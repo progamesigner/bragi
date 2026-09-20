@@ -1,6 +1,9 @@
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, Show } from "solid-js";
+import { createStore, reconcile } from "solid-js/store";
 import Capture from "~/components/Capture";
+import Review from "~/components/Review";
 import type { PreparedImage } from "~/lib/image";
+import type { Segment } from "~/lib/state";
 
 type UploadTarget = {
   uploadId: string;
@@ -10,7 +13,7 @@ type UploadTarget = {
 
 type OcrResult = {
   detectedLanguage: string;
-  segments: Array<{ id: string; text: string; suggestedToneHint: string }>;
+  segments: Segment[];
 };
 
 async function responseError(response: Response): Promise<string> {
@@ -26,7 +29,8 @@ export default function Home() {
   const [otp, setOtp] = createSignal("");
   const [image, setImage] = createSignal<PreparedImage>();
   const [genreHint, setGenreHint] = createSignal("");
-  const [ocrResult, setOcrResult] = createSignal<OcrResult>();
+  const [detectedLanguage, setDetectedLanguage] = createSignal<string>();
+  const [segments, setSegments] = createStore<Segment[]>([]);
   const [status, setStatus] = createSignal("尚未驗證");
   const [busy, setBusy] = createSignal(false);
 
@@ -49,7 +53,8 @@ export default function Home() {
     const selected = image()?.file;
     if (!selected) return;
     setBusy(true);
-    setOcrResult(undefined);
+    setDetectedLanguage(undefined);
+    setSegments(reconcile([]));
     setStatus("建立 Gemini upload session…");
     try {
       const sessionResponse = await fetch("/api/uploads", {
@@ -79,7 +84,8 @@ export default function Home() {
       });
       if (!ocrResponse.ok) throw new Error(await responseError(ocrResponse));
       const result = (await ocrResponse.json()) as OcrResult;
-      setOcrResult(result);
+      setDetectedLanguage(result.detectedLanguage);
+      setSegments(reconcile(result.segments));
       setStatus(`辨識完成 · ${result.segments.length} 個段落`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "上傳失敗");
@@ -133,7 +139,8 @@ export default function Home() {
           disabled={busy()}
           onChange={(prepared) => {
             setImage(prepared);
-            setOcrResult(undefined);
+            setDetectedLanguage(undefined);
+            setSegments(reconcile([]));
           }}
           onStatus={setStatus}
         />
@@ -151,22 +158,14 @@ export default function Home() {
         </button>
       </section>
 
-      <Show when={ocrResult()}>
-        {(result) => (
-          <section class="card" aria-labelledby="ocr-heading">
-            <h2 id="ocr-heading">3. 辨識草稿</h2>
-            <p>主要語言：{result().detectedLanguage}</p>
-            <ol class="segments">
-              <For each={result().segments}>
-                {(segment) => (
-                  <li>
-                    <p class="segment-text">{segment.text}</p>
-                    <p class="tone">語氣：{segment.suggestedToneHint}</p>
-                  </li>
-                )}
-              </For>
-            </ol>
-          </section>
+      <Show when={detectedLanguage()}>
+        {(language) => (
+          <Review
+            detectedLanguage={language()}
+            segments={segments}
+            setSegments={setSegments}
+            onStatus={setStatus}
+          />
         )}
       </Show>
 
