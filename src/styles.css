@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   color: #f3ead8;
   background: #171512;
@@ -12,11 +13,16 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background: radial-gradient(circle at 20% 0%, #4a2d22 0, transparent 42%), #171512;
+  -webkit-font-smoothing: antialiased;
+}
+::selection {
+  color: #22170d;
+  background: #f7c47f;
 }
 main {
   width: min(100% - 32px, 680px);
   margin: 0 auto;
-  padding: 56px 0 72px;
+  padding: max(56px, env(safe-area-inset-top)) 0 max(72px, env(safe-area-inset-bottom));
 }
 header {
   margin-bottom: 40px;
@@ -86,6 +92,10 @@ textarea {
   font: inherit;
   line-height: 1.55;
 }
+input:hover,
+textarea:hover {
+  border-color: #8a735e;
+}
 textarea.invalid {
   border-color: #d86f64;
 }
@@ -107,6 +117,18 @@ button {
   font: inherit;
   font-weight: 800;
   cursor: pointer;
+  transition:
+    transform 120ms ease,
+    filter 120ms ease,
+    border-color 120ms ease;
+}
+button:not(:disabled):hover,
+.file-button:not([aria-disabled="true"]):hover {
+  filter: brightness(1.08);
+}
+button:not(:disabled):active,
+.file-button:not([aria-disabled="true"]):active {
+  transform: translateY(1px);
 }
 button:disabled {
   cursor: not-allowed;
@@ -241,9 +263,19 @@ button.danger {
   text-align: center;
 }
 .status {
+  position: sticky;
+  z-index: 10;
+  bottom: max(12px, env(safe-area-inset-bottom));
   min-height: 1.5em;
+  margin: 24px auto 0;
+  padding: 12px 16px;
+  border: 1px solid #625446;
+  border-radius: 999px;
   color: #e7a85c;
+  background: rgb(29 26 23 / 0.94);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.32);
   text-align: center;
+  backdrop-filter: blur(12px);
 }
 .status.success {
   color: #9fc29b;
@@ -387,7 +419,7 @@ button.danger {
 }
 @media (max-width: 480px) {
   main {
-    padding-top: 36px;
+    padding-top: max(36px, env(safe-area-inset-top));
   }
   .row {
     flex-direction: column;
@@ -409,5 +441,13 @@ button.danger {
   .playback-script {
     min-height: 150px;
     padding: 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto;
+    transition: none;
   }
 }
