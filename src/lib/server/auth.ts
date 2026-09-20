@@ -4,7 +4,7 @@ import * as OTPAuth from "otpauth";
 import { requiredEnv, sessionVersion } from "./config";
 import { readCookie } from "./http";
 
-export const SESSION_COOKIE = "__Host-bragi";
+export const SESSION_COOKIE = "__Host-bragi-session";
 const ISSUER = "bragi";
 const AUDIENCE = "bragi-web";
 const THIRTY_DAYS = 30 * 24 * 60 * 60;

@@ -20,6 +20,6 @@ npm run build
 npm run preview
 ```
 
-`POST /api/uploads`, `/api/ocr`, and `/api/tts` require the signed `__Host-bragi` cookie and an exact same-origin `Origin` header. OCR and TTS intentionally use authenticated fixtures until their live-model milestones.
+`POST /api/uploads`, `/api/ocr`, and `/api/tts` require the signed `__Host-bragi-session` cookie and an exact same-origin `Origin` header. OCR and TTS intentionally use authenticated fixtures until their live-model milestones.
 
 M1 fixes the processing contracts before live model integration. `/api/ocr` returns deterministic segments, while `/api/tts` returns a deterministic 300 ms WAV fixture. JSON errors use `{ error: { code, message, requestId, retryable } }`; the same request ID is exposed through `X-Request-Id` on every API response.

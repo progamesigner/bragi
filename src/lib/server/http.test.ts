@@ -18,9 +18,9 @@ describe("HTTP security helpers", () => {
 
   it("reads an exact cookie name", () => {
     const request = new Request("https://bragi.example", {
-      headers: { cookie: "a=1; __Host-bragi=token; b=2" },
+      headers: { cookie: "a=1; __Host-bragi-session=token; b=2" },
     });
-    expect(readCookie(request, "__Host-bragi")).toBe("token");
+    expect(readCookie(request, "__Host-bragi-session")).toBe("token");
     expect(readCookie(request, "bragi")).toBeUndefined();
   });
 
