@@ -74,6 +74,12 @@ input {
   background: #1d1a17;
   font: inherit;
 }
+label + input {
+  margin-top: 8px;
+}
+input[type="file"] {
+  margin-bottom: 18px;
+}
 button {
   padding: 13px 20px;
   border: 0;
@@ -101,6 +107,30 @@ button:disabled {
   min-height: 1.5em;
   color: #e7a85c;
   text-align: center;
+}
+.segments {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding-left: 24px;
+}
+.segments li {
+  padding: 4px 0 12px 8px;
+  border-bottom: 1px solid #4c4136;
+}
+.segments li:last-child {
+  border-bottom: 0;
+}
+.segments .segment-text {
+  margin: 0 0 6px;
+  color: #f3ead8;
+  font-size: 1rem;
+  white-space: pre-wrap;
+}
+.segments .tone {
+  margin: 0;
+  color: #e7a85c;
+  font-size: 0.8rem;
 }
 @media (max-width: 480px) {
   main {

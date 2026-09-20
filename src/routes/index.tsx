@@ -1,4 +1,4 @@
-import { createSignal, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 
 type UploadTarget = {
   uploadId: string;
@@ -6,9 +6,25 @@ type UploadTarget = {
   expiresAt: string;
 };
 
+type OcrResult = {
+  detectedLanguage: string;
+  segments: Array<{ id: string; text: string; suggestedToneHint: string }>;
+};
+
+async function responseError(response: Response): Promise<string> {
+  try {
+    const body = await response.json();
+    return `${body.error?.message ?? "Request failed"} (${body.error?.requestId ?? response.status})`;
+  } catch {
+    return `Request failed (${response.status})`;
+  }
+}
+
 export default function Home() {
   const [otp, setOtp] = createSignal("");
   const [file, setFile] = createSignal<File>();
+  const [genreHint, setGenreHint] = createSignal("");
+  const [ocrResult, setOcrResult] = createSignal<OcrResult>();
   const [status, setStatus] = createSignal("尚未驗證");
   const [busy, setBusy] = createSignal(false);
 
@@ -27,10 +43,11 @@ export default function Home() {
     }
   }
 
-  async function testUpload() {
+  async function recognizeUpload() {
     const selected = file();
     if (!selected) return;
     setBusy(true);
+    setOcrResult(undefined);
     setStatus("建立 Gemini upload session…");
     try {
       const sessionResponse = await fetch("/api/uploads", {
@@ -38,7 +55,7 @@ export default function Home() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ mimeType: selected.type, sizeBytes: selected.size }),
       });
-      if (!sessionResponse.ok) throw new Error(await sessionResponse.text());
+      if (!sessionResponse.ok) throw new Error(await responseError(sessionResponse));
       const upload = (await sessionResponse.json()) as UploadTarget;
       setStatus("透過 Bragi 安全轉送至 Gemini…");
       const response = await fetch(upload.target.url, {
@@ -46,9 +63,22 @@ export default function Home() {
         headers: upload.target.headers,
         body: selected,
       });
-      if (!response.ok) throw new Error(`Gemini upload failed (${response.status})`);
+      if (!response.ok) throw new Error(await responseError(response));
       const receipt = await response.json();
-      setStatus(`CORS spike 成功：${receipt.file?.name ?? "upload complete"}`);
+      setStatus("Gemini 正在辨識與分段…");
+      const ocrResponse = await fetch("/api/ocr", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          uploadId: upload.uploadId,
+          receipt,
+          genreHint: genreHint().trim() || undefined,
+        }),
+      });
+      if (!ocrResponse.ok) throw new Error(await responseError(ocrResponse));
+      const result = (await ocrResponse.json()) as OcrResult;
+      setOcrResult(result);
+      setStatus(`辨識完成 · ${result.segments.length} 個段落`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "上傳失敗");
     } finally {
@@ -59,14 +89,14 @@ export default function Home() {
   return (
     <main>
       <header>
-        <p class="eyebrow">BRAGI · M0</p>
+        <p class="eyebrow">BRAGI · OCR</p>
         <h1>
           讓桌上的故事，
           <br />
           用對的語氣開口。
         </h1>
         <p class="lede">
-          拍下劇本或卡牌，校對分段，再逐段朗讀。這個畫面目前用來驗證登入與 Gemini browser upload。
+          拍下劇本或卡牌，交給 Gemini 辨識與分段。辨識結果仍是草稿，朗讀前請務必校對。
         </p>
       </header>
 
@@ -92,7 +122,7 @@ export default function Home() {
       </section>
 
       <section class="card">
-        <h2>2. Gemini upload</h2>
+        <h2>2. 上傳並辨識</h2>
         <p>
           選擇一張不含敏感資訊、最多 4 MB 的圖片。檔案會經 Bragi 轉送至 Google Gemini，最多保存 48
           小時。
@@ -103,6 +133,15 @@ export default function Home() {
           capture="environment"
           onChange={(e) => setFile(e.currentTarget.files?.[0])}
         />
+        <label for="genre">題材提示（選填）</label>
+        <input
+          id="genre"
+          type="text"
+          maxlength="80"
+          placeholder="例如：奇幻、懸疑、科幻"
+          value={genreHint()}
+          onInput={(event) => setGenreHint(event.currentTarget.value)}
+        />
         <Show when={file()}>
           {(selected) => (
             <p class="file">
@@ -110,10 +149,29 @@ export default function Home() {
             </p>
           )}
         </Show>
-        <button type="button" class="wide" disabled={busy() || !file()} onClick={testUpload}>
-          執行上傳測試
+        <button type="button" class="wide" disabled={busy() || !file()} onClick={recognizeUpload}>
+          上傳並辨識文字
         </button>
       </section>
+
+      <Show when={ocrResult()}>
+        {(result) => (
+          <section class="card" aria-labelledby="ocr-heading">
+            <h2 id="ocr-heading">3. 辨識草稿</h2>
+            <p>主要語言：{result().detectedLanguage}</p>
+            <ol class="segments">
+              <For each={result().segments}>
+                {(segment) => (
+                  <li>
+                    <p class="segment-text">{segment.text}</p>
+                    <p class="tone">語氣：{segment.suggestedToneHint}</p>
+                  </li>
+                )}
+              </For>
+            </ol>
+          </section>
+        )}
+      </Show>
 
       <p class="status" role="status">
         {busy() ? "處理中 · " : ""}
