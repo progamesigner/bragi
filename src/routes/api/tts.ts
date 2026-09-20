@@ -2,7 +2,8 @@ import type { APIEvent } from "@solidjs/start/server";
 import { isTtsTextTooLong, ttsRequestSchema } from "~/lib/schemas";
 import { hasValidSession } from "~/lib/server/auth";
 import { apiError, createRequestId, isSameOrigin } from "~/lib/server/http";
-import { createTestWav } from "~/lib/wav";
+import { SpeechError, synthesizeSpeech } from "~/lib/server/speech";
+import { pcmToWav } from "~/lib/wav";
 
 export async function POST({ request }: APIEvent) {
   const requestId = createRequestId();
@@ -34,15 +35,57 @@ export async function POST({ request }: APIEvent) {
   if (!parsed.success)
     return apiError(requestId, 400, "INVALID_REQUEST", "Speech request is invalid");
 
-  const wav = createTestWav();
-  return new Response(wav.buffer, {
-    status: 200,
-    headers: {
-      "cache-control": "private, no-store",
-      "content-length": String(wav.byteLength),
-      "content-type": "audio/wav",
-      "x-audio-duration-ms": "300",
-      "x-request-id": requestId,
-    },
-  });
+  try {
+    const speech = await synthesizeSpeech(parsed.data, request.signal);
+    const wav = pcmToWav(speech.pcm);
+    return new Response(wav.buffer, {
+      status: 200,
+      headers: {
+        "cache-control": "private, no-store",
+        "content-length": String(wav.byteLength),
+        "content-type": "audio/wav",
+        "x-audio-duration-ms": String(speech.durationMs),
+        "x-request-id": requestId,
+      },
+    });
+  } catch (error) {
+    if (!(error instanceof SpeechError)) {
+      console.error(
+        "Unexpected speech failure",
+        error instanceof Error ? error.message : "unknown",
+      );
+      return apiError(requestId, 503, "TTS_UNAVAILABLE", "Speech service is unavailable", true);
+    }
+    console.error("Gemini speech failure", error.kind);
+    switch (error.kind) {
+      case "too-long":
+        return apiError(
+          requestId,
+          413,
+          "TEXT_TOO_LONG",
+          "Generated speech is too long; split this segment",
+        );
+      case "rate-limited":
+        return apiError(
+          requestId,
+          429,
+          "TTS_RATE_LIMITED",
+          "Speech rate limit was reached",
+          true,
+          error.retryAfter ? { "retry-after": error.retryAfter } : undefined,
+        );
+      case "rejected":
+        return apiError(requestId, 422, "TTS_REJECTED", "Speech request was rejected");
+      case "invalid-response":
+        return apiError(
+          requestId,
+          502,
+          "TTS_UNAVAILABLE",
+          "Speech service returned invalid audio",
+          true,
+        );
+      case "unavailable":
+        return apiError(requestId, 503, "TTS_UNAVAILABLE", "Speech service is unavailable", true);
+    }
+  }
 }
