@@ -6,6 +6,7 @@ import Review from "~/components/Review";
 import { apiErrorMessage } from "~/lib/api";
 import type { PreparedImage } from "~/lib/image";
 import type { Segment } from "~/lib/state";
+import type { StatusMessage, StatusTone } from "~/lib/status";
 
 type UploadTarget = {
   uploadId: string;
@@ -24,9 +25,16 @@ export default function Home() {
   const [genreHint, setGenreHint] = createSignal("");
   const [detectedLanguage, setDetectedLanguage] = createSignal<string>();
   const [segments, setSegments] = createStore<Segment[]>([]);
-  const [status, setStatus] = createSignal("尚未驗證");
+  const [status, setStatus] = createSignal<StatusMessage>({
+    message: "尚未驗證",
+    tone: "info",
+  });
   const [busy, setBusy] = createSignal(false);
   const [screen, setScreen] = createSignal<"review" | "playback">("review");
+
+  function reportStatus(message: string, tone: StatusTone = "info") {
+    setStatus({ message, tone });
+  }
 
   async function signIn(event: SubmitEvent) {
     event.preventDefault();
@@ -38,9 +46,9 @@ export default function Home() {
         body: JSON.stringify({ otp: otp() }),
       });
       if (!response.ok) throw new Error(await apiErrorMessage(response, "驗證失敗"));
-      setStatus("驗證成功，可以上傳圖片");
+      reportStatus("驗證成功，可以上傳圖片", "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "驗證失敗");
+      reportStatus(error instanceof Error ? error.message : "驗證失敗", "error");
     } finally {
       setBusy(false);
     }
@@ -52,7 +60,7 @@ export default function Home() {
     setBusy(true);
     setDetectedLanguage(undefined);
     setSegments(reconcile([]));
-    setStatus("建立 Gemini upload session…");
+    reportStatus("建立 Gemini upload session…");
     try {
       const sessionResponse = await fetch("/api/uploads", {
         method: "POST",
@@ -62,7 +70,7 @@ export default function Home() {
       if (!sessionResponse.ok)
         throw new Error(await apiErrorMessage(sessionResponse, "無法建立上傳工作階段"));
       const upload = (await sessionResponse.json()) as UploadTarget;
-      setStatus("透過 Bragi 安全轉送至 Gemini…");
+      reportStatus("透過 Bragi 安全轉送至 Gemini…");
       const response = await fetch(upload.target.url, {
         method: upload.target.method,
         headers: upload.target.headers,
@@ -70,7 +78,7 @@ export default function Home() {
       });
       if (!response.ok) throw new Error(await apiErrorMessage(response, "無法上傳圖片"));
       const receipt = await response.json();
-      setStatus("Gemini 正在辨識與分段…");
+      reportStatus("Gemini 正在辨識與分段…");
       const ocrResponse = await fetch("/api/ocr", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -85,9 +93,9 @@ export default function Home() {
       setDetectedLanguage(result.detectedLanguage);
       setSegments(reconcile(result.segments));
       setScreen("review");
-      setStatus(`辨識完成 · ${result.segments.length} 個段落`);
+      reportStatus(`辨識完成 · ${result.segments.length} 個段落`, "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "上傳失敗");
+      reportStatus(error instanceof Error ? error.message : "上傳失敗", "error");
     } finally {
       setBusy(false);
     }
@@ -142,7 +150,7 @@ export default function Home() {
             setSegments(reconcile([]));
             setScreen("review");
           }}
-          onStatus={setStatus}
+          onStatus={reportStatus}
         />
         <label for="genre">題材提示（選填）</label>
         <input
@@ -168,9 +176,9 @@ export default function Home() {
                 genreHint={genreHint().trim() || undefined}
                 onBack={() => {
                   setScreen("review");
-                  setStatus("已返回校對");
+                  reportStatus("已返回校對", "success");
                 }}
-                onStatus={setStatus}
+                onStatus={reportStatus}
               />
             }
           >
@@ -181,17 +189,21 @@ export default function Home() {
               setSegments={setSegments}
               onStartPlayback={() => {
                 setScreen("playback");
-                setStatus("逐段朗讀已就緒");
+                reportStatus("逐段朗讀已就緒");
               }}
-              onStatus={setStatus}
+              onStatus={reportStatus}
             />
           </Show>
         )}
       </Show>
 
-      <p class="status" role="status">
+      <p
+        class="status"
+        classList={{ success: status().tone === "success", error: status().tone === "error" }}
+        role={status().tone === "error" ? "alert" : "status"}
+      >
         {busy() ? "處理中 · " : ""}
-        {status()}
+        {status().message}
       </p>
     </main>
   );

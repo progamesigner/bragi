@@ -1,11 +1,12 @@
 import { createEffect, createSignal, on, onCleanup, Show, untrack } from "solid-js";
 import { requestSpeech } from "~/lib/speech";
+import type { StatusReporter } from "~/lib/status";
 
 type SpeechPreviewProps = {
   text: string;
   toneHint: string;
   genreHint?: string;
-  onStatus: (message: string) => void;
+  onStatus: StatusReporter;
 };
 
 export default function SpeechPreview(props: SpeechPreviewProps) {
@@ -39,7 +40,7 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
 
   async function generate() {
     if (!props.text.trim()) {
-      props.onStatus("請先填寫段落文字");
+      props.onStatus("請先填寫段落文字", "error");
       return;
     }
     clearAudio();
@@ -53,9 +54,9 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
       });
       setAudioUrl(URL.createObjectURL(audio.blob));
       setDuration(audio.durationMs);
-      props.onStatus("試聽已準備完成，請按播放");
+      props.onStatus("試聽已準備完成，請按播放", "success");
     } catch (error) {
-      props.onStatus(error instanceof Error ? error.message : "無法產生試聽");
+      props.onStatus(error instanceof Error ? error.message : "無法產生試聽", "error");
     } finally {
       setBusy(false);
     }

@@ -7,6 +7,7 @@ import {
   type Segment,
   splitAtCursor,
 } from "~/lib/state";
+import type { StatusReporter } from "~/lib/status";
 import SpeechPreview from "./SpeechPreview";
 
 type ReviewProps = {
@@ -15,7 +16,7 @@ type ReviewProps = {
   segments: Segment[];
   setSegments: SetStoreFunction<Segment[]>;
   onStartPlayback: () => void;
-  onStatus: (message: string) => void;
+  onStatus: StatusReporter;
 };
 
 export default function Review(props: ReviewProps) {
@@ -29,9 +30,9 @@ export default function Review(props: ReviewProps) {
   function split(index: number, editor: HTMLTextAreaElement) {
     try {
       replaceSegments(splitAtCursor(props.segments, index, editor.selectionStart));
-      props.onStatus("段落已分割");
+      props.onStatus("段落已分割", "success");
     } catch (error) {
-      props.onStatus(error instanceof Error ? error.message : "無法分割段落");
+      props.onStatus(error instanceof Error ? error.message : "無法分割段落", "error");
       editor.focus();
     }
   }
@@ -111,7 +112,7 @@ export default function Review(props: ReviewProps) {
                       class="small secondary"
                       onClick={() => {
                         replaceSegments(insertAfter(props.segments, index()));
-                        props.onStatus("已新增空白段落");
+                        props.onStatus("已新增空白段落", "success");
                       }}
                     >
                       在下方新增
@@ -122,7 +123,7 @@ export default function Review(props: ReviewProps) {
                         class="small secondary"
                         onClick={() => {
                           replaceSegments(mergeWithNext(props.segments, index()));
-                          props.onStatus("已與下一段合併");
+                          props.onStatus("已與下一段合併", "success");
                         }}
                       >
                         合併下一段
@@ -133,7 +134,7 @@ export default function Review(props: ReviewProps) {
                       class="small danger"
                       onClick={() => {
                         replaceSegments(removeSegment(props.segments, index()));
-                        props.onStatus("段落已刪除");
+                        props.onStatus("段落已刪除", "success");
                       }}
                       aria-label={`刪除段落 ${index() + 1}`}
                     >

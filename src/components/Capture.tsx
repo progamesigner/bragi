@@ -1,10 +1,11 @@
 import { createSignal, onCleanup, Show } from "solid-js";
 import { type PreparedImage, prepareImage } from "~/lib/image";
+import type { StatusReporter } from "~/lib/status";
 
 type CaptureProps = {
   disabled: boolean;
   onChange: (image: PreparedImage | undefined) => void;
-  onStatus: (message: string) => void;
+  onStatus: StatusReporter;
 };
 
 export default function Capture(props: CaptureProps) {
@@ -37,9 +38,12 @@ export default function Capture(props: CaptureProps) {
       setImage(prepared);
       replacePreview(URL.createObjectURL(prepared.file));
       props.onChange(prepared);
-      props.onStatus(prepared.warning ?? "圖片已準備完成，可以開始辨識");
+      props.onStatus(
+        prepared.warning ?? "圖片已準備完成，可以開始辨識",
+        prepared.warning ? "info" : "success",
+      );
     } catch (error) {
-      props.onStatus(error instanceof Error ? error.message : "無法處理圖片");
+      props.onStatus(error instanceof Error ? error.message : "無法處理圖片", "error");
     } finally {
       setPreparing(false);
     }

@@ -2,12 +2,13 @@ import { createSignal, Match, onCleanup, Show, Switch, untrack } from "solid-js"
 import { initialPlaybackState, type PlaybackEvent, transitionPlayback } from "~/lib/playback";
 import { requestSpeech } from "~/lib/speech";
 import type { Segment } from "~/lib/state";
+import type { StatusReporter } from "~/lib/status";
 
 type PlaybackProps = {
   segments: Segment[];
   genreHint?: string;
   onBack: () => void;
-  onStatus: (message: string) => void;
+  onStatus: StatusReporter;
 };
 
 export default function Playback(props: PlaybackProps) {
@@ -59,12 +60,12 @@ export default function Playback(props: PlaybackProps) {
       setAudioUrl(URL.createObjectURL(result.blob));
       setDuration(result.durationMs);
       dispatch({ type: "audio-ready" });
-      props.onStatus(`第 ${nextState.index + 1} 段已準備，請按播放`);
+      props.onStatus(`第 ${nextState.index + 1} 段已準備，請按播放`, "success");
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       const message = error instanceof Error ? error.message : "無法產生朗讀音訊";
       dispatch({ type: "fail", message });
-      props.onStatus(message);
+      props.onStatus(message, "error");
     }
   }
 
@@ -73,7 +74,7 @@ export default function Playback(props: PlaybackProps) {
     try {
       await audio.play();
     } catch {
-      props.onStatus("瀏覽器阻止播放，請再按一次播放按鈕");
+      props.onStatus("瀏覽器阻止播放，請再按一次播放按鈕", "error");
     }
   }
 
@@ -124,7 +125,10 @@ export default function Playback(props: PlaybackProps) {
               }}
               onEnded={() => {
                 dispatch({ type: "ended" });
-                props.onStatus(state().phase === "complete" ? "全部段落播放完成" : "本段播放完成");
+                props.onStatus(
+                  state().phase === "complete" ? "全部段落播放完成" : "本段播放完成",
+                  "success",
+                );
               }}
             >
               <track kind="captions" src={captionsUrl()} label="口白文字" default />

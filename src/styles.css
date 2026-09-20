@@ -207,6 +207,12 @@ button.danger {
   color: #e7a85c;
   text-align: center;
 }
+.status.success {
+  color: #9fc29b;
+}
+.status.error {
+  color: #ef9a91;
+}
 .review-heading {
   display: flex;
   align-items: flex-start;
