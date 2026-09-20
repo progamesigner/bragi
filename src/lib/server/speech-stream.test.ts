@@ -38,7 +38,7 @@ describe("Gemini speech streaming", () => {
     );
 
     await expect(
-      collect(synthesizeSpeechStream({ text: "第一段" }, undefined, fetcher)),
+      collect(await synthesizeSpeechStream({ text: "第一段" }, undefined, fetcher)),
     ).resolves.toEqual([0, 1, 2, 3]);
     const init = fetcher.mock.calls[0]?.[1];
     expect(init?.headers).toMatchObject({ "api-revision": "2026-05-20" });
@@ -53,7 +53,7 @@ describe("Gemini speech streaming", () => {
       .mockResolvedValue(eventStream([{ event_type: "interaction.completed" }]));
 
     await expect(
-      collect(synthesizeSpeechStream({ text: "第一段" }, undefined, fetcher)),
+      collect(await synthesizeSpeechStream({ text: "第一段" }, undefined, fetcher)),
     ).rejects.toMatchObject({ kind: "invalid-response" });
   });
 
@@ -65,7 +65,7 @@ describe("Gemini speech streaming", () => {
       .mockResolvedValue(new Response(null, { status: 429, headers: { "retry-after": "5" } }));
 
     await expect(
-      collect(synthesizeSpeechStream({ text: "第一段" }, undefined, fetcher)),
+      synthesizeSpeechStream({ text: "第一段" }, undefined, fetcher),
     ).rejects.toMatchObject({ kind: "rate-limited", retryAfter: "5" });
   });
 });

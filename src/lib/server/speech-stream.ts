@@ -83,11 +83,11 @@ function upstreamError(response: Response): SpeechError {
   );
 }
 
-export async function* synthesizeSpeechStream(
+export async function synthesizeSpeechStream(
   input: TtsRequest,
   requestSignal?: AbortSignal,
   fetcher: typeof fetch = fetch,
-): AsyncGenerator<Uint8Array<ArrayBuffer>, void, undefined> {
+): Promise<AsyncGenerator<Uint8Array<ArrayBuffer>, void, undefined>> {
   const timeout = AbortSignal.timeout(55_000);
   const signal = requestSignal ? AbortSignal.any([requestSignal, timeout]) : timeout;
   let response: Response;
@@ -119,30 +119,33 @@ export async function* synthesizeSpeechStream(
   if (!response.ok) throw upstreamError(response);
   if (!response.body) throw new SpeechError("invalid-response", "Gemini returned no speech stream");
 
-  let bytes = 0;
-  for await (const data of sseData(response.body)) {
-    let value: unknown;
-    try {
-      value = JSON.parse(data);
-    } catch {
-      throw new SpeechError("invalid-response", "Gemini returned an invalid stream event");
+  return (async function* () {
+    let bytes = 0;
+    for await (const data of sseData(response.body as ReadableStream<Uint8Array>)) {
+      let value: unknown;
+      try {
+        value = JSON.parse(data);
+      } catch {
+        throw new SpeechError("invalid-response", "Gemini returned an invalid stream event");
+      }
+      const event = streamEventSchema.safeParse(value);
+      if (!event.success)
+        throw new SpeechError("invalid-response", "Gemini returned an invalid stream event");
+      if (event.data.event_type === "interaction.failed")
+        throw new SpeechError("unavailable", "Gemini speech streaming failed");
+      if (event.data.event_type !== "step.delta" || event.data.delta?.type !== "audio") continue;
+      if (!event.data.delta.data) continue;
+
+      const chunk = decodeAudioDelta(event.data.delta.data);
+      bytes += chunk.byteLength;
+      if (bytes > MAX_PCM_BYTES)
+        throw new SpeechError("too-long", "Generated speech exceeds 60 seconds");
+      yield chunk;
     }
-    const event = streamEventSchema.safeParse(value);
-    if (!event.success)
-      throw new SpeechError("invalid-response", "Gemini returned an invalid stream event");
-    if (event.data.event_type === "interaction.failed")
-      throw new SpeechError("unavailable", "Gemini speech streaming failed");
-    if (event.data.event_type !== "step.delta" || event.data.delta?.type !== "audio") continue;
-    if (!event.data.delta.data) continue;
 
-    const chunk = decodeAudioDelta(event.data.delta.data);
-    bytes += chunk.byteLength;
-    if (bytes > MAX_PCM_BYTES)
-      throw new SpeechError("too-long", "Generated speech exceeds 60 seconds");
-    yield chunk;
-  }
-
-  if (bytes === 0) throw new SpeechError("invalid-response", "Gemini returned no streaming audio");
-  if (bytes % 2 !== 0)
-    throw new SpeechError("invalid-response", "Gemini returned incomplete streaming PCM audio");
+    if (bytes === 0)
+      throw new SpeechError("invalid-response", "Gemini returned no streaming audio");
+    if (bytes % 2 !== 0)
+      throw new SpeechError("invalid-response", "Gemini returned incomplete streaming PCM audio");
+  })();
 }
