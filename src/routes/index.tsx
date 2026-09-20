@@ -29,7 +29,8 @@ export default function Home() {
     message: "尚未驗證",
     tone: "info",
   });
-  const [busy, setBusy] = createSignal(false);
+  const [authBusy, setAuthBusy] = createSignal(false);
+  const [recognitionBusy, setRecognitionBusy] = createSignal(false);
   const [screen, setScreen] = createSignal<"review" | "playback">("review");
 
   function reportStatus(message: string, tone: StatusTone = "info") {
@@ -38,7 +39,7 @@ export default function Home() {
 
   async function signIn(event: SubmitEvent) {
     event.preventDefault();
-    setBusy(true);
+    setAuthBusy(true);
     try {
       const response = await fetch("/api/session", {
         method: "POST",
@@ -50,14 +51,14 @@ export default function Home() {
     } catch (error) {
       reportStatus(error instanceof Error ? error.message : "驗證失敗", "error");
     } finally {
-      setBusy(false);
+      setAuthBusy(false);
     }
   }
 
   async function recognizeUpload() {
     const selected = image()?.file;
     if (!selected) return;
-    setBusy(true);
+    setRecognitionBusy(true);
     setDetectedLanguage(undefined);
     setSegments(reconcile([]));
     reportStatus("建立 Gemini upload session…");
@@ -97,7 +98,7 @@ export default function Home() {
     } catch (error) {
       reportStatus(error instanceof Error ? error.message : "上傳失敗", "error");
     } finally {
-      setBusy(false);
+      setRecognitionBusy(false);
     }
   }
 
@@ -117,7 +118,7 @@ export default function Home() {
 
       <section class="card">
         <h2>1. 驗證存取</h2>
-        <form onSubmit={signIn}>
+        <form onSubmit={signIn} aria-busy={authBusy()}>
           <label for="otp">Authenticator 6 位驗證碼</label>
           <div class="row">
             <input
@@ -129,21 +130,21 @@ export default function Home() {
               value={otp()}
               onInput={(e) => setOtp(e.currentTarget.value)}
             />
-            <button type="submit" disabled={busy() || otp().length !== 6}>
-              登入
+            <button type="submit" disabled={authBusy() || otp().length !== 6}>
+              {authBusy() ? "驗證中…" : "登入"}
             </button>
           </div>
         </form>
       </section>
 
-      <section class="card">
+      <section class="card" aria-busy={recognitionBusy()}>
         <h2>2. 上傳並辨識</h2>
         <p>
           拍攝或選擇一張不含敏感資訊的圖片。Bragi 會在裝置上調整方向、尺寸與檔案大小，再轉送至
           Google Gemini，最多保存 48 小時。
         </p>
         <Capture
-          disabled={busy()}
+          disabled={recognitionBusy()}
           onChange={(prepared) => {
             setImage(prepared);
             setDetectedLanguage(undefined);
@@ -161,8 +162,13 @@ export default function Home() {
           value={genreHint()}
           onInput={(event) => setGenreHint(event.currentTarget.value)}
         />
-        <button type="button" class="wide" disabled={busy() || !image()} onClick={recognizeUpload}>
-          上傳並辨識文字
+        <button
+          type="button"
+          class="wide"
+          disabled={recognitionBusy() || !image()}
+          onClick={recognizeUpload}
+        >
+          {recognitionBusy() ? "正在上傳與辨識…" : "上傳並辨識文字"}
         </button>
       </section>
 
@@ -202,7 +208,6 @@ export default function Home() {
         classList={{ success: status().tone === "success", error: status().tone === "error" }}
         role={status().tone === "error" ? "alert" : "status"}
       >
-        {busy() ? "處理中 · " : ""}
         {status().message}
       </p>
     </main>
