@@ -1,6 +1,6 @@
+import { apiJson, createRequestId } from "~/lib/server/http";
+
 export function GET() {
-  return Response.json(
-    { status: "ok", service: "bragi" },
-    { headers: { "cache-control": "no-store" } },
-  );
+  const requestId = createRequestId();
+  return apiJson({ status: "ok", service: "bragi", requestId }, requestId);
 }
