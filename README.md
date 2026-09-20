@@ -15,6 +15,8 @@ OCR output opens as an editable review draft. Every segment supports text and to
 
 After review, playback prepares one segment at a time. Each prepared segment requires an explicit play action, and playback stops when the segment ends until the user chooses to replay it or prepare the next one. Returning to review preserves the current draft; leaving playback cancels an active speech request and releases generated audio URLs.
 
+Progress, success, and error notices use distinct accessible live-region semantics, and API failures retain their request ID for troubleshooting. Keyboard focus follows the review and playback views, invalid empty segments include field guidance, and all controls expose a visible focus indicator. The upload screen explains which processing stays on-device, which data is sent to Gemini, and what Bragi does not persist.
+
 JPEG, PNG, WebP, HEIC, and HEIF sources up to 25 MB are accepted. When a browser cannot decode HEIC or HEIF, an original file already below 4 MB can still be sent directly to Gemini; larger files require conversion or a new capture.
 
 ## Verification
