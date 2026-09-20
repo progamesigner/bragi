@@ -206,7 +206,14 @@ export async function recognizeImage(
   if (!outputText) throw new GeminiError("invalid-response", "Gemini OCR returned no text");
 
   try {
-    return ocrResponseSchema.parse(JSON.parse(outputText));
+    const result = ocrResponseSchema.parse(JSON.parse(outputText));
+    return {
+      ...result,
+      segments: result.segments.map((segment, index) => ({
+        ...segment,
+        id: `segment-${index + 1}`,
+      })),
+    };
   } catch {
     throw new GeminiError("invalid-response", "Gemini OCR output did not match its schema");
   }

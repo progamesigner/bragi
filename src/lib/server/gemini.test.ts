@@ -86,7 +86,8 @@ describe("Gemini OCR", () => {
                   text: JSON.stringify({
                     detectedLanguage: "zh-Hant",
                     segments: [
-                      { id: "segment-1", text: "古老的門緩緩開啟。", suggestedToneHint: "低沉" },
+                      { id: "duplicate", text: "古老的門緩緩開啟。", suggestedToneHint: "低沉" },
+                      { id: "duplicate", text: "火光照亮大廳。", suggestedToneHint: "平靜" },
                     ],
                   }),
                 },
@@ -105,7 +106,10 @@ describe("Gemini OCR", () => {
         },
         "奇幻",
       ),
-    ).resolves.toMatchObject({ detectedLanguage: "zh-Hant" });
+    ).resolves.toMatchObject({
+      detectedLanguage: "zh-Hant",
+      segments: [{ id: "segment-1" }, { id: "segment-2" }],
+    });
 
     const request = vi.mocked(fetch).mock.calls[0]?.[1];
     const body = JSON.parse(String(request?.body));
