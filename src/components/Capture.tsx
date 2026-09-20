@@ -67,6 +67,7 @@ export default function Capture(props: CaptureProps) {
           type="file"
           accept="image/*,.heic,.heif"
           capture="environment"
+          aria-describedby="upload-privacy"
           disabled={props.disabled || preparing()}
           onChange={inputChanged}
         />
@@ -82,6 +83,7 @@ export default function Capture(props: CaptureProps) {
           class="visually-hidden"
           type="file"
           accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
+          aria-describedby="upload-privacy"
           disabled={props.disabled || preparing()}
           onChange={inputChanged}
         />

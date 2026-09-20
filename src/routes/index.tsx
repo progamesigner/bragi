@@ -143,6 +143,15 @@ export default function Home() {
           拍攝或選擇一張不含敏感資訊的圖片。Bragi 會在裝置上調整方向、尺寸與檔案大小，再轉送至
           Google Gemini，最多保存 48 小時。
         </p>
+        <aside class="privacy-note" id="upload-privacy" aria-labelledby="privacy-heading">
+          <h3 id="privacy-heading">資料如何處理</h3>
+          <ul>
+            <li>照片的方向修正與壓縮先在此裝置完成。</li>
+            <li>照片與朗讀文字會送往 Google Gemini；照片最多保存 48 小時。</li>
+            <li>Bragi 不建立辨識歷史，也不把產生的音訊存入資料庫。</li>
+          </ul>
+          <p>請避免拍入無關的人臉、聯絡資訊或其他敏感資料。</p>
+        </aside>
         <Capture
           disabled={recognitionBusy()}
           onChange={(prepared) => {
