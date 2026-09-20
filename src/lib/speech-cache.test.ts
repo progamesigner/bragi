@@ -56,4 +56,24 @@ describe("speech cache", () => {
     expect(calls).toBe(1);
     speechCache.clear();
   });
+
+  it("deduplicates concurrent synthesis requests", async () => {
+    speechCache.clear();
+    let resolveResponse!: (response: Response) => void;
+    let calls = 0;
+    const fetcher: typeof fetch = () => {
+      calls += 1;
+      return new Promise((resolve) => {
+        resolveResponse = resolve;
+      });
+    };
+
+    const first = requestCachedSpeech(request("shared"), undefined, fetcher);
+    const second = requestCachedSpeech(request("shared"), undefined, fetcher);
+    expect(calls).toBe(1);
+    resolveResponse(new Response(audio(10).blob, { headers: { "content-type": "audio/wav" } }));
+
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+    speechCache.clear();
+  });
 });

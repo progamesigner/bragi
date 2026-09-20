@@ -13,6 +13,7 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
   const [busy, setBusy] = createSignal(false);
   const [audioUrl, setAudioUrl] = createSignal<string>();
   const [duration, setDuration] = createSignal<number>();
+  let request: AbortController | undefined;
 
   function captionsUrl() {
     const transcript = props.text.replaceAll("-->", "→");
@@ -29,11 +30,15 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
   createEffect(
     on(
       () => [props.text, props.toneHint, props.genreHint],
-      () => clearAudio(),
+      () => {
+        request?.abort();
+        clearAudio();
+      },
       { defer: true },
     ),
   );
   onCleanup(() => {
+    request?.abort();
     const url = untrack(audioUrl);
     if (url) URL.revokeObjectURL(url);
   });
@@ -44,21 +49,28 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
       return;
     }
     clearAudio();
+    request?.abort();
+    const controller = new AbortController();
+    request = controller;
     setBusy(true);
     props.onStatus("Gemini 正在產生試聽音訊…");
     try {
-      const audio = await requestCachedSpeech({
-        text: props.text,
-        toneHint: props.toneHint || undefined,
-        genreHint: props.genreHint || undefined,
-      });
+      const audio = await requestCachedSpeech(
+        {
+          text: props.text,
+          toneHint: props.toneHint || undefined,
+          genreHint: props.genreHint || undefined,
+        },
+        controller.signal,
+      );
       setAudioUrl(URL.createObjectURL(audio.blob));
       setDuration(audio.durationMs);
       props.onStatus("試聽已準備完成，請按播放", "success");
     } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
       props.onStatus(error instanceof Error ? error.message : "無法產生試聽", "error");
     } finally {
-      setBusy(false);
+      if (request === controller) setBusy(false);
     }
   }
 

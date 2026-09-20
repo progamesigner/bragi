@@ -53,6 +53,7 @@ export class SpeechCache {
 }
 
 export const speechCache = new SpeechCache();
+const pendingSpeech = new Map<string, Promise<SpeechAudio>>();
 
 export async function requestCachedSpeech(
   input: SpeechRequest,
@@ -61,7 +62,16 @@ export async function requestCachedSpeech(
 ): Promise<SpeechAudio> {
   const cached = speechCache.get(input);
   if (cached) return cached;
-  const audio = await requestSpeech(input, signal, fetcher);
-  speechCache.set(input, audio);
-  return audio;
+  const key = speechCacheKey(input);
+  const pending = pendingSpeech.get(key);
+  if (pending) return pending;
+
+  const request = requestSpeech(input, signal, fetcher)
+    .then((audio) => {
+      speechCache.set(input, audio);
+      return audio;
+    })
+    .finally(() => pendingSpeech.delete(key));
+  pendingSpeech.set(key, request);
+  return request;
 }
