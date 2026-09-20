@@ -10,11 +10,10 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "tsc --noEmit",
+    "check": "biome check .",
     "format": "biome format --write .",
-    "format:check": "biome format .",
-    "lint": "biome lint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@solidjs/router": "1.0.0",
