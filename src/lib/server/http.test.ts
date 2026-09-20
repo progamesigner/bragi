@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSameOrigin, readCookie } from "./http";
+import { apiError, apiJson, createRequestId, isSameOrigin, readCookie } from "./http";
 
 describe("HTTP security helpers", () => {
   it("accepts only an exact same origin", () => {
@@ -22,5 +22,26 @@ describe("HTTP security helpers", () => {
     });
     expect(readCookie(request, "__Host-bragi")).toBe("token");
     expect(readCookie(request, "bragi")).toBeUndefined();
+  });
+
+  it("returns one request ID in success headers and error bodies", async () => {
+    const requestId = createRequestId();
+    expect(requestId).toMatch(/^[0-9a-f-]{36}$/);
+
+    const success = apiJson({ ok: true }, requestId);
+    expect(success.headers.get("x-request-id")).toBe(requestId);
+    expect(success.headers.get("cache-control")).toBe("private, no-store");
+
+    const failure = apiError(requestId, 400, "INVALID_REQUEST", "Invalid request");
+    expect(failure.status).toBe(400);
+    expect(failure.headers.get("x-request-id")).toBe(requestId);
+    expect(await failure.json()).toEqual({
+      error: {
+        code: "INVALID_REQUEST",
+        message: "Invalid request",
+        requestId,
+        retryable: false,
+      },
+    });
   });
 });
