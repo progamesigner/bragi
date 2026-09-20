@@ -23,6 +23,10 @@ const optionalHint = (max: number) =>
     .refine((value) => graphemeCount(value) <= max)
     .optional();
 
+export const sessionRequestSchema = z.object({
+  otp: z.string().regex(/^\d{6}$/),
+});
+
 export const ocrRequestSchema = z.object({
   uploadId: z.string().min(1).max(4096),
   receipt: z.unknown().optional(),
