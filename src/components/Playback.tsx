@@ -1,6 +1,7 @@
 import { createSignal, Match, onCleanup, onMount, Show, Switch, untrack } from "solid-js";
 import { initialPlaybackState, type PlaybackEvent, transitionPlayback } from "~/lib/playback";
-import { requestCachedSpeech } from "~/lib/speech-cache";
+import type { SpeechRequest } from "~/lib/speech";
+import { requestCachedSpeech, speechCache } from "~/lib/speech-cache";
 import type { Segment } from "~/lib/state";
 import type { StatusReporter } from "~/lib/status";
 
@@ -15,11 +16,26 @@ export default function Playback(props: PlaybackProps) {
   const [state, setState] = createSignal(initialPlaybackState);
   const [audioUrl, setAudioUrl] = createSignal<string>();
   const [duration, setDuration] = createSignal<number>();
+  const [prefetch, setPrefetch] = createSignal<{
+    index: number;
+    phase: "loading" | "ready";
+  }>();
   let audio!: HTMLAudioElement;
   let heading!: HTMLHeadingElement;
   let request: AbortController | undefined;
+  let prefetchRequest: AbortController | undefined;
 
   const segment = () => props.segments[state().index];
+
+  function speechInput(index: number): SpeechRequest | undefined {
+    const target = props.segments[index];
+    if (!target) return undefined;
+    return {
+      text: target.text,
+      toneHint: target.suggestedToneHint || undefined,
+      genreHint: props.genreHint,
+    };
+  }
 
   function dispatch(event: PlaybackEvent) {
     setState((current) => transitionPlayback(current, event, props.segments.length));
@@ -48,16 +64,9 @@ export default function Playback(props: PlaybackProps) {
     clearAudio();
     props.onStatus(`正在產生第 ${nextState.index + 1} 段音訊…`);
     try {
-      const current = props.segments[nextState.index];
-      if (!current) throw new Error("找不到要播放的段落");
-      const result = await requestCachedSpeech(
-        {
-          text: current.text,
-          toneHint: current.suggestedToneHint || undefined,
-          genreHint: props.genreHint,
-        },
-        request.signal,
-      );
+      const input = speechInput(nextState.index);
+      if (!input) throw new Error("找不到要播放的段落");
+      const result = await requestCachedSpeech(input, request.signal);
       setAudioUrl(URL.createObjectURL(result.blob));
       setDuration(result.durationMs);
       dispatch({ type: "audio-ready" });
@@ -67,6 +76,28 @@ export default function Playback(props: PlaybackProps) {
       const message = error instanceof Error ? error.message : "無法產生朗讀音訊";
       dispatch({ type: "fail", message });
       props.onStatus(message, "error");
+    }
+  }
+
+  async function prefetchNext() {
+    const index = state().index + 1;
+    const input = speechInput(index);
+    if (!input) return;
+    if (prefetch()?.index === index) return;
+    if (speechCache.get(input)) {
+      setPrefetch({ index, phase: "ready" });
+      return;
+    }
+
+    prefetchRequest?.abort();
+    const controller = new AbortController();
+    prefetchRequest = controller;
+    setPrefetch({ index, phase: "loading" });
+    try {
+      await requestCachedSpeech(input, controller.signal);
+      if (prefetchRequest === controller) setPrefetch({ index, phase: "ready" });
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) setPrefetch(undefined);
     }
   }
 
@@ -81,12 +112,14 @@ export default function Playback(props: PlaybackProps) {
 
   function leavePlayback() {
     request?.abort();
+    prefetchRequest?.abort();
     clearAudio();
     props.onBack();
   }
 
   onCleanup(() => {
     request?.abort();
+    prefetchRequest?.abort();
     clearAudio();
   });
   onMount(() => heading.focus());
@@ -121,7 +154,10 @@ export default function Playback(props: PlaybackProps) {
               preload="metadata"
               src={url()}
               aria-label={`第 ${state().index + 1} 段朗讀`}
-              onPlay={() => dispatch({ type: "play" })}
+              onPlay={() => {
+                dispatch({ type: "play" });
+                void prefetchNext();
+              }}
               onPause={() => {
                 if (!audio.ended) dispatch({ type: "pause" });
               }}
@@ -165,11 +201,16 @@ export default function Playback(props: PlaybackProps) {
             </button>
           </Match>
           <Match when={state().phase === "waiting"}>
+            <Show when={prefetch()?.index === state().index + 1}>
+              <p class="prefetch-status">
+                {prefetch()?.phase === "ready" ? "下一段已準備完成" : "正在準備下一段…"}
+              </p>
+            </Show>
             <button type="button" class="secondary" onClick={play}>
               重播本段
             </button>
             <button type="button" onClick={() => prepare("next")}>
-              準備下一段
+              {prefetch()?.phase === "ready" ? "繼續下一段" : "準備下一段"}
             </button>
           </Match>
           <Match when={state().phase === "error"}>

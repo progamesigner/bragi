@@ -426,6 +426,10 @@ button.danger {
   flex: 1 0 100%;
   margin: 0;
 }
+.playback-actions .prefetch-status {
+  color: #9fc29b;
+  font-size: 0.82rem;
+}
 @media (max-width: 480px) {
   main {
     padding-top: max(36px, env(safe-area-inset-top));
