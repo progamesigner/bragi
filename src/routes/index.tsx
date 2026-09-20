@@ -1,4 +1,6 @@
 import { createSignal, For, Show } from "solid-js";
+import Capture from "~/components/Capture";
+import type { PreparedImage } from "~/lib/image";
 
 type UploadTarget = {
   uploadId: string;
@@ -22,7 +24,7 @@ async function responseError(response: Response): Promise<string> {
 
 export default function Home() {
   const [otp, setOtp] = createSignal("");
-  const [file, setFile] = createSignal<File>();
+  const [image, setImage] = createSignal<PreparedImage>();
   const [genreHint, setGenreHint] = createSignal("");
   const [ocrResult, setOcrResult] = createSignal<OcrResult>();
   const [status, setStatus] = createSignal("尚未驗證");
@@ -44,7 +46,7 @@ export default function Home() {
   }
 
   async function recognizeUpload() {
-    const selected = file();
+    const selected = image()?.file;
     if (!selected) return;
     setBusy(true);
     setOcrResult(undefined);
@@ -124,14 +126,16 @@ export default function Home() {
       <section class="card">
         <h2>2. 上傳並辨識</h2>
         <p>
-          選擇一張不含敏感資訊、最多 4 MB 的圖片。檔案會經 Bragi 轉送至 Google Gemini，最多保存 48
-          小時。
+          拍攝或選擇一張不含敏感資訊的圖片。Bragi 會在裝置上調整方向、尺寸與檔案大小，再轉送至
+          Google Gemini，最多保存 48 小時。
         </p>
-        <input
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-          capture="environment"
-          onChange={(e) => setFile(e.currentTarget.files?.[0])}
+        <Capture
+          disabled={busy()}
+          onChange={(prepared) => {
+            setImage(prepared);
+            setOcrResult(undefined);
+          }}
+          onStatus={setStatus}
         />
         <label for="genre">題材提示（選填）</label>
         <input
@@ -142,14 +146,7 @@ export default function Home() {
           value={genreHint()}
           onInput={(event) => setGenreHint(event.currentTarget.value)}
         />
-        <Show when={file()}>
-          {(selected) => (
-            <p class="file">
-              {selected().name} · {(selected().size / 1_000_000).toFixed(2)} MB
-            </p>
-          )}
-        </Show>
-        <button type="button" class="wide" disabled={busy() || !file()} onClick={recognizeUpload}>
+        <button type="button" class="wide" disabled={busy() || !image()} onClick={recognizeUpload}>
           上傳並辨識文字
         </button>
       </section>
