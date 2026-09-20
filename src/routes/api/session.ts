@@ -1,7 +1,20 @@
 import type { APIEvent } from "@solidjs/start/server";
 import { sessionRequestSchema } from "~/lib/schemas";
-import { expiredSessionCookie, issueSession, sessionCookie, verifyTotp } from "~/lib/server/auth";
+import {
+  expiredSessionCookie,
+  hasValidSession,
+  issueSession,
+  sessionCookie,
+  verifyTotp,
+} from "~/lib/server/auth";
 import { apiError, apiJson, createRequestId, isSameOrigin } from "~/lib/server/http";
+
+export async function GET({ request }: APIEvent) {
+  const requestId = createRequestId();
+  return apiJson({ authenticated: await hasValidSession(request) }, requestId, {
+    headers: { "cache-control": "private, no-store" },
+  });
+}
 
 export async function POST({ request }: APIEvent) {
   const requestId = createRequestId();
