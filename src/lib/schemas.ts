@@ -27,6 +27,11 @@ export const sessionRequestSchema = z.object({
   otp: z.string().regex(/^\d{6}$/),
 });
 
+export const uploadSessionRequestSchema = z.object({
+  mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]),
+  sizeBytes: z.number().int().positive(),
+});
+
 export const ocrRequestSchema = z.object({
   uploadId: z.string().min(1).max(4096),
   receipt: z.unknown().optional(),

@@ -1,32 +1,53 @@
 import type { APIEvent } from "@solidjs/start/server";
+import { uploadSessionRequestSchema } from "~/lib/schemas";
 import { hasValidSession } from "~/lib/server/auth";
-import { isSameOrigin, json } from "~/lib/server/http";
-import { ACCEPTED_IMAGE_TYPES, createGeminiUpload, MAX_UPLOAD_BYTES } from "~/lib/server/uploads";
+import { apiError, apiJson, createRequestId, isSameOrigin } from "~/lib/server/http";
+import { createGeminiUpload, MAX_UPLOAD_BYTES } from "~/lib/server/uploads";
 
 export async function POST({ request }: APIEvent) {
-  if (!isSameOrigin(request)) return json({ error: "INVALID_ORIGIN" }, { status: 403 });
-  if (!(await hasValidSession(request))) return json({ error: "UNAUTHORIZED" }, { status: 401 });
+  const requestId = createRequestId();
+  if (!isSameOrigin(request))
+    return apiError(requestId, 403, "INVALID_ORIGIN", "Request origin is not allowed");
+  if (!(await hasValidSession(request)))
+    return apiError(requestId, 401, "UNAUTHORIZED", "Authentication is required");
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json"))
-    return json({ error: "INVALID_CONTENT_TYPE" }, { status: 415 });
-  let body: { mimeType?: unknown; sizeBytes?: unknown };
+    return apiError(
+      requestId,
+      415,
+      "INVALID_CONTENT_TYPE",
+      "Content-Type must be application/json",
+    );
+
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return json({ error: "INVALID_JSON" }, { status: 400 });
+    return apiError(requestId, 400, "INVALID_JSON", "Request body must be valid JSON");
   }
-  if (typeof body.mimeType !== "string" || !ACCEPTED_IMAGE_TYPES.has(body.mimeType))
-    return json({ error: "UNSUPPORTED_MEDIA_TYPE" }, { status: 415 });
-  if (!Number.isSafeInteger(body.sizeBytes) || Number(body.sizeBytes) <= 0)
-    return json({ error: "INVALID_SIZE" }, { status: 400 });
-  if (Number(body.sizeBytes) > MAX_UPLOAD_BYTES)
-    return json({ error: "FILE_TOO_LARGE" }, { status: 413 });
+  const parsed = uploadSessionRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    const unsupported =
+      typeof body === "object" &&
+      body !== null &&
+      "mimeType" in body &&
+      typeof body.mimeType === "string";
+    return unsupported
+      ? apiError(requestId, 415, "UNSUPPORTED_MEDIA_TYPE", "Image type is not supported")
+      : apiError(requestId, 400, "INVALID_REQUEST", "Upload request is invalid");
+  }
+  if (parsed.data.sizeBytes > MAX_UPLOAD_BYTES)
+    return apiError(requestId, 413, "FILE_TOO_LARGE", "Image exceeds the 4 MB upload limit");
+
   try {
-    return json(await createGeminiUpload(body.mimeType, Number(body.sizeBytes)));
+    return apiJson(
+      await createGeminiUpload(parsed.data.mimeType, parsed.data.sizeBytes),
+      requestId,
+    );
   } catch (error) {
     console.error(
       "Unable to create upload session",
       error instanceof Error ? error.message : "unknown error",
     );
-    return json({ error: "UPLOAD_UNAVAILABLE" }, { status: 503 });
+    return apiError(requestId, 503, "UPLOAD_UNAVAILABLE", "Upload service is unavailable", true);
   }
 }

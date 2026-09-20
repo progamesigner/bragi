@@ -1,25 +1,37 @@
 import type { APIEvent } from "@solidjs/start/server";
 import { hasValidSession } from "~/lib/server/auth";
-import { isSameOrigin, json } from "~/lib/server/http";
+import { apiError, createRequestId, isSameOrigin } from "~/lib/server/http";
 import { verifyUploadId } from "~/lib/server/uploads";
 
 export async function POST({ request }: APIEvent) {
-  if (!isSameOrigin(request)) return json({ error: "INVALID_ORIGIN" }, { status: 403 });
-  if (!(await hasValidSession(request))) return json({ error: "UNAUTHORIZED" }, { status: 401 });
+  const requestId = createRequestId();
+  if (!isSameOrigin(request))
+    return apiError(requestId, 403, "INVALID_ORIGIN", "Request origin is not allowed");
+  if (!(await hasValidSession(request)))
+    return apiError(requestId, 401, "UNAUTHORIZED", "Authentication is required");
 
   const uploadId = request.headers.get("x-bragi-upload-id");
-  if (!uploadId) return json({ error: "INVALID_UPLOAD" }, { status: 400 });
+  if (!uploadId) return apiError(requestId, 400, "INVALID_UPLOAD", "Upload reference is required");
+
+  let upload: Awaited<ReturnType<typeof verifyUploadId>>;
+  try {
+    upload = await verifyUploadId(uploadId);
+  } catch {
+    return apiError(requestId, 400, "INVALID_UPLOAD", "Upload reference is invalid or expired");
+  }
+  if (request.headers.get("content-type") !== upload.mimeType)
+    return apiError(
+      requestId,
+      415,
+      "INVALID_CONTENT_TYPE",
+      "Image type does not match upload session",
+    );
+
+  const body = await request.arrayBuffer();
+  if (body.byteLength !== upload.sizeBytes)
+    return apiError(requestId, 400, "INVALID_SIZE", "Image size does not match upload session");
 
   try {
-    const upload = await verifyUploadId(uploadId);
-    if (request.headers.get("content-type") !== upload.mimeType) {
-      return json({ error: "INVALID_CONTENT_TYPE" }, { status: 415 });
-    }
-    const body = await request.arrayBuffer();
-    if (body.byteLength !== upload.sizeBytes) {
-      return json({ error: "INVALID_SIZE" }, { status: 400 });
-    }
-
     const response = await fetch(upload.url, {
       method: "POST",
       headers: {
@@ -31,20 +43,21 @@ export async function POST({ request }: APIEvent) {
     });
     if (!response.ok) {
       console.error("Gemini upload failed", response.status);
-      return json({ error: "UPLOAD_UNAVAILABLE" }, { status: 503 });
+      return apiError(requestId, 503, "UPLOAD_UNAVAILABLE", "Upload service is unavailable", true);
     }
     return new Response(response.body, {
       status: 200,
       headers: {
-        "cache-control": "no-store",
+        "cache-control": "private, no-store",
         "content-type": "application/json",
+        "x-request-id": requestId,
       },
     });
   } catch (error) {
     console.error(
-      "Invalid upload request",
+      "Gemini upload unavailable",
       error instanceof Error ? error.message : "unknown error",
     );
-    return json({ error: "INVALID_UPLOAD" }, { status: 400 });
+    return apiError(requestId, 503, "UPLOAD_UNAVAILABLE", "Upload service is unavailable", true);
   }
 }
