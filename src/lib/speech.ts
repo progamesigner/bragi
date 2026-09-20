@@ -1,3 +1,5 @@
+import { apiErrorMessage } from "./api";
+
 export type SpeechRequest = {
   text: string;
   toneHint?: string;
@@ -8,15 +10,6 @@ export type SpeechAudio = {
   blob: Blob;
   durationMs?: number;
 };
-
-async function responseError(response: Response): Promise<string> {
-  try {
-    const body = await response.json();
-    return `${body.error?.message ?? "Speech request failed"} (${body.error?.requestId ?? response.status})`;
-  } catch {
-    return `Speech request failed (${response.status})`;
-  }
-}
 
 export async function requestSpeech(
   input: SpeechRequest,
@@ -29,7 +22,7 @@ export async function requestSpeech(
     body: JSON.stringify(input),
     signal,
   });
-  if (!response.ok) throw new Error(await responseError(response));
+  if (!response.ok) throw new Error(await apiErrorMessage(response, "Speech request failed"));
 
   const blob = await response.blob();
   if (blob.type !== "audio/wav") throw new Error("Speech service returned invalid audio");

@@ -3,6 +3,7 @@ import { createStore, reconcile } from "solid-js/store";
 import Capture from "~/components/Capture";
 import Playback from "~/components/Playback";
 import Review from "~/components/Review";
+import { apiErrorMessage } from "~/lib/api";
 import type { PreparedImage } from "~/lib/image";
 import type { Segment } from "~/lib/state";
 
@@ -16,15 +17,6 @@ type OcrResult = {
   detectedLanguage: string;
   segments: Segment[];
 };
-
-async function responseError(response: Response): Promise<string> {
-  try {
-    const body = await response.json();
-    return `${body.error?.message ?? "Request failed"} (${body.error?.requestId ?? response.status})`;
-  } catch {
-    return `Request failed (${response.status})`;
-  }
-}
 
 export default function Home() {
   const [otp, setOtp] = createSignal("");
@@ -45,7 +37,10 @@ export default function Home() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ otp: otp() }),
       });
-      setStatus(response.ok ? "驗證成功，可以測試直接上傳" : "驗證失敗");
+      if (!response.ok) throw new Error(await apiErrorMessage(response, "驗證失敗"));
+      setStatus("驗證成功，可以上傳圖片");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "驗證失敗");
     } finally {
       setBusy(false);
     }
@@ -64,7 +59,8 @@ export default function Home() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ mimeType: selected.type, sizeBytes: selected.size }),
       });
-      if (!sessionResponse.ok) throw new Error(await responseError(sessionResponse));
+      if (!sessionResponse.ok)
+        throw new Error(await apiErrorMessage(sessionResponse, "無法建立上傳工作階段"));
       const upload = (await sessionResponse.json()) as UploadTarget;
       setStatus("透過 Bragi 安全轉送至 Gemini…");
       const response = await fetch(upload.target.url, {
@@ -72,7 +68,7 @@ export default function Home() {
         headers: upload.target.headers,
         body: selected,
       });
-      if (!response.ok) throw new Error(await responseError(response));
+      if (!response.ok) throw new Error(await apiErrorMessage(response, "無法上傳圖片"));
       const receipt = await response.json();
       setStatus("Gemini 正在辨識與分段…");
       const ocrResponse = await fetch("/api/ocr", {
@@ -84,7 +80,7 @@ export default function Home() {
           genreHint: genreHint().trim() || undefined,
         }),
       });
-      if (!ocrResponse.ok) throw new Error(await responseError(ocrResponse));
+      if (!ocrResponse.ok) throw new Error(await apiErrorMessage(ocrResponse, "無法辨識圖片"));
       const result = (await ocrResponse.json()) as OcrResult;
       setDetectedLanguage(result.detectedLanguage);
       setSegments(reconcile(result.segments));
