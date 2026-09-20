@@ -13,7 +13,7 @@ The home page signs in with TOTP, captures or selects an image, uploads it throu
 
 OCR output opens as an editable review draft. Every segment supports text and tone edits, cursor-position splitting, merging with the next segment, insertion, and deletion. These edits remain in memory and are not persisted across page reloads.
 
-After review, playback prepares one segment at a time. Each prepared segment requires an explicit play action, and playback stops when the segment ends until the user chooses to replay it or prepare the next one. Returning to review preserves the current draft; leaving playback cancels an active speech request and releases generated audio URLs.
+After review, playback prepares one segment at a time. Each prepared segment requires an explicit play action, and playback stops when the segment ends until the user chooses to replay it or continue. Once a segment starts playing, Bragi prepares at most one following segment in the background. Speech previews and playback share a bounded in-memory cache of three entries or 9 MB; changing the image or signing out clears it. Returning to review preserves the current draft, while leaving playback cancels its active speech requests and releases generated audio URLs.
 
 Progress, success, and error notices use distinct accessible live-region semantics, and API failures retain their request ID for troubleshooting. Keyboard focus follows the review and playback views, invalid empty segments include field guidance, and all controls expose a visible focus indicator. The upload screen explains which processing stays on-device, which data is sent to Gemini, and what Bragi does not persist.
 
@@ -28,7 +28,7 @@ npm run build
 npm run preview
 ```
 
-`POST /api/uploads`, `/api/ocr`, and `/api/tts` require the signed `__Host-bragi-session` cookie and an exact same-origin `Origin` header.
+`POST /api/uploads`, `/api/ocr`, and `/api/tts` require the signed `__Host-bragi-session` cookie and an exact same-origin `Origin` header. The JWT and persistent cookie expire together after 90 days. `GET /api/session` restores the signed-in interface without exposing the token, while `DELETE /api/session` expires it and clears the active browser workspace.
 
 `/api/ocr` verifies the untrusted upload receipt against Gemini Files metadata before sending the file URI to the Interactions API. It uses structured output, high image resolution, and stateless processing.
 
