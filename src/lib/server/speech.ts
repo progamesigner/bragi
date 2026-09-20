@@ -81,6 +81,24 @@ function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(buffer);
 }
 
+function validateAudioMetadata(audio: {
+  mime_type?: string;
+  sample_rate?: number;
+  channels?: number;
+}): void {
+  const [mediaType, ...parameters] = audio.mime_type?.toLowerCase().split(";") ?? [];
+  if (mediaType?.trim() && mediaType.trim() !== "audio/l16")
+    throw new SpeechError("invalid-response", "Gemini returned an unsupported audio format");
+  const mimeRate = parameters
+    .map((parameter) => parameter.trim().match(/^rate=(\d+)$/)?.[1])
+    .find(Boolean);
+  const sampleRate = audio.sample_rate ?? (mimeRate ? Number(mimeRate) : undefined);
+  if (sampleRate && sampleRate !== SAMPLE_RATE)
+    throw new SpeechError("invalid-response", "Gemini returned an unsupported sample rate");
+  if (audio.channels && audio.channels !== CHANNELS)
+    throw new SpeechError("invalid-response", "Gemini returned unsupported audio channels");
+}
+
 async function responseJson(response: Response): Promise<unknown> {
   try {
     return await response.json();
@@ -142,12 +160,7 @@ async function requestSpeech(
     .at(-1);
   if (!audio?.data)
     throw new SpeechError("invalid-response", "Gemini returned no audio", undefined, true);
-  if (audio.mime_type && audio.mime_type !== "audio/l16")
-    throw new SpeechError("invalid-response", "Gemini returned an unsupported audio format");
-  if (audio.sample_rate && audio.sample_rate !== SAMPLE_RATE)
-    throw new SpeechError("invalid-response", "Gemini returned an unsupported sample rate");
-  if (audio.channels && audio.channels !== CHANNELS)
-    throw new SpeechError("invalid-response", "Gemini returned unsupported audio channels");
+  validateAudioMetadata(audio);
 
   const pcm = decodeBase64(audio.data);
   if (pcm.byteLength % 2 !== 0)

@@ -56,7 +56,7 @@ export async function POST({ request }: APIEvent) {
       );
       return apiError(requestId, 503, "TTS_UNAVAILABLE", "Speech service is unavailable", true);
     }
-    console.error("Gemini speech failure", error.kind);
+    console.error("Gemini speech failure", error.kind, error.message);
     switch (error.kind) {
       case "too-long":
         return apiError(

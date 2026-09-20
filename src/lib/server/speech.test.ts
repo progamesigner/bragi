@@ -17,8 +17,7 @@ function audioResponse(pcm: Uint8Array) {
           {
             type: "audio",
             data: Buffer.from(pcm).toString("base64"),
-            mime_type: "audio/l16",
-            sample_rate: 24_000,
+            mime_type: "audio/L16;codec=pcm;rate=24000",
             channels: 1,
           },
         ],
