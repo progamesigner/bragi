@@ -89,6 +89,12 @@ textarea {
 textarea.invalid {
   border-color: #d86f64;
 }
+.field-error {
+  display: block;
+  margin-top: 6px;
+  color: #ef9a91;
+  font-size: 0.8rem;
+}
 label + input {
   margin-top: 8px;
 }
@@ -105,6 +111,15 @@ button {
 button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+audio:focus-visible,
+[tabindex="-1"]:focus-visible,
+.file-button:has(+ input:focus-visible) {
+  outline: 3px solid #f7c47f;
+  outline-offset: 3px;
 }
 .small {
   padding: 9px 12px;

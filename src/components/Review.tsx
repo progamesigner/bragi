@@ -1,4 +1,4 @@
-import { For, Show } from "solid-js";
+import { For, onMount, Show } from "solid-js";
 import { reconcile, type SetStoreFunction } from "solid-js/store";
 import {
   insertAfter,
@@ -20,8 +20,11 @@ type ReviewProps = {
 };
 
 export default function Review(props: ReviewProps) {
+  let heading!: HTMLHeadingElement;
   const canStartPlayback = () =>
     props.segments.length > 0 && props.segments.every((segment) => segment.text.trim().length > 0);
+
+  onMount(() => heading.focus());
 
   function replaceSegments(segments: Segment[]) {
     props.setSegments(reconcile(segments));
@@ -41,7 +44,9 @@ export default function Review(props: ReviewProps) {
     <section class="card review" aria-labelledby="review-heading">
       <div class="review-heading">
         <div>
-          <h2 id="review-heading">3. 校對辨識草稿</h2>
+          <h2 ref={heading} id="review-heading" tabindex="-1">
+            3. 校對辨識草稿
+          </h2>
           <p>
             主要語言：{props.detectedLanguage} · {props.segments.length} 個段落
           </p>
@@ -84,10 +89,20 @@ export default function Review(props: ReviewProps) {
                     value={segment.text}
                     classList={{ invalid: segment.text.trim().length === 0 }}
                     aria-invalid={segment.text.trim().length === 0}
+                    aria-describedby={
+                      segment.text.trim().length === 0
+                        ? `segment-text-error-${segment.id}`
+                        : undefined
+                    }
                     onInput={(event) =>
                       props.setSegments(index(), "text", event.currentTarget.value)
                     }
                   />
+                  <Show when={segment.text.trim().length === 0}>
+                    <span class="field-error" id={`segment-text-error-${segment.id}`}>
+                      請輸入口白文字後再開始朗讀
+                    </span>
+                  </Show>
                   <label for={`segment-tone-${segment.id}`}>朗讀語氣</label>
                   <input
                     id={`segment-tone-${segment.id}`}

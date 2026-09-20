@@ -1,4 +1,4 @@
-import { createSignal, Match, onCleanup, Show, Switch, untrack } from "solid-js";
+import { createSignal, Match, onCleanup, onMount, Show, Switch, untrack } from "solid-js";
 import { initialPlaybackState, type PlaybackEvent, transitionPlayback } from "~/lib/playback";
 import { requestSpeech } from "~/lib/speech";
 import type { Segment } from "~/lib/state";
@@ -16,6 +16,7 @@ export default function Playback(props: PlaybackProps) {
   const [audioUrl, setAudioUrl] = createSignal<string>();
   const [duration, setDuration] = createSignal<number>();
   let audio!: HTMLAudioElement;
+  let heading!: HTMLHeadingElement;
   let request: AbortController | undefined;
 
   const segment = () => props.segments[state().index];
@@ -88,13 +89,14 @@ export default function Playback(props: PlaybackProps) {
     request?.abort();
     clearAudio();
   });
+  onMount(() => heading.focus());
 
   return (
     <section class="card playback" aria-labelledby="playback-heading">
       <div class="playback-heading">
         <div>
           <p class="eyebrow">逐段朗讀</p>
-          <h2 id="playback-heading">
+          <h2 ref={heading} id="playback-heading" tabindex="-1">
             第 {state().index + 1} 段，共 {props.segments.length} 段
           </h2>
         </div>
