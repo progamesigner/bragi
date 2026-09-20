@@ -13,7 +13,7 @@ The home page signs in with TOTP, captures or selects an image, uploads it throu
 
 OCR output opens as an editable review draft. Every segment supports text and tone edits, cursor-position splitting, merging with the next segment, insertion, and deletion. These edits remain in memory and are not persisted across page reloads.
 
-After review, playback prepares one segment at a time. Each prepared segment requires an explicit play action, and playback stops when the segment ends until the user chooses to replay it or continue. Once a segment starts playing, Bragi prepares at most one following segment in the background. Speech previews and playback share a bounded in-memory cache of three entries or 9 MB; changing the image or signing out clears it. Returning to review preserves the current draft, while leaving playback cancels its active speech requests and releases generated audio URLs.
+After review, the first uncached segment starts through progressive PCM streaming, so playback can begin before Gemini finishes the entire response. Completed streams are wrapped as WAV and enter the same bounded in-memory cache used by speech previews and later playback. Bragi prepares at most one following segment in the background, retains no more than three entries or 9 MB, and clears them when the image changes or the user signs out. Playback still stops after every segment until the user explicitly replays it or continues. Returning to review preserves the current draft, while leaving playback cancels active speech requests, stops Web Audio sources, and releases generated audio URLs.
 
 Progress, success, and error notices use distinct accessible live-region semantics, and API failures retain their request ID for troubleshooting. Keyboard focus follows the review and playback views, invalid empty segments include field guidance, and all controls expose a visible focus indicator. The upload screen explains which processing stays on-device, which data is sent to Gemini, and what Bragi does not persist.
 
@@ -28,10 +28,12 @@ npm run build
 npm run preview
 ```
 
-`POST /api/uploads`, `/api/ocr`, and `/api/tts` require the signed `__Host-bragi-session` cookie and an exact same-origin `Origin` header. The JWT and persistent cookie expire together after 90 days. `GET /api/session` restores the signed-in interface without exposing the token, while `DELETE /api/session` expires it and clears the active browser workspace.
+`POST /api/uploads`, `/api/ocr`, `/api/tts`, and `/api/tts-stream` require the signed `__Host-bragi-session` cookie and an exact same-origin `Origin` header. The JWT and persistent cookie expire together after 90 days. `GET /api/session` restores the signed-in interface without exposing the token, while `DELETE /api/session` expires it and clears the active browser workspace.
 
 `/api/ocr` verifies the untrusted upload receipt against Gemini Files metadata before sending the file URI to the Interactions API. It uses structured output, high image resolution, and stateless processing.
 
 `/api/tts` uses `gemini-3.1-flash-tts-preview` with the server-configured voice. It requests audio using the model's native format, validates the returned 24 kHz mono PCM and limits it to 60 seconds, wraps it in WAV, and retries one transient or missing-audio response. Review segments expose manual previews through native audio controls; generated object URLs are revoked when the text changes or the component is removed.
+
+`/api/tts-stream` uses Gemini Interactions SSE and forwards only validated audio deltas as bounded 24 kHz, 16-bit mono PCM. The browser schedules these chunks through Web Audio, preserves split samples across transport boundaries, and reconstructs a complete WAV for replay and in-memory reuse. The non-streaming `/api/tts` path remains available for previews, prefetching, cache misses on browsers without Web Audio, and explicit fallback.
 
 JSON errors use `{ error: { code, message, requestId, retryable } }`; the same request ID is exposed through `X-Request-Id` on every API response.
