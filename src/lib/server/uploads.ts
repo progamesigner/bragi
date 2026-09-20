@@ -1,5 +1,5 @@
 import "server-only";
-import { SignJWT } from "jose";
+import { jwtVerify, SignJWT } from "jose";
 import { requiredEnv } from "./config";
 
 export const ACCEPTED_IMAGE_TYPES = new Set([
@@ -9,7 +9,7 @@ export const ACCEPTED_IMAGE_TYPES = new Set([
   "image/heic",
   "image/heif",
 ]);
-export const MAX_UPLOAD_BYTES = 20_000_000;
+export const MAX_UPLOAD_BYTES = 4_000_000;
 
 function uploadKey(): Uint8Array {
   return new TextEncoder().encode(requiredEnv("BRAGI_SESSION_SECRET"));
@@ -35,7 +35,7 @@ export async function createGeminiUpload(mimeType: string, sizeBytes: number) {
   if (!url) throw new Error("Gemini response omitted x-goog-upload-url");
 
   const expiresAt = new Date(Date.now() + 15 * 60_000);
-  const uploadId = await new SignJWT({ provider: "gemini", mimeType, sizeBytes })
+  const uploadId = await new SignJWT({ provider: "gemini", mimeType, sizeBytes, url })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setIssuer("bragi-upload")
     .setAudience("bragi-ocr")
@@ -47,14 +47,38 @@ export async function createGeminiUpload(mimeType: string, sizeBytes: number) {
   return {
     uploadId,
     target: {
-      url,
+      url: "/api/upload-content",
       method: "POST" as const,
       headers: {
         "content-type": mimeType,
-        "x-goog-upload-offset": "0",
-        "x-goog-upload-command": "upload, finalize",
+        "x-bragi-upload-id": uploadId,
       },
     },
     expiresAt: expiresAt.toISOString(),
+  };
+}
+
+export async function verifyUploadId(uploadId: string) {
+  const { payload } = await jwtVerify(uploadId, uploadKey(), {
+    issuer: "bragi-upload",
+    audience: "bragi-ocr",
+  });
+  if (
+    payload.provider !== "gemini" ||
+    typeof payload.mimeType !== "string" ||
+    !ACCEPTED_IMAGE_TYPES.has(payload.mimeType) ||
+    typeof payload.sizeBytes !== "number" ||
+    !Number.isSafeInteger(payload.sizeBytes) ||
+    payload.sizeBytes <= 0 ||
+    payload.sizeBytes > MAX_UPLOAD_BYTES ||
+    typeof payload.url !== "string" ||
+    !payload.url.startsWith("https://generativelanguage.googleapis.com/")
+  ) {
+    throw new Error("Invalid upload token");
+  }
+  return {
+    mimeType: payload.mimeType,
+    sizeBytes: payload.sizeBytes,
+    url: payload.url,
   };
 }

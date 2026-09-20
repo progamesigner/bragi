@@ -40,7 +40,7 @@ export default function Home() {
       });
       if (!sessionResponse.ok) throw new Error(await sessionResponse.text());
       const upload = (await sessionResponse.json()) as UploadTarget;
-      setStatus("瀏覽器直接上傳至 Gemini…");
+      setStatus("透過 Bragi 安全轉送至 Gemini…");
       const response = await fetch(upload.target.url, {
         method: upload.target.method,
         headers: upload.target.headers,
@@ -92,8 +92,11 @@ export default function Home() {
       </section>
 
       <section class="card">
-        <h2>2. Direct upload CORS spike</h2>
-        <p>選擇一張不含敏感資訊的圖片。檔案會直接送到 Google Gemini，最多保存 48 小時。</p>
+        <h2>2. Gemini upload</h2>
+        <p>
+          選擇一張不含敏感資訊、最多 4 MB 的圖片。檔案會經 Bragi 轉送至 Google Gemini，最多保存 48
+          小時。
+        </p>
         <input
           type="file"
           accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
