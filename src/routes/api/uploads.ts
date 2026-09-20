@@ -2,7 +2,7 @@ import type { APIEvent } from "@solidjs/start/server";
 import { uploadSessionRequestSchema } from "~/lib/schemas";
 import { hasValidSession } from "~/lib/server/auth";
 import { apiError, apiJson, createRequestId, isSameOrigin } from "~/lib/server/http";
-import { createGeminiUpload, MAX_UPLOAD_BYTES } from "~/lib/server/uploads";
+import { ACCEPTED_IMAGE_TYPES, createGeminiUpload, MAX_UPLOAD_BYTES } from "~/lib/server/uploads";
 
 export async function POST({ request }: APIEvent) {
   const requestId = createRequestId();
@@ -30,7 +30,8 @@ export async function POST({ request }: APIEvent) {
       typeof body === "object" &&
       body !== null &&
       "mimeType" in body &&
-      typeof body.mimeType === "string";
+      typeof body.mimeType === "string" &&
+      !ACCEPTED_IMAGE_TYPES.has(body.mimeType);
     return unsupported
       ? apiError(requestId, 415, "UNSUPPORTED_MEDIA_TYPE", "Image type is not supported")
       : apiError(requestId, 400, "INVALID_REQUEST", "Upload request is invalid");

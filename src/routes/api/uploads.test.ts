@@ -42,4 +42,12 @@ describe("POST /api/uploads", () => {
     expect(response.status).toBe(413);
     expect((await response.json()).error.code).toBe("FILE_TOO_LARGE");
   });
+
+  it("reports malformed upload metadata as an invalid request", async () => {
+    const response = await POST({
+      request: await request({ mimeType: "image/jpeg", sizeBytes: "100" }),
+    } as APIEvent);
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.code).toBe("INVALID_REQUEST");
+  });
 });
