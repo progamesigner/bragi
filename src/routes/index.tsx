@@ -1,6 +1,7 @@
 import { createSignal, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import Capture from "~/components/Capture";
+import Playback from "~/components/Playback";
 import Review from "~/components/Review";
 import type { PreparedImage } from "~/lib/image";
 import type { Segment } from "~/lib/state";
@@ -33,6 +34,7 @@ export default function Home() {
   const [segments, setSegments] = createStore<Segment[]>([]);
   const [status, setStatus] = createSignal("尚未驗證");
   const [busy, setBusy] = createSignal(false);
+  const [screen, setScreen] = createSignal<"review" | "playback">("review");
 
   async function signIn(event: SubmitEvent) {
     event.preventDefault();
@@ -86,6 +88,7 @@ export default function Home() {
       const result = (await ocrResponse.json()) as OcrResult;
       setDetectedLanguage(result.detectedLanguage);
       setSegments(reconcile(result.segments));
+      setScreen("review");
       setStatus(`辨識完成 · ${result.segments.length} 個段落`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "上傳失敗");
@@ -141,6 +144,7 @@ export default function Home() {
             setImage(prepared);
             setDetectedLanguage(undefined);
             setSegments(reconcile([]));
+            setScreen("review");
           }}
           onStatus={setStatus}
         />
@@ -160,13 +164,32 @@ export default function Home() {
 
       <Show when={detectedLanguage()}>
         {(language) => (
-          <Review
-            detectedLanguage={language()}
-            genreHint={genreHint().trim() || undefined}
-            segments={segments}
-            setSegments={setSegments}
-            onStatus={setStatus}
-          />
+          <Show
+            when={screen() === "review"}
+            fallback={
+              <Playback
+                segments={segments}
+                genreHint={genreHint().trim() || undefined}
+                onBack={() => {
+                  setScreen("review");
+                  setStatus("已返回校對");
+                }}
+                onStatus={setStatus}
+              />
+            }
+          >
+            <Review
+              detectedLanguage={language()}
+              genreHint={genreHint().trim() || undefined}
+              segments={segments}
+              setSegments={setSegments}
+              onStartPlayback={() => {
+                setScreen("playback");
+                setStatus("逐段朗讀已就緒");
+              }}
+              onStatus={setStatus}
+            />
+          </Show>
         )}
       </Show>
 

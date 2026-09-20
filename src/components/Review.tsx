@@ -14,10 +14,14 @@ type ReviewProps = {
   genreHint?: string;
   segments: Segment[];
   setSegments: SetStoreFunction<Segment[]>;
+  onStartPlayback: () => void;
   onStatus: (message: string) => void;
 };
 
 export default function Review(props: ReviewProps) {
+  const canStartPlayback = () =>
+    props.segments.length > 0 && props.segments.every((segment) => segment.text.trim().length > 0);
+
   function replaceSegments(segments: Segment[]) {
     props.setSegments(reconcile(segments));
   }
@@ -41,13 +45,23 @@ export default function Review(props: ReviewProps) {
             主要語言：{props.detectedLanguage} · {props.segments.length} 個段落
           </p>
         </div>
-        <button
-          type="button"
-          class="small secondary"
-          onClick={() => replaceSegments(insertAfter(props.segments, props.segments.length - 1))}
-        >
-          新增段落
-        </button>
+        <div class="review-heading-actions">
+          <button
+            type="button"
+            class="small secondary"
+            onClick={() => replaceSegments(insertAfter(props.segments, props.segments.length - 1))}
+          >
+            新增段落
+          </button>
+          <button
+            type="button"
+            class="small"
+            disabled={!canStartPlayback()}
+            onClick={props.onStartPlayback}
+          >
+            開始逐段朗讀
+          </button>
+        </div>
       </div>
 
       <Show
