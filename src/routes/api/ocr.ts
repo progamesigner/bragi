@@ -1,6 +1,7 @@
 import type { APIEvent } from "@solidjs/start/server";
 import { ocrRequestSchema, ocrResponseSchema } from "~/lib/schemas";
 import { hasValidSession } from "~/lib/server/auth";
+import { GeminiError, recognizeImage, resolveGeminiFile } from "~/lib/server/gemini";
 import { apiError, apiJson, createRequestId, isSameOrigin } from "~/lib/server/http";
 import { verifyUploadId } from "~/lib/server/uploads";
 
@@ -27,26 +28,49 @@ export async function POST({ request }: APIEvent) {
   const parsed = ocrRequestSchema.safeParse(input);
   if (!parsed.success) return apiError(requestId, 400, "INVALID_REQUEST", "OCR request is invalid");
 
+  let upload: Awaited<ReturnType<typeof verifyUploadId>>;
   try {
-    await verifyUploadId(parsed.data.uploadId);
+    upload = await verifyUploadId(parsed.data.uploadId);
   } catch {
     return apiError(requestId, 400, "INVALID_UPLOAD", "Upload reference is invalid or expired");
   }
 
-  const response = ocrResponseSchema.parse({
-    detectedLanguage: "zh-Hant",
-    segments: [
-      {
-        id: "segment-1",
-        text: "這是一段用於驗證 Bragi 流程的範例文字。",
-        suggestedToneHint: "清晰、沉穩地敘述",
-      },
-      {
-        id: "segment-2",
-        text: "確認內容後，即可逐段進行朗讀。",
-        suggestedToneHint: "帶有期待感",
-      },
-    ],
-  });
-  return apiJson(response, requestId);
+  try {
+    const file = await resolveGeminiFile(parsed.data.receipt, upload);
+    const response = ocrResponseSchema.parse(await recognizeImage(file, parsed.data.genreHint));
+    return apiJson(response, requestId);
+  } catch (error) {
+    if (!(error instanceof GeminiError)) {
+      console.error("Unexpected OCR failure", error instanceof Error ? error.message : "unknown");
+      return apiError(requestId, 503, "OCR_UNAVAILABLE", "OCR service is unavailable", true);
+    }
+    console.error("Gemini OCR failure", error.kind);
+    switch (error.kind) {
+      case "invalid-file":
+        return apiError(requestId, 400, "INVALID_UPLOAD", "Uploaded image is invalid");
+      case "processing":
+        return apiError(
+          requestId,
+          409,
+          "UPLOAD_PROCESSING",
+          "Uploaded image is still processing",
+          true,
+        );
+      case "rate-limited":
+        return apiError(
+          requestId,
+          429,
+          "OCR_RATE_LIMITED",
+          "OCR rate limit was reached",
+          true,
+          error.retryAfter ? { "retry-after": error.retryAfter } : undefined,
+        );
+      case "rejected":
+        return apiError(requestId, 422, "OCR_REJECTED", "Image could not be processed");
+      case "invalid-response":
+        return apiError(requestId, 502, "OCR_FAILED", "OCR returned an invalid response", true);
+      case "unavailable":
+        return apiError(requestId, 503, "OCR_UNAVAILABLE", "OCR service is unavailable", true);
+    }
+  }
 }

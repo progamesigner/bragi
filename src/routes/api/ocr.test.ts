@@ -37,27 +37,103 @@ describe("POST /api/ocr", () => {
     expect(body.error.requestId).toBe(response.headers.get("x-request-id"));
   });
 
-  it("returns deterministic segments for a valid upload", async () => {
+  it("returns Gemini segments for a verified upload", async () => {
     process.env.BRAGI_SESSION_SECRET = "0123456789abcdef0123456789abcdef";
     process.env.GEMINI_API_KEY = "test-key";
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(null, {
-          status: 200,
-          headers: {
-            "x-goog-upload-url": "https://generativelanguage.googleapis.com/upload/session-id",
-          },
-        }),
-      ),
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(null, {
+            status: 200,
+            headers: {
+              "x-goog-upload-url": "https://generativelanguage.googleapis.com/upload/session-id",
+            },
+          }),
+        )
+        .mockResolvedValueOnce(
+          Response.json({
+            name: "files/image-1",
+            mimeType: "image/jpeg",
+            sizeBytes: "1234",
+            uri: "https://generativelanguage.googleapis.com/v1beta/files/image-1",
+            state: "ACTIVE",
+          }),
+        )
+        .mockResolvedValueOnce(
+          Response.json({
+            steps: [
+              {
+                type: "model_output",
+                content: [
+                  {
+                    type: "text",
+                    text: JSON.stringify({
+                      detectedLanguage: "zh-Hant",
+                      segments: [
+                        {
+                          id: "segment-1",
+                          text: "古老的門緩緩開啟。",
+                          suggestedToneHint: "低沉地敘述",
+                        },
+                      ],
+                    }),
+                  },
+                ],
+              },
+            ],
+          }),
+        ),
     );
     const upload = await createGeminiUpload("image/jpeg", 1234);
     const response = await POST({
-      request: await authenticatedRequest({ uploadId: upload.uploadId, receipt: {} }),
+      request: await authenticatedRequest({
+        uploadId: upload.uploadId,
+        receipt: { file: { name: "files/image-1" } },
+      }),
     } as APIEvent);
     const body = await response.json();
     expect(response.status).toBe(200);
     expect(body.detectedLanguage).toBe("zh-Hant");
-    expect(body.segments).toHaveLength(2);
+    expect(body.segments).toHaveLength(1);
+  });
+
+  it("reports a processing upload as retryable", async () => {
+    process.env.BRAGI_SESSION_SECRET = "0123456789abcdef0123456789abcdef";
+    process.env.GEMINI_API_KEY = "test-key";
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(null, {
+            status: 200,
+            headers: {
+              "x-goog-upload-url": "https://generativelanguage.googleapis.com/upload/session-id",
+            },
+          }),
+        )
+        .mockResolvedValueOnce(
+          Response.json({
+            name: "files/image-1",
+            mimeType: "image/jpeg",
+            sizeBytes: "1234",
+            uri: "https://generativelanguage.googleapis.com/v1beta/files/image-1",
+            state: "PROCESSING",
+          }),
+        ),
+    );
+    const upload = await createGeminiUpload("image/jpeg", 1234);
+
+    const response = await POST({
+      request: await authenticatedRequest({
+        uploadId: upload.uploadId,
+        receipt: { file: { name: "files/image-1" } },
+      }),
+    } as APIEvent);
+    const body = await response.json();
+    expect(response.status).toBe(409);
+    expect(body.error).toMatchObject({ code: "UPLOAD_PROCESSING", retryable: true });
   });
 });

@@ -9,10 +9,15 @@ export type ApiErrorCode =
   | "INVALID_REQUEST"
   | "INVALID_SIZE"
   | "INVALID_UPLOAD"
+  | "OCR_FAILED"
+  | "OCR_RATE_LIMITED"
+  | "OCR_REJECTED"
+  | "OCR_UNAVAILABLE"
   | "SERVICE_UNAVAILABLE"
   | "TEXT_TOO_LONG"
   | "UNAUTHORIZED"
   | "UNSUPPORTED_MEDIA_TYPE"
+  | "UPLOAD_PROCESSING"
   | "UPLOAD_UNAVAILABLE";
 
 export function createRequestId(): string {
