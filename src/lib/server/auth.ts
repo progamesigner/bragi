@@ -7,7 +7,7 @@ import { readCookie } from "./http";
 export const SESSION_COOKIE = "__Host-bragi-session";
 const ISSUER = "bragi";
 const AUDIENCE = "bragi-web";
-const THIRTY_DAYS = 30 * 24 * 60 * 60;
+const SESSION_TTL_SECONDS = 90 * 24 * 60 * 60;
 
 function sessionKey(): Uint8Array {
   const secret = requiredEnv("BRAGI_SESSION_SECRET");
@@ -35,7 +35,7 @@ export async function issueSession(): Promise<string> {
     .setIssuer(ISSUER)
     .setAudience(AUDIENCE)
     .setIssuedAt()
-    .setExpirationTime(`${THIRTY_DAYS}s`)
+    .setExpirationTime(`${SESSION_TTL_SECONDS}s`)
     .setJti(crypto.randomUUID())
     .sign(sessionKey());
 }
@@ -55,7 +55,7 @@ export async function hasValidSession(request: Request): Promise<boolean> {
 }
 
 export function sessionCookie(token: string): string {
-  return `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${THIRTY_DAYS}; HttpOnly; Secure; SameSite=Strict`;
+  return `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${SESSION_TTL_SECONDS}; HttpOnly; Secure; SameSite=Strict`;
 }
 
 export function expiredSessionCookie(): string {

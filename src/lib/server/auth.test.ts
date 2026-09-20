@@ -24,6 +24,7 @@ describe("session authentication", () => {
     process.env.BRAGI_SESSION_SECRET = "0123456789abcdef0123456789abcdef";
     process.env.BRAGI_SESSION_VERSION = "1";
     const token = await issueSession();
+    expect(sessionCookie(token)).toContain("Max-Age=7776000");
     const request = new Request("https://bragi.example", {
       headers: { cookie: `${sessionCookie(token).split(";")[0]}` },
     });
