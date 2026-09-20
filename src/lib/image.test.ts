@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_IMAGE_DIMENSION,
   MAX_SOURCE_BYTES,
+  normalizeImageType,
   targetDimensions,
   validateSourceImage,
 } from "./image";
@@ -33,5 +34,10 @@ describe("image preparation limits", () => {
         size: MAX_SOURCE_BYTES + 1,
       } as File),
     ).toThrow("25 MB");
+  });
+
+  it("recovers missing mobile MIME types from known file extensions", () => {
+    const file = new File(["image"], "capture.HEIC");
+    expect(normalizeImageType(file).type).toBe("image/heic");
   });
 });

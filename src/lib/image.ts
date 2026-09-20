@@ -10,6 +10,14 @@ const ACCEPTED_TYPES = new Set([
   "image/heif",
 ]);
 const HEIF_TYPES = new Set(["image/heic", "image/heif"]);
+const EXTENSION_TYPES: Record<string, string> = {
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  heic: "image/heic",
+  heif: "image/heif",
+};
 
 export type PreparedImage = {
   file: File;
@@ -37,6 +45,13 @@ export function validateSourceImage(file: File): void {
   if (file.size > MAX_SOURCE_BYTES) throw new Error("原始圖片不可超過 25 MB");
 }
 
+export function normalizeImageType(file: File): File {
+  if (file.type || !file.name.includes(".")) return file;
+  const extension = file.name.split(".").at(-1)?.toLowerCase();
+  const type = extension ? EXTENSION_TYPES[extension] : undefined;
+  return type ? new File([file], file.name, { type, lastModified: file.lastModified }) : file;
+}
+
 function canvasBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
@@ -61,24 +76,25 @@ function jpegName(name: string): string {
 }
 
 export async function prepareImage(file: File): Promise<PreparedImage> {
-  validateSourceImage(file);
+  const source = normalizeImageType(file);
+  validateSourceImage(source);
 
   let bitmap: ImageBitmap;
   try {
-    bitmap = await createImageBitmap(file, {
+    bitmap = await createImageBitmap(source, {
       imageOrientation: "from-image",
       premultiplyAlpha: "default",
       colorSpaceConversion: "default",
     });
   } catch {
-    if (HEIF_TYPES.has(file.type) && file.size <= MAX_UPLOAD_BYTES) {
+    if (HEIF_TYPES.has(source.type) && source.size <= MAX_UPLOAD_BYTES) {
       return {
-        file,
+        file: source,
         transformed: false,
         warning: "此瀏覽器無法預覽 HEIC；將保留原檔交給 Gemini 辨識",
       };
     }
-    if (HEIF_TYPES.has(file.type))
+    if (HEIF_TYPES.has(source.type))
       throw new Error("此瀏覽器無法壓縮大於 4 MB 的 HEIC，請改用 JPEG 或較小的圖片");
     throw new Error("瀏覽器無法讀取這張圖片，請改用其他檔案");
   }
@@ -97,7 +113,7 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
       const blob = await encodeWithinLimit(canvas);
       if (blob)
         return {
-          file: new File([blob], jpegName(file.name), {
+          file: new File([blob], jpegName(source.name), {
             type: "image/jpeg",
             lastModified: Date.now(),
           }),
