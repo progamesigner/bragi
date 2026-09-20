@@ -9,7 +9,9 @@ Mobile-first tabletop narration assistant. Bragi uploads a tabletop script or ca
 3. Add the Base32 `BRAGI_TOTP_SECRET` to an authenticator app using an offline `otpauth://` QR-code workflow.
 4. Run `npm run dev`.
 
-The home page signs in with TOTP, uploads images through Bragi to Gemini Files, and runs live OCR with `gemini-3.8-flash`. The 4 MB application limit stays below Vercel Functions' 4.5 MB request limit. Gemini may retain uploaded files for up to 48 hours.
+The home page signs in with TOTP, captures or selects an image, uploads it through Bragi to Gemini Files, and runs live OCR with `gemini-3.8-flash`. The browser normalizes EXIF orientation, limits the longest edge to 2,400 pixels, and compresses supported images below the 4 MB application limit before upload. Gemini may retain uploaded files for up to 48 hours.
+
+JPEG, PNG, WebP, HEIC, and HEIF sources up to 25 MB are accepted. When a browser cannot decode HEIC or HEIF, an original file already below 4 MB can still be sent directly to Gemini; larger files require conversion or a new capture.
 
 ## Verification
 
