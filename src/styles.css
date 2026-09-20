@@ -74,6 +74,21 @@ input {
   background: #1d1a17;
   font: inherit;
 }
+textarea {
+  min-width: 0;
+  width: 100%;
+  resize: vertical;
+  padding: 13px 14px;
+  border: 1px solid #625446;
+  border-radius: 12px;
+  color: inherit;
+  background: #1d1a17;
+  font: inherit;
+  line-height: 1.55;
+}
+textarea.invalid {
+  border-color: #d86f64;
+}
 label + input {
   margin-top: 8px;
 }
@@ -90,6 +105,20 @@ button {
 button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+.small {
+  padding: 9px 12px;
+  font-size: 0.82rem;
+}
+button.secondary {
+  border: 1px solid #625446;
+  background: #1d1a17;
+  color: #f3ead8;
+}
+button.danger {
+  border: 1px solid #75433e;
+  background: transparent;
+  color: #ef9a91;
 }
 .wide {
   width: 100%;
@@ -178,29 +207,50 @@ button:disabled {
   color: #e7a85c;
   text-align: center;
 }
-.segments {
+.review-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.review-heading h2,
+.review-heading p {
+  margin-bottom: 4px;
+}
+.review-segments {
   display: grid;
-  gap: 12px;
+  gap: 16px;
   margin: 0;
-  padding-left: 24px;
+  padding: 0;
+  list-style: none;
 }
-.segments li {
-  padding: 4px 0 12px 8px;
-  border-bottom: 1px solid #4c4136;
+.review-segment {
+  padding: 18px;
+  border: 1px solid #4c4136;
+  border-radius: 14px;
+  background: #201c18;
 }
-.segments li:last-child {
-  border-bottom: 0;
+.review-segment label {
+  display: block;
+  margin: 12px 0 6px;
 }
-.segments .segment-text {
-  margin: 0 0 6px;
-  color: #f3ead8;
-  font-size: 1rem;
-  white-space: pre-wrap;
-}
-.segments .tone {
-  margin: 0;
+.segment-number {
   color: #e7a85c;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.segment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.empty-state {
+  padding: 22px;
+  border: 1px dashed #625446;
+  border-radius: 12px;
+  text-align: center;
 }
 @media (max-width: 480px) {
   main {
@@ -208,6 +258,13 @@ button:disabled {
   }
   .row {
     flex-direction: column;
+  }
+  .review-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .segment-actions button {
+    flex: 1 1 calc(50% - 8px);
   }
   .card {
     padding: 20px;
