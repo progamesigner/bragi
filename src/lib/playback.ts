@@ -57,7 +57,7 @@ export function transitionPlayback(
     case "retry":
       return state.phase === "error" ? { index: state.index, phase: "loading" } : state;
     case "fail":
-      return state.phase === "loading"
+      return ["loading", "ready", "playing"].includes(state.phase)
         ? { index: state.index, phase: "error", error: event.message }
         : state;
   }

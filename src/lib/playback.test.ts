@@ -40,6 +40,12 @@ describe("playback state", () => {
     expect(transition(failed, { type: "retry" })).toEqual({ index: 1, phase: "loading" });
   });
 
+  it("surfaces a stream interrupted during playback", () => {
+    expect(
+      transition({ index: 1, phase: "playing" }, { type: "fail", message: "串流中斷" }),
+    ).toEqual({ index: 1, phase: "error", error: "串流中斷" });
+  });
+
   it("ignores events that would skip the current phase", () => {
     expect(transition(initialPlaybackState, { type: "next" })).toBe(initialPlaybackState);
     expect(transition(initialPlaybackState, { type: "play" })).toBe(initialPlaybackState);
