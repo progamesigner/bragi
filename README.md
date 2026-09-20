@@ -1,6 +1,6 @@
 # Bragi
 
-Mobile-first tabletop narration assistant. M0 establishes the SolidStart v2/Nitro foundation, TOTP authentication, protected API boundaries, and a browser-to-Gemini resumable upload spike.
+Mobile-first tabletop narration assistant. M0 establishes the SolidStart v2/Nitro foundation, TOTP authentication, protected API boundaries, and a same-origin proxy for Gemini resumable uploads.
 
 ## Local setup
 
@@ -9,7 +9,7 @@ Mobile-first tabletop narration assistant. M0 establishes the SolidStart v2/Nitr
 3. Add the Base32 `BRAGI_TOTP_SECRET` to an authenticator app using an offline `otpauth://` QR-code workflow.
 4. Run `npm run dev`.
 
-The home page signs in with TOTP and performs the real browser CORS upload spike. Images are uploaded directly to Gemini Files and may be retained there for up to 48 hours.
+The home page signs in with TOTP and uploads images through Bragi to Gemini Files. The 4 MB application limit stays below Vercel Functions' 4.5 MB request limit. Gemini may retain uploaded files for up to 48 hours.
 
 ## Verification
 
