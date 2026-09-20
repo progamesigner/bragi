@@ -105,12 +105,7 @@ async function requestSpeech(
         model: process.env.GEMINI_TTS_MODEL?.trim() || "gemini-3.1-flash-tts-preview",
         store: false,
         input: speechPrompt(input),
-        response_format: {
-          type: "audio",
-          mime_type: "audio/l16",
-          sample_rate: SAMPLE_RATE,
-          delivery: "inline",
-        },
+        response_format: { type: "audio" },
         generation_config: {
           speech_config: [{ voice: requiredEnv("GEMINI_TTS_VOICE") }],
         },

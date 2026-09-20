@@ -50,7 +50,7 @@ describe("Gemini speech", () => {
     expect(body).toMatchObject({
       model: "gemini-tts-test",
       store: false,
-      response_format: { type: "audio", mime_type: "audio/l16", sample_rate: 24_000 },
+      response_format: { type: "audio" },
       generation_config: { speech_config: [{ voice: "Kore" }] },
     });
   });
