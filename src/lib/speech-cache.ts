@@ -1,4 +1,4 @@
-import type { SpeechAudio, SpeechRequest } from "./speech";
+import { requestSpeech, type SpeechAudio, type SpeechRequest } from "./speech";
 
 export function speechCacheKey(input: SpeechRequest): string {
   return JSON.stringify([input.text, input.toneHint ?? "", input.genreHint ?? ""]);
@@ -53,3 +53,15 @@ export class SpeechCache {
 }
 
 export const speechCache = new SpeechCache();
+
+export async function requestCachedSpeech(
+  input: SpeechRequest,
+  signal?: AbortSignal,
+  fetcher: typeof fetch = fetch,
+): Promise<SpeechAudio> {
+  const cached = speechCache.get(input);
+  if (cached) return cached;
+  const audio = await requestSpeech(input, signal, fetcher);
+  speechCache.set(input, audio);
+  return audio;
+}

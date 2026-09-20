@@ -5,6 +5,7 @@ import Playback from "~/components/Playback";
 import Review from "~/components/Review";
 import { apiErrorMessage } from "~/lib/api";
 import type { PreparedImage } from "~/lib/image";
+import { speechCache } from "~/lib/speech-cache";
 import type { Segment } from "~/lib/state";
 import type { StatusMessage, StatusTone } from "~/lib/status";
 
@@ -40,6 +41,7 @@ export default function Home() {
   }
 
   function clearWorkspace() {
+    speechCache.clear();
     setImage(undefined);
     setDetectedLanguage(undefined);
     setSegments(reconcile([]));
@@ -213,6 +215,7 @@ export default function Home() {
           <Capture
             disabled={recognitionBusy()}
             onChange={(prepared) => {
+              speechCache.clear();
               setImage(prepared);
               setDetectedLanguage(undefined);
               setSegments(reconcile([]));

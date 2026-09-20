@@ -1,5 +1,5 @@
 import { createEffect, createSignal, on, onCleanup, Show, untrack } from "solid-js";
-import { requestSpeech } from "~/lib/speech";
+import { requestCachedSpeech } from "~/lib/speech-cache";
 import type { StatusReporter } from "~/lib/status";
 
 type SpeechPreviewProps = {
@@ -47,7 +47,7 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
     setBusy(true);
     props.onStatus("Gemini 正在產生試聽音訊…");
     try {
-      const audio = await requestSpeech({
+      const audio = await requestCachedSpeech({
         text: props.text,
         toneHint: props.toneHint || undefined,
         genreHint: props.genreHint || undefined,

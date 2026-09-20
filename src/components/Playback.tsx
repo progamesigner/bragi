@@ -1,6 +1,6 @@
 import { createSignal, Match, onCleanup, onMount, Show, Switch, untrack } from "solid-js";
 import { initialPlaybackState, type PlaybackEvent, transitionPlayback } from "~/lib/playback";
-import { requestSpeech } from "~/lib/speech";
+import { requestCachedSpeech } from "~/lib/speech-cache";
 import type { Segment } from "~/lib/state";
 import type { StatusReporter } from "~/lib/status";
 
@@ -50,7 +50,7 @@ export default function Playback(props: PlaybackProps) {
     try {
       const current = props.segments[nextState.index];
       if (!current) throw new Error("找不到要播放的段落");
-      const result = await requestSpeech(
+      const result = await requestCachedSpeech(
         {
           text: current.text,
           toneHint: current.suggestedToneHint || undefined,

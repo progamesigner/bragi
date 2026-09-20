@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SpeechAudio, SpeechRequest } from "./speech";
-import { SpeechCache, speechCacheKey } from "./speech-cache";
+import { requestCachedSpeech, SpeechCache, speechCache, speechCacheKey } from "./speech-cache";
 
 function request(text: string): SpeechRequest {
   return { text, toneHint: "平靜", genreHint: "奇幻" };
@@ -38,5 +38,22 @@ describe("speech cache", () => {
     expect(cache.get(request("two"))).toBeDefined();
     cache.clear();
     expect(cache.get(request("two"))).toBeUndefined();
+  });
+
+  it("reuses a cached API response", async () => {
+    speechCache.clear();
+    const fetcher = async () =>
+      new Response(audio(10).blob, { headers: { "content-type": "audio/wav" } });
+    let calls = 0;
+    const countedFetch: typeof fetch = (..._arguments) => {
+      calls += 1;
+      return fetcher();
+    };
+
+    await requestCachedSpeech(request("one"), undefined, countedFetch);
+    await requestCachedSpeech(request("one"), undefined, countedFetch);
+
+    expect(calls).toBe(1);
+    speechCache.clear();
   });
 });
