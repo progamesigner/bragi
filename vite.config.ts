@@ -10,6 +10,7 @@ export default defineConfig(({ mode }) => ({
       ? {
           alias: {
             "server-only": fileURLToPath(new URL("./test/server-only.ts", import.meta.url)),
+            "~": fileURLToPath(new URL("./src", import.meta.url)),
           },
         }
       : undefined,
