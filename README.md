@@ -1,6 +1,6 @@
 # Bragi
 
-Mobile-first tabletop narration assistant. M0 establishes the SolidStart v2/Nitro foundation, TOTP authentication, protected API boundaries, and a same-origin proxy for Gemini resumable uploads.
+Mobile-first tabletop narration assistant. Bragi uploads a tabletop script or card image to Gemini, extracts structured narration segments, and prepares them for reviewed, step-by-step playback.
 
 ## Local setup
 
@@ -9,7 +9,7 @@ Mobile-first tabletop narration assistant. M0 establishes the SolidStart v2/Nitr
 3. Add the Base32 `BRAGI_TOTP_SECRET` to an authenticator app using an offline `otpauth://` QR-code workflow.
 4. Run `npm run dev`.
 
-The home page signs in with TOTP and uploads images through Bragi to Gemini Files. The 4 MB application limit stays below Vercel Functions' 4.5 MB request limit. Gemini may retain uploaded files for up to 48 hours.
+The home page signs in with TOTP, uploads images through Bragi to Gemini Files, and runs live OCR with `gemini-3.8-flash`. The 4 MB application limit stays below Vercel Functions' 4.5 MB request limit. Gemini may retain uploaded files for up to 48 hours.
 
 ## Verification
 
@@ -20,6 +20,8 @@ npm run build
 npm run preview
 ```
 
-`POST /api/uploads`, `/api/ocr`, and `/api/tts` require the signed `__Host-bragi-session` cookie and an exact same-origin `Origin` header. OCR and TTS intentionally use authenticated fixtures until their live-model milestones.
+`POST /api/uploads`, `/api/ocr`, and `/api/tts` require the signed `__Host-bragi-session` cookie and an exact same-origin `Origin` header.
 
-M1 fixes the processing contracts before live model integration. `/api/ocr` returns deterministic segments, while `/api/tts` returns a deterministic 300 ms WAV fixture. JSON errors use `{ error: { code, message, requestId, retryable } }`; the same request ID is exposed through `X-Request-Id` on every API response.
+`/api/ocr` verifies the untrusted upload receipt against Gemini Files metadata before sending the file URI to the Interactions API. It uses structured output, high image resolution, and stateless processing. `/api/tts` remains a deterministic 300 ms WAV fixture until its live-model milestone.
+
+JSON errors use `{ error: { code, message, requestId, retryable } }`; the same request ID is exposed through `X-Request-Id` on every API response.
