@@ -39,14 +39,24 @@ export const ocrRequestSchema = z.object({
 });
 
 export const ocrResponseSchema = z.object({
-  detectedLanguage: z.string().min(1),
-  segments: z.array(
-    z.object({
-      id: z.string().min(1),
-      text: z.string().min(1),
-      suggestedToneHint: z.string(),
-    }),
-  ),
+  detectedLanguage: z.string().min(1).max(35),
+  segments: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(64),
+        text: z
+          .string()
+          .trim()
+          .min(1)
+          .refine((value) => graphemeCount(value) <= 400),
+        suggestedToneHint: z
+          .string()
+          .trim()
+          .refine((value) => graphemeCount(value) <= 120),
+      }),
+    )
+    .min(1)
+    .max(50),
 });
 
 export const ttsRequestSchema = z.object({

@@ -112,18 +112,26 @@ const ocrJsonSchema = {
   properties: {
     detectedLanguage: {
       type: "string",
+      maxLength: 35,
       description: "BCP 47 language tag for the primary recognized language",
     },
     segments: {
       type: "array",
       minItems: 1,
+      maxItems: 50,
       items: {
         type: "object",
         properties: {
-          id: { type: "string" },
-          text: { type: "string", description: "Exact recognized text for this narration segment" },
+          id: { type: "string", maxLength: 64 },
+          text: {
+            type: "string",
+            minLength: 1,
+            maxLength: 400,
+            description: "Exact recognized text for this narration segment",
+          },
           suggestedToneHint: {
             type: "string",
+            maxLength: 120,
             description: "Short delivery direction in the same language as the text",
           },
         },
@@ -141,6 +149,7 @@ function ocrPrompt(genreHint?: string): string {
     "Transcribe all readable tabletop game narration or card text in the image.",
     "Preserve the original language, wording, punctuation, and reading order.",
     "Split the transcription into natural narration segments without summarizing or inventing text.",
+    "Keep every segment at or below 400 characters so it can be narrated independently.",
     "Use stable sequential IDs such as segment-1. Suggest a concise speaking tone for each segment.",
     "Ignore decorative text that is clearly not part of the readable game content.",
     genreHint ? `The user describes the game genre or scene as: ${genreHint}` : undefined,

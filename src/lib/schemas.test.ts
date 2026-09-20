@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTtsTextTooLong, ocrRequestSchema, ttsRequestSchema } from "./schemas";
+import { isTtsTextTooLong, ocrRequestSchema, ocrResponseSchema, ttsRequestSchema } from "./schemas";
 
 describe("API schemas", () => {
   it("normalizes valid OCR and TTS requests", () => {
@@ -22,5 +22,14 @@ describe("API schemas", () => {
     expect(ttsRequestSchema.safeParse({ text: "👨‍👩‍👧‍👦".repeat(400) }).success).toBe(false);
     expect(isTtsTextTooLong("a".repeat(401))).toBe(true);
     expect(isTtsTextTooLong("界".repeat(400))).toBe(false);
+  });
+
+  it("bounds model-generated OCR output", () => {
+    expect(
+      ocrResponseSchema.safeParse({
+        detectedLanguage: "zh-Hant",
+        segments: [{ id: "segment-1", text: "字".repeat(401), suggestedToneHint: "平靜" }],
+      }).success,
+    ).toBe(false);
   });
 });
