@@ -70,6 +70,15 @@ label,
   gap: 10px;
   margin-top: 10px;
 }
+.session-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.session-state p {
+  margin: 0;
+}
 input {
   min-width: 0;
   width: 100%;
