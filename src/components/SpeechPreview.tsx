@@ -1,4 +1,5 @@
 import { createEffect, createSignal, on, onCleanup, Show, untrack } from "solid-js";
+import { requestSpeech } from "~/lib/speech";
 
 type SpeechPreviewProps = {
   text: string;
@@ -6,15 +7,6 @@ type SpeechPreviewProps = {
   genreHint?: string;
   onStatus: (message: string) => void;
 };
-
-async function responseError(response: Response): Promise<string> {
-  try {
-    const body = await response.json();
-    return `${body.error?.message ?? "Speech request failed"} (${body.error?.requestId ?? response.status})`;
-  } catch {
-    return `Speech request failed (${response.status})`;
-  }
-}
 
 export default function SpeechPreview(props: SpeechPreviewProps) {
   const [busy, setBusy] = createSignal(false);
@@ -54,21 +46,13 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
     setBusy(true);
     props.onStatus("Gemini 正在產生試聽音訊…");
     try {
-      const response = await fetch("/api/tts", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          text: props.text,
-          toneHint: props.toneHint || undefined,
-          genreHint: props.genreHint || undefined,
-        }),
+      const audio = await requestSpeech({
+        text: props.text,
+        toneHint: props.toneHint || undefined,
+        genreHint: props.genreHint || undefined,
       });
-      if (!response.ok) throw new Error(await responseError(response));
-      const blob = await response.blob();
-      if (blob.type !== "audio/wav") throw new Error("Speech service returned invalid audio");
-      setAudioUrl(URL.createObjectURL(blob));
-      const durationMs = Number(response.headers.get("x-audio-duration-ms"));
-      if (Number.isFinite(durationMs)) setDuration(durationMs);
+      setAudioUrl(URL.createObjectURL(audio.blob));
+      setDuration(audio.durationMs);
       props.onStatus("試聽已準備完成，請按播放");
     } catch (error) {
       props.onStatus(error instanceof Error ? error.message : "無法產生試聽");
