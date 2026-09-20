@@ -1,33 +1,58 @@
 const HEADER_BYTES = 44;
 
-export function createTestWav(durationMs = 300): Uint8Array<ArrayBuffer> {
-  const sampleRate = 24_000;
-  const samples = Math.floor((sampleRate * durationMs) / 1000);
-  const bytesPerSample = 2;
-  const dataBytes = samples * bytesPerSample;
-  const buffer = new ArrayBuffer(HEADER_BYTES + dataBytes);
+export function pcmToWav(
+  pcm: Uint8Array,
+  sampleRate = 24_000,
+  channels = 1,
+  bitsPerSample = 16,
+): Uint8Array<ArrayBuffer> {
+  const bytesPerSample = bitsPerSample / 8;
+  if (!Number.isInteger(bytesPerSample) || bytesPerSample <= 0)
+    throw new Error("Invalid PCM bit depth");
+  if (pcm.byteLength % (channels * bytesPerSample) !== 0)
+    throw new Error("PCM data does not contain complete samples");
+  const buffer = new ArrayBuffer(HEADER_BYTES + pcm.byteLength);
   const view = new DataView(buffer);
 
   writeAscii(view, 0, "RIFF");
-  view.setUint32(4, 36 + dataBytes, true);
+  view.setUint32(4, 36 + pcm.byteLength, true);
   writeAscii(view, 8, "WAVE");
   writeAscii(view, 12, "fmt ");
   view.setUint32(16, 16, true);
   view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
+  view.setUint16(22, channels, true);
   view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * bytesPerSample, true);
-  view.setUint16(32, bytesPerSample, true);
-  view.setUint16(34, 16, true);
+  view.setUint32(28, sampleRate * channels * bytesPerSample, true);
+  view.setUint16(32, channels * bytesPerSample, true);
+  view.setUint16(34, bitsPerSample, true);
   writeAscii(view, 36, "data");
-  view.setUint32(40, dataBytes, true);
+  view.setUint32(40, pcm.byteLength, true);
+  new Uint8Array(buffer, HEADER_BYTES).set(pcm);
+  return new Uint8Array(buffer);
+}
+
+export function pcmDurationMs(
+  byteLength: number,
+  sampleRate = 24_000,
+  channels = 1,
+  bitsPerSample = 16,
+): number {
+  return Math.round((byteLength * 1000) / (sampleRate * channels * (bitsPerSample / 8)));
+}
+
+export function createTestWav(durationMs = 300): Uint8Array<ArrayBuffer> {
+  const sampleRate = 24_000;
+  const samples = Math.floor((sampleRate * durationMs) / 1000);
+  const bytesPerSample = 2;
+  const pcm = new Uint8Array(samples * bytesPerSample);
+  const view = new DataView(pcm.buffer);
 
   for (let index = 0; index < samples; index += 1) {
     const fade = Math.min(index / 240, (samples - index) / 240, 1);
     const sample = Math.sin((2 * Math.PI * 440 * index) / sampleRate) * 0.12 * fade;
-    view.setInt16(HEADER_BYTES + index * bytesPerSample, Math.round(sample * 0x7fff), true);
+    view.setInt16(index * bytesPerSample, Math.round(sample * 0x7fff), true);
   }
-  return new Uint8Array(buffer);
+  return pcmToWav(pcm, sampleRate);
 }
 
 function writeAscii(view: DataView, offset: number, value: string) {
