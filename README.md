@@ -13,6 +13,8 @@ The home page signs in with TOTP, captures or selects an image, uploads it throu
 
 OCR output opens as an editable review draft. Every segment supports text and tone edits, cursor-position splitting, merging with the next segment, insertion, and deletion. These edits remain in memory and are not persisted across page reloads.
 
+After review, playback prepares one segment at a time. Each prepared segment requires an explicit play action, and playback stops when the segment ends until the user chooses to replay it or prepare the next one. Returning to review preserves the current draft; leaving playback cancels an active speech request and releases generated audio URLs.
+
 JPEG, PNG, WebP, HEIC, and HEIF sources up to 25 MB are accepted. When a browser cannot decode HEIC or HEIF, an original file already below 4 MB can still be sent directly to Gemini; larger files require conversion or a new capture.
 
 ## Verification
