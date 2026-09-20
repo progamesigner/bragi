@@ -40,21 +40,6 @@ export function pcmDurationMs(
   return Math.round((byteLength * 1000) / (sampleRate * channels * (bitsPerSample / 8)));
 }
 
-export function createTestWav(durationMs = 300): Uint8Array<ArrayBuffer> {
-  const sampleRate = 24_000;
-  const samples = Math.floor((sampleRate * durationMs) / 1000);
-  const bytesPerSample = 2;
-  const pcm = new Uint8Array(samples * bytesPerSample);
-  const view = new DataView(pcm.buffer);
-
-  for (let index = 0; index < samples; index += 1) {
-    const fade = Math.min(index / 240, (samples - index) / 240, 1);
-    const sample = Math.sin((2 * Math.PI * 440 * index) / sampleRate) * 0.12 * fade;
-    view.setInt16(index * bytesPerSample, Math.round(sample * 0x7fff), true);
-  }
-  return pcmToWav(pcm, sampleRate);
-}
-
 function writeAscii(view: DataView, offset: number, value: string) {
   for (let index = 0; index < value.length; index += 1) {
     view.setUint8(offset + index, value.charCodeAt(index));
