@@ -1,5 +1,5 @@
 import "server-only";
-import { SignJWT, jwtVerify } from "jose";
+import { jwtVerify, SignJWT } from "jose";
 import * as OTPAuth from "otpauth";
 import { requiredEnv, sessionVersion } from "./config";
 import { readCookie } from "./http";

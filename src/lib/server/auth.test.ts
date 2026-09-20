@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
 import * as OTPAuth from "otpauth";
+import { afterEach, describe, expect, it } from "vitest";
 import { hasValidSession, issueSession, sessionCookie, verifyTotp } from "./auth";
 
 const originalEnv = { ...process.env };
