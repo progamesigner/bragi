@@ -162,6 +162,7 @@ export default function Home() {
         {(language) => (
           <Review
             detectedLanguage={language()}
+            genreHint={genreHint().trim() || undefined}
             segments={segments}
             setSegments={setSegments}
             onStatus={setStatus}

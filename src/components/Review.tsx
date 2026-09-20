@@ -7,9 +7,11 @@ import {
   type Segment,
   splitAtCursor,
 } from "~/lib/state";
+import SpeechPreview from "./SpeechPreview";
 
 type ReviewProps = {
   detectedLanguage: string;
+  genreHint?: string;
   segments: Segment[];
   setSegments: SetStoreFunction<Segment[]>;
   onStatus: (message: string) => void;
@@ -124,6 +126,12 @@ export default function Review(props: ReviewProps) {
                       刪除
                     </button>
                   </div>
+                  <SpeechPreview
+                    text={segment.text}
+                    toneHint={segment.suggestedToneHint}
+                    genreHint={props.genreHint}
+                    onStatus={props.onStatus}
+                  />
                 </li>
               );
             }}
