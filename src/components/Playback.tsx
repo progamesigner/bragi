@@ -2,8 +2,10 @@ import { createSignal, Match, onCleanup, onMount, Show, Switch, untrack } from "
 import { initialPlaybackState, type PlaybackEvent, transitionPlayback } from "~/lib/playback";
 import type { SpeechRequest } from "~/lib/speech";
 import { requestCachedSpeech, speechCache } from "~/lib/speech-cache";
+import { openSpeechStream, PcmStreamPlayer } from "~/lib/speech-stream";
 import type { Segment } from "~/lib/state";
 import type { StatusReporter } from "~/lib/status";
+import { pcmDurationMs, pcmToWav } from "~/lib/wav";
 
 type PlaybackProps = {
   segments: Segment[];
@@ -16,6 +18,7 @@ export default function Playback(props: PlaybackProps) {
   const [state, setState] = createSignal(initialPlaybackState);
   const [audioUrl, setAudioUrl] = createSignal<string>();
   const [duration, setDuration] = createSignal<number>();
+  const [streaming, setStreaming] = createSignal(false);
   const [prefetch, setPrefetch] = createSignal<{
     index: number;
     phase: "loading" | "ready";
@@ -24,6 +27,8 @@ export default function Playback(props: PlaybackProps) {
   let heading!: HTMLHeadingElement;
   let request: AbortController | undefined;
   let prefetchRequest: AbortController | undefined;
+  let streamPlayer: PcmStreamPlayer | undefined;
+  let streamContext: AudioContext | undefined;
 
   const segment = () => props.segments[state().index];
 
@@ -48,10 +53,25 @@ export default function Playback(props: PlaybackProps) {
 
   function clearAudio() {
     audio?.pause();
+    streamPlayer?.stop();
+    streamPlayer = undefined;
+    if (streamContext) void streamContext.close();
+    streamContext = undefined;
+    setStreaming(false);
     const url = untrack(audioUrl);
     if (url) URL.revokeObjectURL(url);
     setAudioUrl(undefined);
     setDuration(undefined);
+  }
+
+  function completePcm(chunks: Uint8Array[], byteLength: number): Uint8Array<ArrayBuffer> {
+    const pcm = new Uint8Array(new ArrayBuffer(byteLength));
+    let offset = 0;
+    for (const chunk of chunks) {
+      pcm.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return pcm;
   }
 
   async function prepare(event: "start" | "next" | "retry") {
@@ -101,13 +121,113 @@ export default function Playback(props: PlaybackProps) {
     }
   }
 
+  async function streamAndPlay(event: "start" | "retry") {
+    dispatch({ type: event });
+    const nextState = state();
+    if (nextState.phase !== "loading") return;
+    const input = speechInput(nextState.index);
+    if (!input) return;
+
+    const cached = speechCache.get(input);
+    if (cached) {
+      clearAudio();
+      setAudioUrl(URL.createObjectURL(cached.blob));
+      setDuration(cached.durationMs);
+      dispatch({ type: "audio-ready" });
+      props.onStatus(`第 ${nextState.index + 1} 段已準備，請按播放`, "success");
+      return;
+    }
+    if (typeof AudioContext === "undefined") {
+      await prepare(event);
+      return;
+    }
+
+    request?.abort();
+    const controller = new AbortController();
+    request = controller;
+    clearAudio();
+    const context = new AudioContext({ sampleRate: 24_000 });
+    const player = new PcmStreamPlayer(context);
+    streamContext = context;
+    streamPlayer = player;
+    setStreaming(true);
+    props.onStatus(`正在串流第 ${nextState.index + 1} 段音訊…`);
+
+    try {
+      await player.resume();
+      const stream = await openSpeechStream(input, controller.signal);
+      const chunks: Uint8Array[] = [];
+      let byteLength = 0;
+      let started = false;
+      while (true) {
+        const result = await stream.reader.read();
+        if (result.done) break;
+        const chunk = result.value.slice();
+        chunks.push(chunk);
+        byteLength += chunk.byteLength;
+        player.append(chunk);
+        if (!started) {
+          started = true;
+          dispatch({ type: "audio-ready" });
+          dispatch({ type: "play" });
+          props.onStatus(`正在播放第 ${nextState.index + 1} 段`);
+          void prefetchNext();
+        }
+      }
+
+      const pcm = completePcm(chunks, byteLength);
+      const wav = pcmToWav(pcm);
+      const audio = {
+        blob: new Blob([wav], { type: "audio/wav" }),
+        durationMs: pcmDurationMs(pcm.byteLength),
+      };
+      speechCache.set(input, audio);
+      await player.finish();
+      if (request !== controller) return;
+
+      streamPlayer = undefined;
+      streamContext = undefined;
+      setStreaming(false);
+      await context.close();
+      setAudioUrl(URL.createObjectURL(audio.blob));
+      setDuration(audio.durationMs);
+      dispatch({ type: "ended" });
+      props.onStatus(state().phase === "complete" ? "全部段落播放完成" : "本段播放完成", "success");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      player.stop();
+      await context.close().catch(() => undefined);
+      streamPlayer = undefined;
+      streamContext = undefined;
+      setStreaming(false);
+      const message = error instanceof Error ? error.message : "串流播放失敗";
+      dispatch({ type: "fail", message });
+      props.onStatus(message, "error");
+    }
+  }
+
   async function play() {
+    if (streaming()) {
+      try {
+        await streamPlayer?.resume();
+        dispatch({ type: "play" });
+      } catch {
+        props.onStatus("瀏覽器阻止播放，請再按一次播放按鈕", "error");
+      }
+      return;
+    }
     if (!audioUrl()) return;
     try {
       await audio.play();
     } catch {
       props.onStatus("瀏覽器阻止播放，請再按一次播放按鈕", "error");
     }
+  }
+
+  async function pause() {
+    if (streaming()) await streamPlayer?.pause();
+    else audio.pause();
+    dispatch({ type: "pause" });
   }
 
   function leavePlayback() {
@@ -181,8 +301,8 @@ export default function Playback(props: PlaybackProps) {
       <div class="playback-actions">
         <Switch>
           <Match when={state().phase === "idle"}>
-            <button type="button" onClick={() => prepare("start")}>
-              準備第一段
+            <button type="button" onClick={() => streamAndPlay("start")}>
+              串流播放第一段
             </button>
           </Match>
           <Match when={state().phase === "loading"}>
@@ -192,11 +312,11 @@ export default function Playback(props: PlaybackProps) {
           </Match>
           <Match when={state().phase === "ready"}>
             <button type="button" onClick={play}>
-              播放第 {state().index + 1} 段
+              {streaming() ? "繼續播放" : `播放第 ${state().index + 1} 段`}
             </button>
           </Match>
           <Match when={state().phase === "playing"}>
-            <button type="button" onClick={() => audio.pause()}>
+            <button type="button" onClick={pause}>
               暫停
             </button>
           </Match>
@@ -215,7 +335,7 @@ export default function Playback(props: PlaybackProps) {
           </Match>
           <Match when={state().phase === "error"}>
             <p role="alert">{state().error}</p>
-            <button type="button" onClick={() => prepare("retry")}>
+            <button type="button" onClick={() => streamAndPlay("retry")}>
               重試本段
             </button>
           </Match>
@@ -225,7 +345,7 @@ export default function Playback(props: PlaybackProps) {
               type="button"
               onClick={() => {
                 dispatch({ type: "reset" });
-                prepare("start");
+                void streamAndPlay("start");
               }}
             >
               從頭播放
