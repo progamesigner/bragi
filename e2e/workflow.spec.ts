@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
 import { pcmToWav } from "../src/lib/wav";
 
@@ -344,4 +345,55 @@ test("spoken corrections change synthesis without changing the transcript", asyn
   expect(calls.find((c) => c.path === "/api/tts-stream")?.body).toMatchObject({
     text: "故事開始。",
   });
+});
+
+test("drafts export text only and import without an image or provider call", async ({ page }) => {
+  const calls = await mockApi(page, true);
+  await page.goto("/");
+  await recognize(page);
+  await page.getByLabel("朗讀語氣").first().fill("低沉");
+  await page.getByRole("button", { name: "另設朗讀文字" }).nth(1).click();
+  await page.getByLabel("朗讀文字（只影響語音）").fill("門，打開了。");
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "匯出草稿" }).click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(/^bragi-draft-\d{8}-\d{4}\.json$/);
+  const exported = JSON.parse(await readFile(await download.path(), "utf8"));
+  expect(exported).toMatchObject({
+    format: "bragi-draft",
+    version: 1,
+    detectedLanguage: "繁體中文",
+    segments: [
+      { id: "one", text: "故事開始。", suggestedToneHint: "低沉" },
+      { id: "two", text: "門打開了。", suggestedToneHint: "期待", spokenText: "門，打開了。" },
+    ],
+  });
+  expect(Object.keys(exported).sort()).toEqual(
+    ["detectedLanguage", "exportedAt", "format", "segments", "version"].sort(),
+  );
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "清除目前內容" }).click();
+  await expect(page.getByRole("heading", { name: "3. 校對辨識草稿" })).toHaveCount(0);
+  await page.getByLabel("匯入草稿 JSON").setInputFiles({
+    name: "broken.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ ...exported, version: 2 })),
+  });
+  await expect(page.getByRole("alert")).toContainText("不支援這個版本");
+
+  const before = calls.length;
+  await page.getByLabel("匯入草稿 JSON").setInputFiles({
+    name: "draft.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(exported)),
+  });
+  await expect(page.getByText("已匯入草稿 · 2 個段落")).toBeVisible();
+  await expect(page.getByLabel("口白文字", { exact: true }).nth(1)).toHaveValue("門打開了。");
+  await expect(page.getByLabel("朗讀文字（只影響語音）")).toHaveValue("門，打開了。");
+  await expect(page.getByLabel("朗讀語氣").first()).toHaveValue("低沉");
+  await expect(page.getByText("查看圖片對照")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "復原", exact: true })).toBeDisabled();
+  expect(calls.slice(before)).toHaveLength(0);
 });

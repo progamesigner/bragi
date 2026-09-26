@@ -4,6 +4,7 @@ import Capture from "~/components/Capture";
 import Playback from "~/components/Playback";
 import Review from "~/components/Review";
 import { apiErrorMessage } from "~/lib/api";
+import { MAX_DRAFT_BYTES, parseDraft } from "~/lib/draft";
 import { History } from "~/lib/editing";
 import type { PreparedImage } from "~/lib/image";
 import { networkErrorMessage, requireOnline } from "~/lib/network";
@@ -133,6 +134,29 @@ export default function Home() {
       reportStatus(networkErrorMessage(error, "登出失敗"), "error");
     } finally {
       setAuthBusy(false);
+    }
+  }
+
+  async function importDraft(input: HTMLInputElement) {
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    try {
+      if (file.size > MAX_DRAFT_BYTES) throw new Error("草稿檔案超過 200 KB，無法匯入");
+      const draft = parseDraft(await file.text());
+      if (
+        (detectedLanguage() || image()) &&
+        !window.confirm("匯入草稿會取代目前的圖片、校閱文字與音訊，確定要繼續嗎？")
+      )
+        return;
+      clearWorkspace();
+      setGenreHint(draft.genreHint ?? "");
+      setSegments(reconcile(draft.segments));
+      setEditHistory(new History<Segment[]>(draft.segments));
+      setDetectedLanguage(draft.detectedLanguage);
+      reportStatus(`已匯入草稿 · ${draft.segments.length} 個段落`, "success");
+    } catch (error) {
+      reportStatus(error instanceof Error ? error.message : "無法匯入草稿", "error");
     }
   }
 
@@ -337,6 +361,25 @@ export default function Home() {
           >
             {recognitionBusy() ? "正在上傳與辨識…" : "上傳並辨識文字"}
           </button>
+          <div class="draft-import">
+            <label
+              class="file-button secondary small"
+              for="draft-import"
+              aria-disabled={recognitionBusy()}
+            >
+              匯入草稿 JSON
+            </label>
+            <input
+              id="draft-import"
+              class="visually-hidden"
+              type="file"
+              aria-describedby="draft-import-note"
+              accept="application/json,.json"
+              disabled={recognitionBusy()}
+              onChange={(event) => void importDraft(event.currentTarget)}
+            />
+            <p id="draft-import-note">草稿只含文字與語氣，不含圖片或音訊，也不會上傳到 Gemini。</p>
+          </div>
         </section>
 
         <Show when={detectedLanguage()}>

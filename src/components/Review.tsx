@@ -1,5 +1,6 @@
 import { createEffect, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { reconcile, type SetStoreFunction } from "solid-js/store";
+import { draftFileName, serializeDraft } from "~/lib/draft";
 import { type History, splitNarration, textBudget } from "~/lib/editing";
 import {
   insertAfter,
@@ -113,6 +114,26 @@ export default function Review(props: ReviewProps) {
       props.onStatus(error instanceof Error ? error.message : "無法自動分段", "error");
     }
   }
+  function exportDraft() {
+    const blob = new Blob(
+      [
+        serializeDraft({
+          detectedLanguage: props.detectedLanguage,
+          genreHint: props.genreHint,
+          segments: props.segments,
+        }),
+      ],
+      { type: "application/json" },
+    );
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = draftFileName();
+    link.click();
+    // Give the browser time to start the download before releasing the file.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    props.onStatus("已匯出草稿 JSON；檔案只含文字，不含圖片或音訊", "success");
+  }
   function spokenCorrectionNotice(segment: Segment) {
     return segment.spokenText === undefined ? "" : "；原本的朗讀修正已移除，請依新段落重新設定";
   }
@@ -161,6 +182,9 @@ export default function Review(props: ReviewProps) {
             onClick={() => replaceSegments(insertAfter(props.segments, props.segments.length - 1))}
           >
             新增段落
+          </button>
+          <button type="button" class="small secondary" onClick={exportDraft}>
+            匯出草稿
           </button>
           <button
             type="button"
