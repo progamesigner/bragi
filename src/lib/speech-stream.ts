@@ -72,7 +72,6 @@ export class PcmStreamPlayer {
   constructor(
     readonly context: AudioContext,
     readonly sampleRate = 24_000,
-    readonly rate = 1,
   ) {}
 
   append(chunk: Uint8Array): void {
@@ -82,10 +81,9 @@ export class PcmStreamPlayer {
     buffer.copyToChannel(samples, 0);
     const source = this.context.createBufferSource();
     source.buffer = buffer;
-    source.playbackRate.value = this.rate;
     source.connect(this.context.destination);
     const start = Math.max(this.#nextStart, this.context.currentTime + 0.08);
-    this.#nextStart = start + buffer.duration / this.rate;
+    this.#nextStart = start + buffer.duration;
     this.#sources.add(source);
     this.#tail = new Promise((resolve) => {
       source.addEventListener(

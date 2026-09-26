@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { openSpeechStream, Pcm16Decoder, PcmStreamPlayer } from "./speech-stream";
 
-it("schedules PCM chunks using the selected playback speed", () => {
+it("schedules PCM chunks back to back at their natural rate", () => {
   const starts: number[] = [];
   const rates: number[] = [];
   const context = {
@@ -25,11 +25,11 @@ it("schedules PCM chunks using the selected playback speed", () => {
       return source;
     },
   } as unknown as AudioContext;
-  const player = new PcmStreamPlayer(context, 24_000, 1.5);
+  const player = new PcmStreamPlayer(context, 24_000);
   player.append(new Uint8Array(48_000));
   player.append(new Uint8Array(48_000));
-  expect(Number(starts[1]) - Number(starts[0])).toBeCloseTo(1 / 1.5);
-  expect(rates).toEqual([1.5, 1.5]);
+  expect(Number(starts[1]) - Number(starts[0])).toBeCloseTo(1);
+  expect(rates).toEqual([1, 1]);
 });
 
 describe("speech stream client", () => {

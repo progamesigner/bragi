@@ -84,14 +84,17 @@ test("font preference persists and selected voice follows both speech paths", as
   await page.getByLabel("朗讀聲音").selectOption("Puck");
   await recognize(page);
   await page.getByRole("button", { name: "開始逐段朗讀" }).click();
-  await page.getByLabel("播放速度").selectOption("1.5");
   await page.getByRole("button", { name: "串流播放第一段" }).click();
   await expect(page.getByRole("button", { name: "重播本段" })).toBeVisible();
+  await page.getByLabel("播放速度").selectOption("1.5");
   await page.getByRole("button", { name: /^(繼續|準備)下一段$/ }).click();
   await page.getByRole("button", { name: "播放第 2 段", exact: true }).click();
   await expect
     .poll(() => page.locator("audio").evaluate((audio: HTMLAudioElement) => audio.playbackRate))
     .toBe(1.5);
+  expect(
+    await page.locator("audio").evaluate((audio: HTMLAudioElement) => audio.preservesPitch),
+  ).toBe(true);
   expect(calls.find((call) => call.path === "/api/tts-stream")?.body).toMatchObject({
     voice: "Puck",
   });
@@ -484,4 +487,23 @@ test("keeps the screen awake during playback only when chosen", async ({ page })
   await page.getByRole("button", { name: "開始逐段朗讀" }).click();
   await expect(page.getByLabel("朗讀時保持螢幕常亮")).toBeChecked();
   await expect.poll(wakeLog).toEqual(["request:screen", "release", "request:screen"]);
+});
+
+test("non-1× speeds skip streaming and keep the original pitch", async ({ page }) => {
+  const calls = await mockApi(page, true);
+  await page.goto("/");
+  await recognize(page);
+  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByLabel("播放速度").selectOption("0.75");
+  await expect(page.getByText("非 1 倍速會先產生整段音訊再播放")).toBeVisible();
+  await page.getByRole("button", { name: "播放第一段" }).click();
+  await page.getByRole("button", { name: "播放第 1 段", exact: true }).click();
+  await expect
+    .poll(() => page.locator("audio").evaluate((audio: HTMLAudioElement) => audio.playbackRate))
+    .toBe(0.75);
+  expect(
+    await page.locator("audio").evaluate((audio: HTMLAudioElement) => audio.preservesPitch),
+  ).toBe(true);
+  expect(calls.filter((call) => call.path === "/api/tts-stream")).toHaveLength(0);
+  expect(calls.filter((call) => call.path === "/api/tts").length).toBeGreaterThan(0);
 });

@@ -151,7 +151,9 @@ export default function Playback(props: PlaybackProps) {
       props.onStatus(`第 ${nextState.index + 1} 段已準備，請按播放`, "success");
       return;
     }
-    if (typeof AudioContext === "undefined") {
+    // Web Audio sources cannot keep their pitch when sped up, so other speeds use complete WAV
+    // audio with the browser's native pitch preservation instead of progressive streaming.
+    if (typeof AudioContext === "undefined" || rate() !== 1) {
       await prepare(event);
       return;
     }
@@ -162,7 +164,7 @@ export default function Playback(props: PlaybackProps) {
     clearAudio();
     const context = new AudioContext({ sampleRate: 24_000 });
     context.addEventListener("statechange", () => handleInterruption(context));
-    const player = new PcmStreamPlayer(context, 24_000, rate());
+    const player = new PcmStreamPlayer(context, 24_000);
     streamContext = context;
     streamPlayer = player;
     setStreaming(true);
@@ -236,7 +238,7 @@ export default function Playback(props: PlaybackProps) {
     if (!audioUrl()) return;
     try {
       audio.playbackRate = rate();
-      audio.preservesPitch = false;
+      audio.preservesPitch = true;
       await audio.play();
     } catch {
       props.onStatus("瀏覽器阻止播放，請再按一次播放按鈕", "error");
@@ -348,6 +350,9 @@ export default function Playback(props: PlaybackProps) {
         <option value="1.25">1.25 倍</option>
         <option value="1.5">1.5 倍</option>
       </select>
+      <Show when={rate() !== 1}>
+        <p class="rate-note">非 1 倍速會先產生整段音訊再播放，並保留原本的音高。</p>
+      </Show>
       <Show when={wakeLock.supported}>
         <label class="checkbox">
           <input
@@ -391,7 +396,7 @@ export default function Playback(props: PlaybackProps) {
               aria-label={`第 ${state().index + 1} 段朗讀`}
               onPlay={() => {
                 audio.playbackRate = rate();
-                audio.preservesPitch = false;
+                audio.preservesPitch = true;
                 dispatch({ type: "play" });
                 void prefetchNext();
               }}
@@ -419,7 +424,7 @@ export default function Playback(props: PlaybackProps) {
         <Switch>
           <Match when={state().phase === "idle"}>
             <button type="button" onClick={() => streamAndPlay("start")}>
-              {state().index === 0 ? "串流播放第一段" : "播放此段"}
+              {state().index > 0 ? "播放此段" : rate() === 1 ? "串流播放第一段" : "播放第一段"}
             </button>
           </Match>
           <Match when={state().phase === "loading"}>
