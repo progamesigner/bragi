@@ -41,7 +41,11 @@ describe("Gemini speech streaming", () => {
     ).resolves.toEqual([0, 1, 2, 3]);
     const init = fetcher.mock.calls[0]?.[1];
     expect(init?.headers).toMatchObject({ "api-revision": "2026-05-20" });
-    expect(JSON.parse(String(init?.body))).toMatchObject({ stream: true, store: false });
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      stream: true,
+      store: false,
+      response_format: { type: "audio", mime_type: "audio/l16", sample_rate: 24_000 },
+    });
   });
 
   it("rejects a completed stream without audio", async () => {

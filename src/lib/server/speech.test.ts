@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { speechPrompt, synthesizeSpeech } from "./speech";
+import { speechInput, synthesizeSpeech } from "./speech";
 
 const originalEnv = { ...process.env };
 
@@ -27,12 +27,31 @@ function audioResponse(pcm: Uint8Array) {
 }
 
 describe("Gemini speech", () => {
-  it("isolates narration directions from the transcript", () => {
-    const prompt = speechPrompt({ text: "只朗讀這一句", toneHint: "低沉", genreHint: "奇幻" });
-    expect(prompt).toContain("_AUDIO_PROFILE\n奇幻");
-    expect(prompt).toContain("_DIRECTORS_NOTES\n低沉");
-    expect(prompt).toContain("_TRANSCRIPT\n只朗讀這一句");
-    expect(prompt).toContain("Speak only the TRANSCRIPT text verbatim");
+  it("sends the transcript verbatim with directions as speech metadata", () => {
+    expect(speechInput({ text: "只朗讀這一句", toneHint: "低沉", genreHint: "奇幻" })).toEqual([
+      {
+        type: "user_input",
+        content: [
+          {
+            type: "text",
+            text: "只朗讀這一句",
+            annotations: [{ type: "speech_metadata", style: "低沉; Genre: 奇幻" }],
+          },
+        ],
+      },
+    ]);
+    expect(speechInput({ text: "冒險開始" })[0]?.content[0]?.annotations).toEqual([
+      { type: "speech_metadata", style: "Natural tabletop narration" },
+    ]);
+  });
+
+  it("defaults to the current Gemini TTS model", async () => {
+    process.env.GEMINI_API_KEY = "test-key";
+    delete process.env.GEMINI_TTS_MODEL;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(audioResponse(new Uint8Array(4_800))));
+    await synthesizeSpeech({ text: "冒險開始" });
+    const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body));
+    expect(body.model).toBe("gemini-3.8-flash-tts");
   });
 
   it("requests configured inline PCM and returns its duration", async () => {
@@ -48,7 +67,7 @@ describe("Gemini speech", () => {
     expect(body).toMatchObject({
       model: "gemini-tts-test",
       store: false,
-      response_format: { type: "audio" },
+      response_format: { type: "audio", mime_type: "audio/l16", sample_rate: 24_000 },
       generation_config: { speech_config: [{ voice: "Kore" }] },
     });
   });

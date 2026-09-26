@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 import type { TtsRequest } from "../schemas";
 import { requiredEnv } from "./config";
-import { SpeechError, speechPrompt } from "./speech";
+import { SPEECH_RESPONSE_FORMAT, SpeechError, speechInput, speechModel } from "./speech";
 import { resolveVoice } from "./voices";
 
 const INTERACTIONS_STREAM_URL =
@@ -102,11 +102,11 @@ export async function synthesizeSpeechStream(
         "x-goog-api-key": requiredEnv("GEMINI_API_KEY"),
       },
       body: JSON.stringify({
-        model: process.env.GEMINI_TTS_MODEL?.trim() || "gemini-3.1-flash-tts-preview",
+        model: speechModel(),
         store: false,
         stream: true,
-        input: speechPrompt(input),
-        response_format: { type: "audio" },
+        input: speechInput(input),
+        response_format: SPEECH_RESPONSE_FORMAT,
         generation_config: {
           speech_config: [{ voice: resolveVoice(input.voice) }],
         },

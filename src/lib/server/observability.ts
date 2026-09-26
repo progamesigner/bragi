@@ -16,7 +16,7 @@ export async function observeRequest(
     endpoint === "/api/ocr"
       ? process.env.GEMINI_OCR_MODEL || "gemini-3.8-flash"
       : endpoint.startsWith("/api/tts")
-        ? process.env.GEMINI_TTS_MODEL || "gemini-3.1-flash-tts-preview"
+        ? process.env.GEMINI_TTS_MODEL || "gemini-3.8-flash-tts"
         : undefined;
   const log = (outcome: string, bytes = 0) =>
     console.info(
