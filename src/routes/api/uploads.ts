@@ -1,7 +1,13 @@
 import type { APIEvent } from "@solidjs/start/server";
 import { uploadSessionRequestSchema } from "~/lib/schemas";
 import { hasValidSession } from "~/lib/server/auth";
-import { apiError, apiJson, createRequestId, isSameOrigin } from "~/lib/server/http";
+import {
+  apiError,
+  apiJson,
+  cancelledResponse,
+  createRequestId,
+  isSameOrigin,
+} from "~/lib/server/http";
 import { observeRequest } from "~/lib/server/observability";
 import { ACCEPTED_IMAGE_TYPES, createGeminiUpload, MAX_UPLOAD_BYTES } from "~/lib/server/uploads";
 
@@ -42,10 +48,11 @@ async function handlePOST({ request }: APIEvent) {
 
   try {
     return apiJson(
-      await createGeminiUpload(parsed.data.mimeType, parsed.data.sizeBytes),
+      await createGeminiUpload(parsed.data.mimeType, parsed.data.sizeBytes, request.signal),
       requestId,
     );
   } catch (_error) {
+    if (request.signal.aborted) return cancelledResponse(requestId);
     console.error("Unable to create upload session", "unexpected");
     return apiError(requestId, 503, "UPLOAD_UNAVAILABLE", "Upload service is unavailable", true);
   }

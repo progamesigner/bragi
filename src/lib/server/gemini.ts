@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { type OcrResponse, ocrResponseSchema } from "../schemas";
 import { requiredEnv } from "./config";
+import { withDeadline } from "./http";
 
 const API_ORIGIN = "https://generativelanguage.googleapis.com";
 const fileNameSchema = z.string().regex(/^files\/[A-Za-z0-9_-]+$/);
@@ -67,6 +68,7 @@ function assertFileUri(uri: string): void {
 export async function resolveGeminiFile(
   receipt: unknown,
   expected: { mimeType: string; sizeBytes: number },
+  signal?: AbortSignal,
 ): Promise<{ uri: string; mimeType: string }> {
   const parsedReceipt = uploadReceiptSchema.safeParse(receipt);
   if (!parsedReceipt.success) throw new GeminiError("invalid-file", "Upload receipt is invalid");
@@ -75,7 +77,7 @@ export async function resolveGeminiFile(
   try {
     response = await fetch(`${API_ORIGIN}/v1beta/${parsedReceipt.data.file.name}`, {
       headers: apiHeaders(),
-      signal: AbortSignal.timeout(10_000),
+      signal: withDeadline(10_000, signal),
     });
   } catch {
     throw new GeminiError("unavailable", "Gemini Files API is unavailable");
@@ -161,6 +163,7 @@ function ocrPrompt(genreHint?: string): string {
 export async function recognizeImage(
   file: { uri: string; mimeType: string },
   genreHint?: string,
+  signal?: AbortSignal,
 ): Promise<OcrResponse> {
   let response: Response;
   try {
@@ -180,7 +183,7 @@ export async function recognizeImage(
           schema: ocrJsonSchema,
         },
       }),
-      signal: AbortSignal.timeout(60_000),
+      signal: withDeadline(60_000, signal),
     });
   } catch {
     throw new GeminiError("unavailable", "Gemini OCR is unavailable");

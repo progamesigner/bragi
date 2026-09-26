@@ -13,6 +13,7 @@ export type ApiErrorCode =
   | "OCR_RATE_LIMITED"
   | "OCR_REJECTED"
   | "OCR_UNAVAILABLE"
+  | "REQUEST_CANCELLED"
   | "SERVICE_UNAVAILABLE"
   | "TEXT_TOO_LONG"
   | "TTS_RATE_LIMITED"
@@ -50,6 +51,17 @@ export function apiError(
     status,
     headers,
   });
+}
+
+/** Combines a provider timeout with the client's disconnect signal. */
+export function withDeadline(milliseconds: number, signal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(milliseconds);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+}
+
+/** The client has gone away, so this body is only recorded for logs and tests. */
+export function cancelledResponse(requestId: string) {
+  return apiError(requestId, 499, "REQUEST_CANCELLED", "Request was cancelled by the client");
 }
 
 export function isSameOrigin(request: Request): boolean {

@@ -2,7 +2,13 @@ import type { APIEvent } from "@solidjs/start/server";
 import { ocrRequestSchema, ocrResponseSchema } from "~/lib/schemas";
 import { hasValidSession } from "~/lib/server/auth";
 import { GeminiError, recognizeImage, resolveGeminiFile } from "~/lib/server/gemini";
-import { apiError, apiJson, createRequestId, isSameOrigin } from "~/lib/server/http";
+import {
+  apiError,
+  apiJson,
+  cancelledResponse,
+  createRequestId,
+  isSameOrigin,
+} from "~/lib/server/http";
 import { observeRequest } from "~/lib/server/observability";
 import { verifyUploadId } from "~/lib/server/uploads";
 
@@ -37,10 +43,13 @@ async function handlePOST({ request }: APIEvent) {
   }
 
   try {
-    const file = await resolveGeminiFile(parsed.data.receipt, upload);
-    const response = ocrResponseSchema.parse(await recognizeImage(file, parsed.data.genreHint));
+    const file = await resolveGeminiFile(parsed.data.receipt, upload, request.signal);
+    const response = ocrResponseSchema.parse(
+      await recognizeImage(file, parsed.data.genreHint, request.signal),
+    );
     return apiJson(response, requestId);
   } catch (error) {
+    if (request.signal.aborted) return cancelledResponse(requestId);
     if (!(error instanceof GeminiError)) {
       console.error("Unexpected OCR failure", "unexpected");
       return apiError(requestId, 503, "OCR_UNAVAILABLE", "OCR service is unavailable", true);

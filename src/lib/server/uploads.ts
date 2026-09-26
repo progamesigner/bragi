@@ -15,7 +15,11 @@ function uploadKey(): Uint8Array {
   return new TextEncoder().encode(requiredEnv("BRAGI_SESSION_SECRET"));
 }
 
-export async function createGeminiUpload(mimeType: string, sizeBytes: number) {
+export async function createGeminiUpload(
+  mimeType: string,
+  sizeBytes: number,
+  signal?: AbortSignal,
+) {
   const response = await fetch(
     `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(requiredEnv("GEMINI_API_KEY"))}`,
     {
@@ -28,6 +32,7 @@ export async function createGeminiUpload(mimeType: string, sizeBytes: number) {
         "x-goog-upload-header-content-type": mimeType,
       },
       body: JSON.stringify({ file: { display_name: `bragi-${crypto.randomUUID()}` } }),
+      signal,
     },
   );
   if (!response.ok) throw new Error(`Gemini upload session failed (${response.status})`);

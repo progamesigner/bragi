@@ -137,4 +137,34 @@ describe("Gemini OCR", () => {
       recognizeImage({ uri: "https://example.invalid/image", mimeType: "image/jpeg" }),
     ).rejects.toMatchObject({ kind: "invalid-response" });
   });
+
+  it("forwards client cancellation to file lookup and OCR", async () => {
+    process.env.GEMINI_API_KEY = "test-key";
+    const client = new AbortController();
+    const fetcher = vi.fn().mockResolvedValue(new Response("{}", { status: 500 }));
+    vi.stubGlobal("fetch", fetcher);
+
+    await expect(
+      resolveGeminiFile(
+        { file: { name: "files/image-1" } },
+        { mimeType: "image/jpeg", sizeBytes: 1 },
+        client.signal,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      recognizeImage(
+        {
+          uri: "https://generativelanguage.googleapis.com/v1beta/files/image-1",
+          mimeType: "image/jpeg",
+        },
+        undefined,
+        client.signal,
+      ),
+    ).rejects.toThrow();
+
+    const signals = fetcher.mock.calls.map(([, init]) => (init as RequestInit).signal);
+    expect(signals.every((signal) => signal?.aborted === false)).toBe(true);
+    client.abort();
+    expect(signals.every((signal) => signal?.aborted === true)).toBe(true);
+  });
 });

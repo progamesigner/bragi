@@ -1,6 +1,6 @@
 import type { APIEvent } from "@solidjs/start/server";
 import { hasValidSession } from "~/lib/server/auth";
-import { apiError, createRequestId, isSameOrigin } from "~/lib/server/http";
+import { apiError, cancelledResponse, createRequestId, isSameOrigin } from "~/lib/server/http";
 import { observeRequest } from "~/lib/server/observability";
 import { verifyUploadId } from "~/lib/server/uploads";
 
@@ -41,6 +41,7 @@ async function handlePOST({ request }: APIEvent) {
         "x-goog-upload-command": "upload, finalize",
       },
       body,
+      signal: request.signal,
     });
     if (!response.ok) {
       console.error("Gemini upload failed", response.status);
@@ -55,6 +56,7 @@ async function handlePOST({ request }: APIEvent) {
       },
     });
   } catch (_error) {
+    if (request.signal.aborted) return cancelledResponse(requestId);
     console.error("Gemini upload unavailable", "unexpected");
     return apiError(requestId, 503, "UPLOAD_UNAVAILABLE", "Upload service is unavailable", true);
   }

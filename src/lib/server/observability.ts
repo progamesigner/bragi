@@ -43,7 +43,7 @@ export async function observeRequest(
       }),
     );
   if (!response.body || !response.ok || !endpoint.startsWith("/api/tts")) {
-    log(response.ok ? "complete" : "error");
+    log(response.ok ? "complete" : response.status === 499 ? "cancelled" : "error");
     return response;
   }
   const reader = response.body.getReader();

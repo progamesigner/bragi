@@ -47,3 +47,14 @@ it("records streaming interruptions even after HTTP success", async () => {
   });
   expect(log.mock.calls.flat().join()).not.toContain("private");
 });
+
+it("records client cancellations separately from errors", async () => {
+  const log = vi.spyOn(console, "info").mockImplementation(() => {});
+  await observeRequest(new Request("https://bragi.example/api/ocr", { method: "POST" }), () =>
+    Response.json({ error: { code: "REQUEST_CANCELLED" } }, { status: 499 }),
+  );
+  expect(JSON.parse(log.mock.calls[0]?.[0] as string)).toMatchObject({
+    status: 499,
+    outcome: "cancelled",
+  });
+});

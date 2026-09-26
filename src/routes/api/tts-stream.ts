@@ -1,7 +1,7 @@
 import type { APIEvent } from "@solidjs/start/server";
 import { isTtsTextTooLong, ttsRequestSchema } from "~/lib/schemas";
 import { hasValidSession } from "~/lib/server/auth";
-import { apiError, createRequestId, isSameOrigin } from "~/lib/server/http";
+import { apiError, cancelledResponse, createRequestId, isSameOrigin } from "~/lib/server/http";
 import { observeRequest } from "~/lib/server/observability";
 import { SpeechError } from "~/lib/server/speech";
 import { synthesizeSpeechStream } from "~/lib/server/speech-stream";
@@ -110,6 +110,7 @@ async function handlePOST({ request }: APIEvent) {
       },
     });
   } catch (error) {
+    if (request.signal.aborted) return cancelledResponse(requestId);
     if (error instanceof SpeechError) return speechError(error, requestId);
     console.error("Unexpected speech stream failure", "unexpected");
     return apiError(requestId, 503, "TTS_UNAVAILABLE", "Speech service is unavailable", true);

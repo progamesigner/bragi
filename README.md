@@ -48,6 +48,8 @@ Pipe exported JSON log lines to `npm run metrics` for request counts, errors, 42
 
 `POST /api/uploads`, `/api/ocr`, `/api/tts`, and `/api/tts-stream` require the signed `__Host-bragi-session` cookie and an exact same-origin `Origin` header. The JWT and persistent cookie expire together after 90 days. `GET /api/session` restores the signed-in interface without exposing the token, while `DELETE /api/session` expires it and clears the active browser workspace.
 
+Upload session creation, the upload proxy, OCR and both speech routes pass the client's disconnect signal to Gemini alongside their provider timeouts. A request cancelled by the client ends with `499 REQUEST_CANCELLED` and is logged with the `cancelled` outcome. Cancelling stops Bragi from waiting, but cannot undo work Gemini has already started or billed.
+
 `/api/ocr` verifies the untrusted upload receipt against Gemini Files metadata before sending the file URI to the Interactions API. It uses structured output, high image resolution, and stateless processing.
 
 `/api/tts` uses `gemini-3.1-flash-tts-preview` with the server-configured voice. It requests audio using the model's native format, validates the returned 24 kHz mono PCM and limits it to 60 seconds, wraps it in WAV, and retries one transient or missing-audio response. Review segments expose manual previews through native audio controls; generated object URLs are revoked when the text changes or the component is removed.
