@@ -278,3 +278,35 @@ test("speech failure recovers only after manual retry", async ({ page }) => {
   await expect(page.getByRole("button", { name: "重播本段" })).toBeVisible();
   expect(attempts).toBe(2);
 });
+
+test("overlong drafts split safely and editing history survives playback", async ({ page }) => {
+  const calls = await mockApi(page, true);
+  await page.goto("/");
+  await recognize(page);
+  await page.getByText("查看圖片對照", { exact: true }).click();
+  await expect(page.getByAltText("校對用圖片")).toBeVisible();
+  await page.getByLabel("圖片放大").selectOption("2");
+  const picture = page.getByAltText("校對用圖片");
+  expect(await picture.evaluate((img) => img.getBoundingClientRect().width)).toBeGreaterThan(300);
+  const original = page.getByLabel("口白文字", { exact: true }).first();
+  const long = "故事開始。".repeat(150);
+  await original.fill(long);
+  await expect(original).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByRole("button", { name: "開始逐段朗讀" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "產生試聽" }).first()).toBeDisabled();
+  expect(calls.filter((c) => c.path === "/api/tts")).toHaveLength(0);
+  await page.getByRole("button", { name: "按句自動分段" }).first().click();
+  await expect(page.getByRole("button", { name: "開始逐段朗讀" })).toBeEnabled();
+  await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(3);
+  await page.getByRole("button", { name: "復原", exact: true }).click();
+  await expect(original).toHaveValue(long);
+  await page.getByRole("button", { name: "重做", exact: true }).click();
+  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByRole("button", { name: /返回校對/ }).click();
+  await page.getByRole("button", { name: "復原", exact: true }).click();
+  await expect(original).toHaveValue(long);
+  await page.getByRole("button", { name: "復原", exact: true }).click();
+  await expect(original).toHaveValue("故事開始。");
+  await original.fill("新版本");
+  await expect(page.getByRole("button", { name: "重做", exact: true })).toBeDisabled();
+});

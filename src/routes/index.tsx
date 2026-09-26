@@ -4,6 +4,7 @@ import Capture from "~/components/Capture";
 import Playback from "~/components/Playback";
 import Review from "~/components/Review";
 import { apiErrorMessage } from "~/lib/api";
+import { History } from "~/lib/editing";
 import type { PreparedImage } from "~/lib/image";
 import { networkErrorMessage, requireOnline } from "~/lib/network";
 import { speechCache } from "~/lib/speech-cache";
@@ -32,6 +33,7 @@ export default function Home() {
   const [image, setImage] = createSignal<PreparedImage>();
   const [genreHint, setGenreHint] = createSignal("");
   const [detectedLanguage, setDetectedLanguage] = createSignal<string>();
+  const [editHistory, setEditHistory] = createSignal(new History<Segment[]>([]));
   const [segments, setSegments] = createStore<Segment[]>([]);
   const [status, setStatus] = createSignal<StatusMessage>({
     message: "尚未驗證",
@@ -55,6 +57,7 @@ export default function Home() {
     setImage(undefined);
     setDetectedLanguage(undefined);
     setSegments(reconcile([]));
+    setEditHistory(new History<Segment[]>([]));
     setScreen("review");
     setGenreHint("");
     setWorkspace({});
@@ -142,6 +145,7 @@ export default function Home() {
     setRecognitionBusy(true);
     setDetectedLanguage(undefined);
     setSegments(reconcile([]));
+    setEditHistory(new History<Segment[]>([]));
     reportStatus("建立 Gemini upload session…");
     try {
       requireOnline();
@@ -181,6 +185,7 @@ export default function Home() {
       controller.signal.throwIfAborted();
       setDetectedLanguage(result.detectedLanguage);
       setSegments(reconcile(result.segments));
+      setEditHistory(new History<Segment[]>(result.segments));
       setScreen("review");
       reportStatus(`辨識完成 · ${result.segments.length} 個段落`, "success");
     } catch (error) {
@@ -310,6 +315,7 @@ export default function Home() {
               setImage(prepared);
               setDetectedLanguage(undefined);
               setSegments(reconcile([]));
+              setEditHistory(new History<Segment[]>([]));
               setScreen("review");
             }}
             onStatus={reportStatus}
@@ -352,10 +358,12 @@ export default function Home() {
             >
               <Review
                 detectedLanguage={language()}
+                image={image()?.file}
                 genreHint={genreHint().trim() || undefined}
                 voice={voice()}
                 segments={segments}
                 setSegments={setSegments}
+                history={editHistory()}
                 onStartPlayback={() => {
                   setScreen("playback");
                   reportStatus("逐段朗讀已就緒");

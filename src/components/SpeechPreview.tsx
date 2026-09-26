@@ -1,4 +1,5 @@
 import { createEffect, createSignal, on, onCleanup, Show, untrack } from "solid-js";
+import { textBudget } from "~/lib/editing";
 import { networkErrorMessage } from "~/lib/network";
 import { requestCachedSpeech } from "~/lib/speech-cache";
 import type { StatusReporter } from "~/lib/status";
@@ -49,8 +50,8 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
   });
 
   async function generate() {
-    if (!props.text.trim()) {
-      props.onStatus("請先填寫段落文字", "error");
+    if (!textBudget(props.text).valid) {
+      props.onStatus("請先填寫符合長度限制的段落文字", "error");
       return;
     }
     clearAudio();
@@ -86,7 +87,7 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
       <button
         type="button"
         class="small preview-button"
-        disabled={busy() || !props.text.trim()}
+        disabled={busy() || !textBudget(props.text).valid}
         onClick={generate}
       >
         {busy() ? "產生中…" : "產生試聽"}
