@@ -104,4 +104,87 @@ describe("speech cache", () => {
     await expect(Promise.all([first, second])).resolves.toHaveLength(2);
     speechCache.clear();
   });
+
+  it("keeps a shared request alive when only one caller cancels", async () => {
+    speechCache.clear();
+    let resolveResponse!: (response: Response) => void;
+    const signals: AbortSignal[] = [];
+    const fetcher: typeof fetch = (_url, init) => {
+      if (init?.signal) signals.push(init.signal);
+      return new Promise((resolve) => {
+        resolveResponse = resolve;
+      });
+    };
+    const prefetch = new AbortController();
+    const first = requestCachedSpeech(request("shared cancel"), prefetch.signal, fetcher);
+    const second = requestCachedSpeech(
+      request("shared cancel"),
+      new AbortController().signal,
+      fetcher,
+    );
+
+    prefetch.abort();
+    await expect(first).rejects.toMatchObject({ name: "AbortError" });
+    expect(signals).toHaveLength(1);
+    expect(signals[0]?.aborted).toBe(false);
+
+    resolveResponse(new Response(audio(10).blob, { headers: { "content-type": "audio/wav" } }));
+    await expect(second).resolves.toMatchObject({ blob: expect.any(Blob) });
+    expect(speechCache.get(request("shared cancel"))).toBeDefined();
+    speechCache.clear();
+  });
+
+  it("cancels upstream only after every caller leaves and then starts fresh", async () => {
+    speechCache.clear();
+    const signals: AbortSignal[] = [];
+    const resolvers: ((response: Response) => void)[] = [];
+    const fetcher: typeof fetch = (_url, init) => {
+      if (init?.signal) signals.push(init.signal);
+      return new Promise((resolve) => {
+        resolvers.push(resolve);
+      });
+    };
+    const callers = [new AbortController(), new AbortController()];
+    const requests = callers.map((caller) =>
+      requestCachedSpeech(request("all cancel"), caller.signal, fetcher),
+    );
+
+    callers[0]?.abort();
+    expect(signals[0]?.aborted).toBe(false);
+    callers[1]?.abort();
+    expect(signals[0]?.aborted).toBe(true);
+    await Promise.all(requests.map((pending) => expect(pending).rejects.toThrow()));
+
+    const retry = requestCachedSpeech(request("all cancel"), undefined, fetcher);
+    expect(signals).toHaveLength(2);
+    // A late answer from the cancelled request must neither fill the cache nor end the retry.
+    resolvers[0]?.(new Response(audio(10).blob, { headers: { "content-type": "audio/wav" } }));
+    await Promise.resolve();
+    expect(speechCache.get(request("all cancel"))).toBeUndefined();
+    resolvers[1]?.(new Response(audio(12).blob, { headers: { "content-type": "audio/wav" } }));
+    await expect(retry).resolves.toMatchObject({ blob: expect.any(Blob) });
+    expect(speechCache.get(request("all cancel"))?.blob.size).toBe(12);
+    speechCache.clear();
+  });
+
+  it("does not let a caller without a signal be cancelled by others", async () => {
+    speechCache.clear();
+    let resolveResponse!: (response: Response) => void;
+    const signals: AbortSignal[] = [];
+    const fetcher: typeof fetch = (_url, init) => {
+      if (init?.signal) signals.push(init.signal);
+      return new Promise((resolve) => {
+        resolveResponse = resolve;
+      });
+    };
+    const caller = new AbortController();
+    const cancelled = requestCachedSpeech(request("unsignalled"), caller.signal, fetcher);
+    const kept = requestCachedSpeech(request("unsignalled"), undefined, fetcher);
+    caller.abort();
+    await expect(cancelled).rejects.toMatchObject({ name: "AbortError" });
+    expect(signals[0]?.aborted).toBe(false);
+    resolveResponse(new Response(audio(10).blob, { headers: { "content-type": "audio/wav" } }));
+    await expect(kept).resolves.toBeDefined();
+    speechCache.clear();
+  });
 });

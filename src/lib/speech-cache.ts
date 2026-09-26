@@ -64,7 +64,47 @@ export class SpeechCache {
 }
 
 export const speechCache = new SpeechCache();
-const pendingSpeech = new Map<string, { promise: Promise<SpeechAudio>; signal?: AbortSignal }>();
+
+type PendingSpeech = {
+  promise: Promise<SpeechAudio>;
+  controller: AbortController;
+  subscribers: number;
+};
+const pendingSpeech = new Map<string, PendingSpeech>();
+
+function abortError(): DOMException {
+  return new DOMException("Speech request was cancelled", "AbortError");
+}
+
+/**
+ * Waits for a shared synthesis request on behalf of one caller. Aborting the caller's signal
+ * rejects only that caller; the upstream request is cancelled once every caller has left.
+ */
+function subscribe(key: string, pending: PendingSpeech, signal?: AbortSignal) {
+  pending.subscribers += 1;
+  return new Promise<SpeechAudio>((resolve, reject) => {
+    let active = true;
+    const leave = () => {
+      if (!active) return false;
+      active = false;
+      signal?.removeEventListener("abort", cancel);
+      pending.subscribers -= 1;
+      return true;
+    };
+    function cancel() {
+      if (!leave()) return;
+      reject(abortError());
+      if (pending.subscribers > 0) return;
+      pending.controller.abort();
+      if (pendingSpeech.get(key) === pending) pendingSpeech.delete(key);
+    }
+    signal?.addEventListener("abort", cancel, { once: true });
+    pending.promise.then(
+      (audio) => leave() && resolve(audio),
+      (error) => leave() && reject(error),
+    );
+  });
+}
 
 export async function requestCachedSpeech(
   input: SpeechRequest,
@@ -78,27 +118,29 @@ export async function requestCachedSpeech(
     console.info(JSON.stringify({ event: "bragi.audio-cache", result: "hit", purpose }));
     return cached;
   }
-  signal?.throwIfAborted();
   const revision = speechCache.revision;
   const key = `${revision}:${speechCacheKey(input)}`;
   const pending = pendingSpeech.get(key);
-  if (pending && !pending.signal?.aborted) {
+  if (pending) {
     console.info(JSON.stringify({ event: "bragi.audio-cache", result: "pending", purpose }));
-    const audio = await pending.promise;
-    signal?.throwIfAborted();
-    return audio;
+    return subscribe(key, pending, signal);
   }
 
   console.info(JSON.stringify({ event: "bragi.audio-cache", result: "miss", purpose }));
-  const request = requestSpeech(input, signal, fetcher, purpose)
-    .then((audio) => {
-      signal?.throwIfAborted();
-      if (speechCache.revision === revision) speechCache.set(input, audio);
-      return audio;
-    })
-    .finally(() => {
-      if (pendingSpeech.get(key)?.promise === request) pendingSpeech.delete(key);
-    });
-  pendingSpeech.set(key, { promise: request, signal });
-  return request;
+  const controller = new AbortController();
+  const entry: PendingSpeech = {
+    controller,
+    subscribers: 0,
+    promise: requestSpeech(input, controller.signal, fetcher, purpose)
+      .then((audio) => {
+        controller.signal.throwIfAborted();
+        if (speechCache.revision === revision) speechCache.set(input, audio);
+        return audio;
+      })
+      .finally(() => {
+        if (pendingSpeech.get(key) === entry) pendingSpeech.delete(key);
+      }),
+  };
+  pendingSpeech.set(key, entry);
+  return subscribe(key, entry, signal);
 }
