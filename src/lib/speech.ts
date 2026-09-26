@@ -1,6 +1,8 @@
 import { apiErrorMessage } from "./api";
+import { requireOnline } from "./network";
 
 export type SpeechRequest = {
+  voice?: string;
   text: string;
   toneHint?: string;
   genreHint?: string;
@@ -11,14 +13,18 @@ export type SpeechAudio = {
   durationMs?: number;
 };
 
+export type SpeechPurpose = "preview" | "playback" | "prefetch";
+
 export async function requestSpeech(
   input: SpeechRequest,
   signal?: AbortSignal,
   fetcher: typeof fetch = fetch,
+  purpose: SpeechPurpose = "preview",
 ): Promise<SpeechAudio> {
+  requireOnline();
   const response = await fetcher("/api/tts", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "x-bragi-speech-purpose": purpose },
     body: JSON.stringify(input),
     signal,
   });

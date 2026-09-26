@@ -11,6 +11,34 @@ function audio(size: number): SpeechAudio {
 }
 
 describe("speech cache", () => {
+  it("does not repopulate the cache with a response from a cleared workspace", async () => {
+    speechCache.clear();
+    let resolveResponse!: (response: Response) => void;
+    const fetcher: typeof fetch = () =>
+      new Promise((resolve) => {
+        resolveResponse = resolve;
+      });
+    const old = requestCachedSpeech(request("old workspace"), undefined, fetcher);
+    speechCache.clear();
+    resolveResponse(new Response(audio(10).blob, { headers: { "content-type": "audio/wav" } }));
+    await old;
+    expect(speechCache.get(request("old workspace"))).toBeUndefined();
+  });
+
+  it("discards a late response when its request was aborted", async () => {
+    speechCache.clear();
+    const controller = new AbortController();
+    let resolveResponse!: (response: Response) => void;
+    const fetcher: typeof fetch = () =>
+      new Promise((resolve) => {
+        resolveResponse = resolve;
+      });
+    const pending = requestCachedSpeech(request("cancelled"), controller.signal, fetcher);
+    controller.abort();
+    resolveResponse(new Response(audio(10).blob, { headers: { "content-type": "audio/wav" } }));
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(speechCache.get(request("cancelled"))).toBeUndefined();
+  });
   it("keys audio by every synthesis input", () => {
     expect(speechCacheKey(request("第一段"))).not.toBe(
       speechCacheKey({ ...request("第一段"), toneHint: "緊張" }),

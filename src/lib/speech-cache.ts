@@ -1,12 +1,22 @@
-import { requestSpeech, type SpeechAudio, type SpeechRequest } from "./speech";
+import { requestSpeech, type SpeechAudio, type SpeechPurpose, type SpeechRequest } from "./speech";
 
 export function speechCacheKey(input: SpeechRequest): string {
-  return JSON.stringify([input.text, input.toneHint ?? "", input.genreHint ?? ""]);
+  return JSON.stringify([
+    input.text,
+    input.toneHint ?? "",
+    input.genreHint ?? "",
+    input.voice ?? "",
+  ]);
 }
 
 export class SpeechCache {
   readonly #entries = new Map<string, SpeechAudio>();
   #bytes = 0;
+  #revision = 0;
+
+  get revision(): number {
+    return this.#revision;
+  }
 
   constructor(
     readonly maxEntries = 3,
@@ -47,31 +57,48 @@ export class SpeechCache {
   }
 
   clear(): void {
+    this.#revision += 1;
     this.#entries.clear();
     this.#bytes = 0;
   }
 }
 
 export const speechCache = new SpeechCache();
-const pendingSpeech = new Map<string, Promise<SpeechAudio>>();
+const pendingSpeech = new Map<string, { promise: Promise<SpeechAudio>; signal?: AbortSignal }>();
 
 export async function requestCachedSpeech(
   input: SpeechRequest,
   signal?: AbortSignal,
   fetcher: typeof fetch = fetch,
+  purpose: SpeechPurpose = "preview",
 ): Promise<SpeechAudio> {
+  signal?.throwIfAborted();
   const cached = speechCache.get(input);
-  if (cached) return cached;
-  const key = speechCacheKey(input);
+  if (cached) {
+    console.info(JSON.stringify({ event: "bragi.audio-cache", result: "hit", purpose }));
+    return cached;
+  }
+  signal?.throwIfAborted();
+  const revision = speechCache.revision;
+  const key = `${revision}:${speechCacheKey(input)}`;
   const pending = pendingSpeech.get(key);
-  if (pending) return pending;
+  if (pending && !pending.signal?.aborted) {
+    console.info(JSON.stringify({ event: "bragi.audio-cache", result: "pending", purpose }));
+    const audio = await pending.promise;
+    signal?.throwIfAborted();
+    return audio;
+  }
 
-  const request = requestSpeech(input, signal, fetcher)
+  console.info(JSON.stringify({ event: "bragi.audio-cache", result: "miss", purpose }));
+  const request = requestSpeech(input, signal, fetcher, purpose)
     .then((audio) => {
-      speechCache.set(input, audio);
+      signal?.throwIfAborted();
+      if (speechCache.revision === revision) speechCache.set(input, audio);
       return audio;
     })
-    .finally(() => pendingSpeech.delete(key));
-  pendingSpeech.set(key, request);
+    .finally(() => {
+      if (pendingSpeech.get(key)?.promise === request) pendingSpeech.delete(key);
+    });
+  pendingSpeech.set(key, { promise: request, signal });
   return request;
 }

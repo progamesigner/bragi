@@ -23,10 +23,28 @@ JPEG, PNG, WebP, HEIC, and HEIF sources up to 25 MB are accepted. When a browser
 
 ```sh
 npm run check
+npm run typecheck
 npm test
-npm run build
+npx playwright install --with-deps chromium
+npm run test:e2e
 npm run preview
 ```
+
+`test:e2e` builds and runs the production server, then checks the mobile flow with synthetic API responses and a separate real-service-worker test. It requires no Gemini credentials or quota. GitHub Actions runs the same checks. For a deployment check without generating content, run `BRAGI_SMOKE_URL=https://your-deployment npm run test:smoke`.
+
+## App settings and installation
+
+Bragi can be installed using the browser's app installation controls. Its versioned service worker caches only public static assets, with a separate offline landing page. API responses, images, drafts and generated audio are never stored in Cache Storage. A waiting update requires confirmation before reloading and clearing the workspace; close other Bragi tabs before applying it.
+
+The app reports offline status and requires manual retry after reconnecting. “Clear current content” confirms before cancelling work and removing the image, draft and audio, while preserving login.
+
+Reading font presets are saved locally. Set optional `GEMINI_TTS_VOICES` to a comma-separated allowlist to enable voice selection alongside `GEMINI_TTS_VOICE`. The server rejects other voices. Previous/next controls select a segment without starting generation. Playback supports 0.75×, 1×, 1.25× and 1.5× speed; choose the speed before playing. PCM and WAV playback both change pitch with speed.
+
+## Operational logs
+
+Server JSON logs record endpoint, request ID, model, status, latency, input size bucket and speech duration, with completion, cancellation and interruption outcomes. Browser cache logs record only hit/miss/pending and request purpose. Logs exclude images, transcripts, credentials, upload capabilities and provider error details.
+
+Pipe exported JSON log lines to `npm run metrics` for request counts, errors, 429s, p95 latency, audio duration and peak global request volume. These are operational measurements, not a billing estimate. WAF recalibration is cancelled; existing protection remains unchanged. Billing and quota alerts require configuration in the connected cloud account.
 
 `POST /api/uploads`, `/api/ocr`, `/api/tts`, and `/api/tts-stream` require the signed `__Host-bragi-session` cookie and an exact same-origin `Origin` header. The JWT and persistent cookie expire together after 90 days. `GET /api/session` restores the signed-in interface without exposing the token, while `DELETE /api/session` expires it and clears the active browser workspace.
 

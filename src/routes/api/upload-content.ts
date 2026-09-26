@@ -1,9 +1,10 @@
 import type { APIEvent } from "@solidjs/start/server";
 import { hasValidSession } from "~/lib/server/auth";
 import { apiError, createRequestId, isSameOrigin } from "~/lib/server/http";
+import { observeRequest } from "~/lib/server/observability";
 import { verifyUploadId } from "~/lib/server/uploads";
 
-export async function POST({ request }: APIEvent) {
+async function handlePOST({ request }: APIEvent) {
   const requestId = createRequestId();
   if (!isSameOrigin(request))
     return apiError(requestId, 403, "INVALID_ORIGIN", "Request origin is not allowed");
@@ -53,11 +54,12 @@ export async function POST({ request }: APIEvent) {
         "x-request-id": requestId,
       },
     });
-  } catch (error) {
-    console.error(
-      "Gemini upload unavailable",
-      error instanceof Error ? error.message : "unknown error",
-    );
+  } catch (_error) {
+    console.error("Gemini upload unavailable", "unexpected");
     return apiError(requestId, 503, "UPLOAD_UNAVAILABLE", "Upload service is unavailable", true);
   }
+}
+
+export function POST(event: APIEvent) {
+  return observeRequest(event.request, () => handlePOST(event));
 }

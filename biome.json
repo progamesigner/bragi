@@ -1,7 +1,14 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
   "files": {
-    "includes": ["**", "!!node_modules", "!!.nitro", "!!.output"]
+    "includes": [
+      "**",
+      "!!node_modules",
+      "!!.nitro",
+      "!!.output",
+      "!!test-results",
+      "!!playwright-report"
+    ]
   },
   "formatter": {
     "enabled": true,

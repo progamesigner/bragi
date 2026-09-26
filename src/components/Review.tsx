@@ -13,6 +13,7 @@ import SpeechPreview from "./SpeechPreview";
 type ReviewProps = {
   detectedLanguage: string;
   genreHint?: string;
+  voice?: string;
   segments: Segment[];
   setSegments: SetStoreFunction<Segment[]>;
   onStartPlayback: () => void;
@@ -160,6 +161,7 @@ export default function Review(props: ReviewProps) {
                     text={segment.text}
                     toneHint={segment.suggestedToneHint}
                     genreHint={props.genreHint}
+                    voice={props.voice}
                     onStatus={props.onStatus}
                   />
                 </li>

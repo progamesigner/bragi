@@ -2,9 +2,10 @@ import type { APIEvent } from "@solidjs/start/server";
 import { uploadSessionRequestSchema } from "~/lib/schemas";
 import { hasValidSession } from "~/lib/server/auth";
 import { apiError, apiJson, createRequestId, isSameOrigin } from "~/lib/server/http";
+import { observeRequest } from "~/lib/server/observability";
 import { ACCEPTED_IMAGE_TYPES, createGeminiUpload, MAX_UPLOAD_BYTES } from "~/lib/server/uploads";
 
-export async function POST({ request }: APIEvent) {
+async function handlePOST({ request }: APIEvent) {
   const requestId = createRequestId();
   if (!isSameOrigin(request))
     return apiError(requestId, 403, "INVALID_ORIGIN", "Request origin is not allowed");
@@ -44,11 +45,12 @@ export async function POST({ request }: APIEvent) {
       await createGeminiUpload(parsed.data.mimeType, parsed.data.sizeBytes),
       requestId,
     );
-  } catch (error) {
-    console.error(
-      "Unable to create upload session",
-      error instanceof Error ? error.message : "unknown error",
-    );
+  } catch (_error) {
+    console.error("Unable to create upload session", "unexpected");
     return apiError(requestId, 503, "UPLOAD_UNAVAILABLE", "Upload service is unavailable", true);
   }
+}
+
+export function POST(event: APIEvent) {
+  return observeRequest(event.request, () => handlePOST(event));
 }

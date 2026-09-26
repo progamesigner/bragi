@@ -13,6 +13,7 @@ export default function Capture(props: CaptureProps) {
   const [previewUrl, setPreviewUrl] = createSignal<string>();
   const [previewFailed, setPreviewFailed] = createSignal(false);
   const [preparing, setPreparing] = createSignal(false);
+  let disposed = false;
 
   function replacePreview(url?: string) {
     const previous = previewUrl();
@@ -22,6 +23,7 @@ export default function Capture(props: CaptureProps) {
   }
 
   onCleanup(() => {
+    disposed = true;
     const url = previewUrl();
     if (url) URL.revokeObjectURL(url);
   });
@@ -35,6 +37,7 @@ export default function Capture(props: CaptureProps) {
     props.onStatus("正在調整方向與圖片大小…");
     try {
       const prepared = await prepareImage(file);
+      if (disposed) return;
       setImage(prepared);
       replacePreview(URL.createObjectURL(prepared.file));
       props.onChange(prepared);
@@ -43,9 +46,10 @@ export default function Capture(props: CaptureProps) {
         prepared.warning ? "info" : "success",
       );
     } catch (error) {
+      if (disposed) return;
       props.onStatus(error instanceof Error ? error.message : "無法處理圖片", "error");
     } finally {
-      setPreparing(false);
+      if (!disposed) setPreparing(false);
     }
   }
 

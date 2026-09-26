@@ -49,13 +49,13 @@ describe("GET /api/session", () => {
       }),
     } as APIEvent);
 
-    expect(await response.json()).toEqual({ authenticated: true });
+    expect(await response.json()).toMatchObject({ authenticated: true, voices: expect.any(Array) });
     expect(response.headers.get("cache-control")).toBe("private, no-store");
   });
 
   it("reports a missing session as signed out", async () => {
     const response = await GET({ request: new Request(`${origin}/api/session`) } as APIEvent);
-    expect(await response.json()).toEqual({ authenticated: false });
+    expect(await response.json()).toMatchObject({ authenticated: false });
   });
 });
 
@@ -67,6 +67,6 @@ describe("DELETE /api/session", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
-    expect(await response.json()).toEqual({ authenticated: false });
+    expect(await response.json()).toMatchObject({ authenticated: false });
   });
 });

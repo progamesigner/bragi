@@ -464,3 +464,16 @@ button.danger {
     transition: none;
   }
 }
+main[data-font-size="large"] .playback-script,
+main[data-font-size="large"] .review-segment textarea {
+  font-size: 1.4rem;
+}
+main[data-font-size="largest"] .playback-script,
+main[data-font-size="largest"] .review-segment textarea {
+  font-size: 1.8rem;
+}
+select {
+  font: inherit;
+  padding: 0.6rem;
+  max-width: 100%;
+}

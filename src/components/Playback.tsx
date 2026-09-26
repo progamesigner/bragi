@@ -1,4 +1,5 @@
 import { createSignal, Match, onCleanup, onMount, Show, Switch, untrack } from "solid-js";
+import { networkErrorMessage } from "~/lib/network";
 import { initialPlaybackState, type PlaybackEvent, transitionPlayback } from "~/lib/playback";
 import type { SpeechRequest } from "~/lib/speech";
 import { requestCachedSpeech, speechCache } from "~/lib/speech-cache";
@@ -10,6 +11,7 @@ import { pcmDurationMs, pcmToWav } from "~/lib/wav";
 type PlaybackProps = {
   segments: Segment[];
   genreHint?: string;
+  voice?: string;
   onBack: () => void;
   onStatus: StatusReporter;
 };
@@ -19,6 +21,7 @@ export default function Playback(props: PlaybackProps) {
   const [audioUrl, setAudioUrl] = createSignal<string>();
   const [duration, setDuration] = createSignal<number>();
   const [streaming, setStreaming] = createSignal(false);
+  const [rate, setRate] = createSignal(1);
   const [prefetch, setPrefetch] = createSignal<{
     index: number;
     phase: "loading" | "ready";
@@ -37,6 +40,7 @@ export default function Playback(props: PlaybackProps) {
     if (!target) return undefined;
     return {
       text: target.text,
+      voice: props.voice,
       toneHint: target.suggestedToneHint || undefined,
       genreHint: props.genreHint,
     };
@@ -81,19 +85,22 @@ export default function Playback(props: PlaybackProps) {
 
     request?.abort();
     request = new AbortController();
+    const controller = request;
     clearAudio();
     props.onStatus(`正在產生第 ${nextState.index + 1} 段音訊…`);
     try {
       const input = speechInput(nextState.index);
       if (!input) throw new Error("找不到要播放的段落");
-      const result = await requestCachedSpeech(input, request.signal);
+      const result = await requestCachedSpeech(input, request.signal, fetch, "playback");
+      controller.signal.throwIfAborted();
       setAudioUrl(URL.createObjectURL(result.blob));
       setDuration(result.durationMs);
       dispatch({ type: "audio-ready" });
       props.onStatus(`第 ${nextState.index + 1} 段已準備，請按播放`, "success");
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
-      const message = error instanceof Error ? error.message : "無法產生朗讀音訊";
+      if (controller.signal.aborted) return;
+      const message = networkErrorMessage(error, "無法產生朗讀音訊");
       dispatch({ type: "fail", message });
       props.onStatus(message, "error");
     }
@@ -114,7 +121,7 @@ export default function Playback(props: PlaybackProps) {
     prefetchRequest = controller;
     setPrefetch({ index, phase: "loading" });
     try {
-      await requestCachedSpeech(input, controller.signal);
+      await requestCachedSpeech(input, controller.signal, fetch, "prefetch");
       if (prefetchRequest === controller) setPrefetch({ index, phase: "ready" });
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) setPrefetch(undefined);
@@ -130,6 +137,9 @@ export default function Playback(props: PlaybackProps) {
 
     const cached = speechCache.get(input);
     if (cached) {
+      console.info(
+        JSON.stringify({ event: "bragi.audio-cache", result: "hit", purpose: "playback" }),
+      );
       clearAudio();
       setAudioUrl(URL.createObjectURL(cached.blob));
       setDuration(cached.durationMs);
@@ -147,7 +157,7 @@ export default function Playback(props: PlaybackProps) {
     request = controller;
     clearAudio();
     const context = new AudioContext({ sampleRate: 24_000 });
-    const player = new PcmStreamPlayer(context);
+    const player = new PcmStreamPlayer(context, 24_000, rate());
     streamContext = context;
     streamPlayer = player;
     setStreaming(true);
@@ -176,6 +186,7 @@ export default function Playback(props: PlaybackProps) {
       }
 
       const pcm = completePcm(chunks, byteLength);
+      controller.signal.throwIfAborted();
       const wav = pcmToWav(pcm);
       const audio = {
         blob: new Blob([wav], { type: "audio/wav" }),
@@ -200,7 +211,7 @@ export default function Playback(props: PlaybackProps) {
       streamPlayer = undefined;
       streamContext = undefined;
       setStreaming(false);
-      const message = error instanceof Error ? error.message : "串流播放失敗";
+      const message = networkErrorMessage(error, "串流播放失敗");
       dispatch({ type: "fail", message });
       props.onStatus(message, "error");
     }
@@ -218,6 +229,8 @@ export default function Playback(props: PlaybackProps) {
     }
     if (!audioUrl()) return;
     try {
+      audio.playbackRate = rate();
+      audio.preservesPitch = false;
       await audio.play();
     } catch {
       props.onStatus("瀏覽器阻止播放，請再按一次播放按鈕", "error");
@@ -235,6 +248,14 @@ export default function Playback(props: PlaybackProps) {
     prefetchRequest?.abort();
     clearAudio();
     props.onBack();
+  }
+
+  function navigate(index: number) {
+    request?.abort();
+    prefetchRequest?.abort();
+    clearAudio();
+    setPrefetch(undefined);
+    setState({ index, phase: "idle" });
   }
 
   onCleanup(() => {
@@ -264,6 +285,39 @@ export default function Playback(props: PlaybackProps) {
           <span>語氣：{segment()?.suggestedToneHint}</span>
         </Show>
       </article>
+      <label for="playback-rate">播放速度</label>
+      <select
+        id="playback-rate"
+        value={rate()}
+        disabled={streaming() || state().phase === "playing" || state().phase === "loading"}
+        onChange={(event) => setRate(Number(event.currentTarget.value))}
+      >
+        <option value="0.75">0.75 倍</option>
+        <option value="1">1 倍</option>
+        <option value="1.25">1.25 倍</option>
+        <option value="1.5">1.5 倍</option>
+      </select>
+      <nav aria-label="選擇朗讀段落">
+        <button
+          type="button"
+          disabled={state().index === 0}
+          onClick={() => navigate(state().index - 1)}
+        >
+          上一段
+        </button>
+        <button
+          type="button"
+          disabled={state().index >= props.segments.length - 1}
+          onClick={() => navigate(state().index + 1)}
+        >
+          下一段
+        </button>
+      </nav>
+      <progress
+        aria-label="段落進度"
+        max={props.segments.length}
+        value={state().phase === "complete" ? props.segments.length : state().index}
+      />
 
       <Show when={audioUrl()}>
         {(url) => (
@@ -275,6 +329,8 @@ export default function Playback(props: PlaybackProps) {
               src={url()}
               aria-label={`第 ${state().index + 1} 段朗讀`}
               onPlay={() => {
+                audio.playbackRate = rate();
+                audio.preservesPitch = false;
                 dispatch({ type: "play" });
                 void prefetchNext();
               }}
@@ -302,7 +358,7 @@ export default function Playback(props: PlaybackProps) {
         <Switch>
           <Match when={state().phase === "idle"}>
             <button type="button" onClick={() => streamAndPlay("start")}>
-              串流播放第一段
+              {state().index === 0 ? "串流播放第一段" : "播放此段"}
             </button>
           </Match>
           <Match when={state().phase === "loading"}>

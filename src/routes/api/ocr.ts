@@ -3,9 +3,10 @@ import { ocrRequestSchema, ocrResponseSchema } from "~/lib/schemas";
 import { hasValidSession } from "~/lib/server/auth";
 import { GeminiError, recognizeImage, resolveGeminiFile } from "~/lib/server/gemini";
 import { apiError, apiJson, createRequestId, isSameOrigin } from "~/lib/server/http";
+import { observeRequest } from "~/lib/server/observability";
 import { verifyUploadId } from "~/lib/server/uploads";
 
-export async function POST({ request }: APIEvent) {
+async function handlePOST({ request }: APIEvent) {
   const requestId = createRequestId();
   if (!isSameOrigin(request))
     return apiError(requestId, 403, "INVALID_ORIGIN", "Request origin is not allowed");
@@ -41,7 +42,7 @@ export async function POST({ request }: APIEvent) {
     return apiJson(response, requestId);
   } catch (error) {
     if (!(error instanceof GeminiError)) {
-      console.error("Unexpected OCR failure", error instanceof Error ? error.message : "unknown");
+      console.error("Unexpected OCR failure", "unexpected");
       return apiError(requestId, 503, "OCR_UNAVAILABLE", "OCR service is unavailable", true);
     }
     console.error("Gemini OCR failure", error.kind);
@@ -73,4 +74,8 @@ export async function POST({ request }: APIEvent) {
         return apiError(requestId, 503, "OCR_UNAVAILABLE", "OCR service is unavailable", true);
     }
   }
+}
+
+export function POST(event: APIEvent) {
+  return observeRequest(event.request, () => handlePOST(event));
 }

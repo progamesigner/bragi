@@ -2,8 +2,10 @@ import type { APIEvent } from "@solidjs/start/server";
 import { isTtsTextTooLong, ttsRequestSchema } from "~/lib/schemas";
 import { hasValidSession } from "~/lib/server/auth";
 import { apiError, createRequestId, isSameOrigin } from "~/lib/server/http";
+import { observeRequest } from "~/lib/server/observability";
 import { SpeechError } from "~/lib/server/speech";
 import { synthesizeSpeechStream } from "~/lib/server/speech-stream";
+import { resolveVoice } from "~/lib/server/voices";
 
 function streamBody(iterator: AsyncGenerator<Uint8Array<ArrayBuffer>>): ReadableStream<Uint8Array> {
   return new ReadableStream({
@@ -16,7 +18,7 @@ function streamBody(iterator: AsyncGenerator<Uint8Array<ArrayBuffer>>): Readable
         console.error(
           "Gemini speech stream interrupted",
           error instanceof SpeechError ? error.kind : "unexpected",
-          error instanceof Error ? error.message : "unknown",
+          "unexpected",
         );
         controller.error(error);
       }
@@ -28,7 +30,7 @@ function streamBody(iterator: AsyncGenerator<Uint8Array<ArrayBuffer>>): Readable
 }
 
 function speechError(error: SpeechError, requestId: string): Response {
-  console.error("Gemini speech stream failure", error.kind, error.message);
+  console.error("Gemini speech stream failure", error.kind);
   switch (error.kind) {
     case "too-long":
       return apiError(
@@ -61,7 +63,7 @@ function speechError(error: SpeechError, requestId: string): Response {
   }
 }
 
-export async function POST({ request }: APIEvent) {
+async function handlePOST({ request }: APIEvent) {
   const requestId = createRequestId();
   if (!isSameOrigin(request))
     return apiError(requestId, 403, "INVALID_ORIGIN", "Request origin is not allowed");
@@ -92,6 +94,12 @@ export async function POST({ request }: APIEvent) {
     return apiError(requestId, 400, "INVALID_REQUEST", "Speech request is invalid");
 
   try {
+    if (parsed.data.voice) resolveVoice(parsed.data.voice);
+  } catch {
+    return apiError(requestId, 400, "INVALID_REQUEST", "Voice is not allowed");
+  }
+
+  try {
     const stream = await synthesizeSpeechStream(parsed.data, request.signal);
     return new Response(streamBody(stream), {
       headers: {
@@ -103,10 +111,11 @@ export async function POST({ request }: APIEvent) {
     });
   } catch (error) {
     if (error instanceof SpeechError) return speechError(error, requestId);
-    console.error(
-      "Unexpected speech stream failure",
-      error instanceof Error ? error.message : "unknown",
-    );
+    console.error("Unexpected speech stream failure", "unexpected");
     return apiError(requestId, 503, "TTS_UNAVAILABLE", "Speech service is unavailable", true);
   }
+}
+
+export function POST(event: APIEvent) {
+  return observeRequest(event.request, () => handlePOST(event));
 }

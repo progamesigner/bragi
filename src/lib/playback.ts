@@ -36,7 +36,7 @@ export function transitionPlayback(
 
   switch (event.type) {
     case "start":
-      return state.phase === "idle" ? { index: 0, phase: "loading" } : state;
+      return state.phase === "idle" ? { index: state.index, phase: "loading" } : state;
     case "audio-ready":
       return state.phase === "loading" ? { index: state.index, phase: "ready" } : state;
     case "play":

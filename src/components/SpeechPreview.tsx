@@ -1,4 +1,5 @@
 import { createEffect, createSignal, on, onCleanup, Show, untrack } from "solid-js";
+import { networkErrorMessage } from "~/lib/network";
 import { requestCachedSpeech } from "~/lib/speech-cache";
 import type { StatusReporter } from "~/lib/status";
 
@@ -6,6 +7,7 @@ type SpeechPreviewProps = {
   text: string;
   toneHint: string;
   genreHint?: string;
+  voice?: string;
   onStatus: StatusReporter;
 };
 
@@ -14,6 +16,7 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
   const [audioUrl, setAudioUrl] = createSignal<string>();
   const [duration, setDuration] = createSignal<number>();
   let request: AbortController | undefined;
+  let audioElement: HTMLAudioElement | undefined;
 
   function captionsUrl() {
     const transcript = props.text.replaceAll("-->", "→");
@@ -21,6 +24,7 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
   }
 
   function clearAudio() {
+    audioElement?.pause();
     const url = untrack(audioUrl);
     if (url) URL.revokeObjectURL(url);
     setAudioUrl(undefined);
@@ -29,7 +33,7 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
 
   createEffect(
     on(
-      () => [props.text, props.toneHint, props.genreHint],
+      () => [props.text, props.toneHint, props.genreHint, props.voice],
       () => {
         request?.abort();
         clearAudio();
@@ -39,6 +43,7 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
   );
   onCleanup(() => {
     request?.abort();
+    audioElement?.pause();
     const url = untrack(audioUrl);
     if (url) URL.revokeObjectURL(url);
   });
@@ -58,17 +63,19 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
       const audio = await requestCachedSpeech(
         {
           text: props.text,
+          voice: props.voice,
           toneHint: props.toneHint || undefined,
           genreHint: props.genreHint || undefined,
         },
         controller.signal,
       );
+      controller.signal.throwIfAborted();
       setAudioUrl(URL.createObjectURL(audio.blob));
       setDuration(audio.durationMs);
       props.onStatus("試聽已準備完成，請按播放", "success");
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
-      props.onStatus(error instanceof Error ? error.message : "無法產生試聽", "error");
+      props.onStatus(networkErrorMessage(error, "無法產生試聽"), "error");
     } finally {
       if (request === controller) setBusy(false);
     }
@@ -87,7 +94,7 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
       <Show when={audioUrl()}>
         {(url) => (
           <div class="audio-result">
-            <audio controls preload="metadata" src={url()} aria-label="段落試聽">
+            <audio ref={audioElement} controls preload="metadata" src={url()} aria-label="段落試聽">
               <track kind="captions" src={captionsUrl()} label="口白文字" default />
             </audio>
             <Show when={duration()}>

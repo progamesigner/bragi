@@ -2,10 +2,12 @@ import type { APIEvent } from "@solidjs/start/server";
 import { isTtsTextTooLong, ttsRequestSchema } from "~/lib/schemas";
 import { hasValidSession } from "~/lib/server/auth";
 import { apiError, createRequestId, isSameOrigin } from "~/lib/server/http";
+import { observeRequest } from "~/lib/server/observability";
 import { SpeechError, synthesizeSpeech } from "~/lib/server/speech";
+import { resolveVoice } from "~/lib/server/voices";
 import { pcmToWav } from "~/lib/wav";
 
-export async function POST({ request }: APIEvent) {
+async function handlePOST({ request }: APIEvent) {
   const requestId = createRequestId();
   if (!isSameOrigin(request))
     return apiError(requestId, 403, "INVALID_ORIGIN", "Request origin is not allowed");
@@ -36,6 +38,12 @@ export async function POST({ request }: APIEvent) {
     return apiError(requestId, 400, "INVALID_REQUEST", "Speech request is invalid");
 
   try {
+    if (parsed.data.voice) resolveVoice(parsed.data.voice);
+  } catch {
+    return apiError(requestId, 400, "INVALID_REQUEST", "Voice is not allowed");
+  }
+
+  try {
     const speech = await synthesizeSpeech(parsed.data, request.signal);
     const wav = pcmToWav(speech.pcm);
     return new Response(wav.buffer, {
@@ -50,13 +58,10 @@ export async function POST({ request }: APIEvent) {
     });
   } catch (error) {
     if (!(error instanceof SpeechError)) {
-      console.error(
-        "Unexpected speech failure",
-        error instanceof Error ? error.message : "unknown",
-      );
+      console.error("Unexpected speech failure", "unexpected");
       return apiError(requestId, 503, "TTS_UNAVAILABLE", "Speech service is unavailable", true);
     }
-    console.error("Gemini speech failure", error.kind, error.message);
+    console.error("Gemini speech failure", error.kind);
     switch (error.kind) {
       case "too-long":
         return apiError(
@@ -88,4 +93,8 @@ export async function POST({ request }: APIEvent) {
         return apiError(requestId, 503, "TTS_UNAVAILABLE", "Speech service is unavailable", true);
     }
   }
+}
+
+export function POST(event: APIEvent) {
+  return observeRequest(event.request, () => handlePOST(event));
 }

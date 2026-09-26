@@ -1,4 +1,5 @@
 import { apiErrorMessage } from "./api";
+import { requireOnline } from "./network";
 import type { SpeechRequest } from "./speech";
 
 export type SpeechPcmStream = {
@@ -12,9 +13,10 @@ export async function openSpeechStream(
   signal?: AbortSignal,
   fetcher: typeof fetch = fetch,
 ): Promise<SpeechPcmStream> {
+  requireOnline();
   const response = await fetcher("/api/tts-stream", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "x-bragi-speech-purpose": "playback" },
     body: JSON.stringify(input),
     signal,
   });
@@ -70,6 +72,7 @@ export class PcmStreamPlayer {
   constructor(
     readonly context: AudioContext,
     readonly sampleRate = 24_000,
+    readonly rate = 1,
   ) {}
 
   append(chunk: Uint8Array): void {
@@ -79,9 +82,10 @@ export class PcmStreamPlayer {
     buffer.copyToChannel(samples, 0);
     const source = this.context.createBufferSource();
     source.buffer = buffer;
+    source.playbackRate.value = this.rate;
     source.connect(this.context.destination);
     const start = Math.max(this.#nextStart, this.context.currentTime + 0.08);
-    this.#nextStart = start + buffer.duration;
+    this.#nextStart = start + buffer.duration / this.rate;
     this.#sources.add(source);
     this.#tail = new Promise((resolve) => {
       source.addEventListener(

@@ -10,6 +10,8 @@ export default createHandler(() => (
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <meta name="theme-color" content="#171512" />
           <title>Bragi</title>
+          <link rel="manifest" href="/manifest.webmanifest" />
+          <link rel="apple-touch-icon" href="/icon-192.png" />
           {assets}
         </head>
         <body>

@@ -26,6 +26,16 @@ async function request(body: unknown) {
 }
 
 describe("POST /api/tts", () => {
+  it("rejects a voice outside the server allowlist before contacting Gemini", async () => {
+    process.env.GEMINI_TTS_VOICE = "Kore";
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    const response = await POST({
+      request: await request({ text: "hello", voice: "unapproved" }),
+    } as APIEvent);
+    expect(response.status).toBe(400);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it("returns playable WAV audio from Gemini PCM", async () => {
     process.env.GEMINI_API_KEY = "test-key";
     process.env.GEMINI_TTS_VOICE = "Kore";

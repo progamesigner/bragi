@@ -60,6 +60,7 @@ export const ocrResponseSchema = z.object({
 });
 
 export const ttsRequestSchema = z.object({
+  voice: z.string().trim().min(1).max(80).optional(),
   text: z
     .string()
     .trim()

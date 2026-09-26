@@ -8,15 +8,18 @@ import {
   verifyTotp,
 } from "~/lib/server/auth";
 import { apiError, apiJson, createRequestId, isSameOrigin } from "~/lib/server/http";
+import { observeRequest } from "~/lib/server/observability";
+import { allowedVoices } from "~/lib/server/voices";
 
-export async function GET({ request }: APIEvent) {
+async function handleGET({ request }: APIEvent) {
   const requestId = createRequestId();
-  return apiJson({ authenticated: await hasValidSession(request) }, requestId, {
+  const authenticated = await hasValidSession(request);
+  return apiJson({ authenticated, voices: authenticated ? allowedVoices() : [] }, requestId, {
     headers: { "cache-control": "private, no-store" },
   });
 }
 
-export async function POST({ request }: APIEvent) {
+async function handlePOST({ request }: APIEvent) {
   const requestId = createRequestId();
   if (!isSameOrigin(request))
     return apiError(requestId, 403, "INVALID_ORIGIN", "Request origin is not allowed");
@@ -42,23 +45,32 @@ export async function POST({ request }: APIEvent) {
     if (!verifyTotp(parsed.data.otp))
       return apiError(requestId, 401, "INVALID_OTP", "OTP is invalid or expired");
     const token = await issueSession();
-    return apiJson({ authenticated: true }, requestId, {
+    return apiJson({ authenticated: true, voices: allowedVoices() }, requestId, {
       headers: { "set-cookie": sessionCookie(token) },
     });
-  } catch (error) {
-    console.error(
-      "Session authentication unavailable",
-      error instanceof Error ? error.message : "unknown error",
-    );
+  } catch (_error) {
+    console.error("Session authentication unavailable", "unexpected");
     return apiError(requestId, 503, "SERVICE_UNAVAILABLE", "Authentication is unavailable");
   }
 }
 
-export function DELETE({ request }: APIEvent) {
+function handleDELETE({ request }: APIEvent) {
   const requestId = createRequestId();
   if (!isSameOrigin(request))
     return apiError(requestId, 403, "INVALID_ORIGIN", "Request origin is not allowed");
   return apiJson({ authenticated: false }, requestId, {
     headers: { "set-cookie": expiredSessionCookie() },
   });
+}
+
+export function GET(event: APIEvent) {
+  return observeRequest(event.request, () => handleGET(event));
+}
+
+export function POST(event: APIEvent) {
+  return observeRequest(event.request, () => handlePOST(event));
+}
+
+export function DELETE(event: APIEvent) {
+  return handleDELETE(event);
 }

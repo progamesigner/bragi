@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { TtsRequest } from "../schemas";
 import { pcmDurationMs } from "../wav";
 import { requiredEnv } from "./config";
+import { resolveVoice } from "./voices";
 
 const INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions";
 const SAMPLE_RATE = 24_000;
@@ -125,7 +126,7 @@ async function requestSpeech(
         input: speechPrompt(input),
         response_format: { type: "audio" },
         generation_config: {
-          speech_config: [{ voice: requiredEnv("GEMINI_TTS_VOICE") }],
+          speech_config: [{ voice: resolveVoice(input.voice) }],
         },
       }),
       signal,

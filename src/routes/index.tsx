@@ -1,10 +1,11 @@
-import { createSignal, onMount, Show } from "solid-js";
+import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import Capture from "~/components/Capture";
 import Playback from "~/components/Playback";
 import Review from "~/components/Review";
 import { apiErrorMessage } from "~/lib/api";
 import type { PreparedImage } from "~/lib/image";
+import { networkErrorMessage, requireOnline } from "~/lib/network";
 import { speechCache } from "~/lib/speech-cache";
 import type { Segment } from "~/lib/state";
 import type { StatusMessage, StatusTone } from "~/lib/status";
@@ -21,6 +22,12 @@ type OcrResult = {
 };
 
 export default function Home() {
+  const [voice, setVoice] = createSignal<string>();
+  const [voices, setVoices] = createSignal<string[]>([]);
+  const [fontSize, setFontSize] = createSignal("normal");
+  const [online, setOnline] = createSignal(true);
+  const [workspace, setWorkspace] = createSignal({});
+  let recognitionRequest: AbortController | undefined;
   const [otp, setOtp] = createSignal("");
   const [image, setImage] = createSignal<PreparedImage>();
   const [genreHint, setGenreHint] = createSignal("");
@@ -41,19 +48,41 @@ export default function Home() {
   }
 
   function clearWorkspace() {
+    recognitionRequest?.abort();
+    recognitionRequest = undefined;
+    setRecognitionBusy(false);
     speechCache.clear();
     setImage(undefined);
     setDetectedLanguage(undefined);
     setSegments(reconcile([]));
     setScreen("review");
+    setGenreHint("");
+    setWorkspace({});
   }
+
+  onMount(() => {
+    try {
+      const saved = localStorage.getItem("bragi-font-size");
+      if (saved && ["normal", "large", "largest"].includes(saved)) setFontSize(saved);
+    } catch {}
+    const update = () => setOnline(navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    onCleanup(() => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+      recognitionRequest?.abort();
+    });
+  });
 
   onMount(async () => {
     try {
       const response = await fetch("/api/session", { cache: "no-store" });
       if (!response.ok) throw new Error(await apiErrorMessage(response, "無法確認登入狀態"));
-      const session = (await response.json()) as { authenticated: boolean };
+      const session = (await response.json()) as { authenticated: boolean; voices?: string[] };
       setAuthenticated(session.authenticated);
+      setVoices(session.voices ?? []);
       reportStatus(
         session.authenticated ? "已恢復登入狀態" : "請先使用 Authenticator 驗證碼登入",
         session.authenticated ? "success" : "info",
@@ -69,17 +98,20 @@ export default function Home() {
     event.preventDefault();
     setAuthBusy(true);
     try {
+      requireOnline();
       const response = await fetch("/api/session", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ otp: otp() }),
       });
       if (!response.ok) throw new Error(await apiErrorMessage(response, "驗證失敗"));
+      const session = await response.json();
+      setVoices(session.voices ?? []);
       setAuthenticated(true);
       setOtp("");
       reportStatus("驗證成功，可以上傳圖片", "success");
     } catch (error) {
-      reportStatus(error instanceof Error ? error.message : "驗證失敗", "error");
+      reportStatus(networkErrorMessage(error, "驗證失敗"), "error");
     } finally {
       setAuthBusy(false);
     }
@@ -88,13 +120,14 @@ export default function Home() {
   async function signOut() {
     setAuthBusy(true);
     try {
+      requireOnline();
       const response = await fetch("/api/session", { method: "DELETE" });
       if (!response.ok) throw new Error(await apiErrorMessage(response, "登出失敗"));
       setAuthenticated(false);
       clearWorkspace();
       reportStatus("已安全登出", "success");
     } catch (error) {
-      reportStatus(error instanceof Error ? error.message : "登出失敗", "error");
+      reportStatus(networkErrorMessage(error, "登出失敗"), "error");
     } finally {
       setAuthBusy(false);
     }
@@ -103,12 +136,17 @@ export default function Home() {
   async function recognizeUpload() {
     const selected = image()?.file;
     if (!selected) return;
+    const controller = new AbortController();
+    recognitionRequest?.abort();
+    recognitionRequest = controller;
     setRecognitionBusy(true);
     setDetectedLanguage(undefined);
     setSegments(reconcile([]));
     reportStatus("建立 Gemini upload session…");
     try {
+      requireOnline();
       const sessionResponse = await fetch("/api/uploads", {
+        signal: controller.signal,
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ mimeType: selected.type, sizeBytes: selected.size }),
@@ -116,16 +154,20 @@ export default function Home() {
       if (!sessionResponse.ok)
         throw new Error(await apiErrorMessage(sessionResponse, "無法建立上傳工作階段"));
       const upload = (await sessionResponse.json()) as UploadTarget;
+      controller.signal.throwIfAborted();
       reportStatus("透過 Bragi 安全轉送至 Gemini…");
       const response = await fetch(upload.target.url, {
+        signal: controller.signal,
         method: upload.target.method,
         headers: upload.target.headers,
         body: selected,
       });
       if (!response.ok) throw new Error(await apiErrorMessage(response, "無法上傳圖片"));
       const receipt = await response.json();
+      controller.signal.throwIfAborted();
       reportStatus("Gemini 正在辨識與分段…");
       const ocrResponse = await fetch("/api/ocr", {
+        signal: controller.signal,
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -136,19 +178,21 @@ export default function Home() {
       });
       if (!ocrResponse.ok) throw new Error(await apiErrorMessage(ocrResponse, "無法辨識圖片"));
       const result = (await ocrResponse.json()) as OcrResult;
+      controller.signal.throwIfAborted();
       setDetectedLanguage(result.detectedLanguage);
       setSegments(reconcile(result.segments));
       setScreen("review");
       reportStatus(`辨識完成 · ${result.segments.length} 個段落`, "success");
     } catch (error) {
-      reportStatus(error instanceof Error ? error.message : "上傳失敗", "error");
+      if (controller.signal.aborted) return;
+      reportStatus(networkErrorMessage(error, "上傳失敗"), "error");
     } finally {
-      setRecognitionBusy(false);
+      if (recognitionRequest === controller) setRecognitionBusy(false);
     }
   }
 
   return (
-    <main>
+    <main data-font-size={fontSize()}>
       <header>
         <p class="eyebrow">BRAGI · OCR</p>
         <h1>
@@ -196,7 +240,54 @@ export default function Home() {
         </Show>
       </section>
 
-      <Show when={authenticated()}>
+      <section class="card">
+        <label for="font-size">朗讀字級</label>
+        <select
+          id="font-size"
+          value={fontSize()}
+          onChange={(event) => {
+            setFontSize(event.currentTarget.value);
+            try {
+              localStorage.setItem("bragi-font-size", fontSize());
+            } catch {}
+          }}
+        >
+          <option value="normal">標準</option>
+          <option value="large">大</option>
+          <option value="largest">特大</option>
+        </select>
+        <Show when={authenticated() && voices().length > 1}>
+          <label for="voice">朗讀聲音</label>
+          <select
+            id="voice"
+            disabled={screen() === "playback" || recognitionBusy()}
+            value={voice() ?? ""}
+            onChange={(event) => {
+              speechCache.clear();
+              setVoice(event.currentTarget.value || undefined);
+            }}
+          >
+            <option value="">預設聲音</option>
+            <For each={voices()}>{(value) => <option value={value}>{value}</option>}</For>
+          </select>
+        </Show>
+      </section>
+      <Show when={!online()}>
+        <p role="status">目前離線。已載入的文字與音訊仍可使用；連線恢復後請手動重試。</p>
+      </Show>
+      <Show when={authenticated() && workspace()} keyed>
+        <button
+          type="button"
+          class="small secondary"
+          onClick={() => {
+            if (!window.confirm("清除目前圖片、校閱文字與音訊？此操作無法復原，但會保留登入狀態。"))
+              return;
+            clearWorkspace();
+            reportStatus("已清除目前內容，登入狀態已保留", "success");
+          }}
+        >
+          清除目前內容
+        </button>
         <section class="card" aria-busy={recognitionBusy()}>
           <h2>2. 上傳並辨識</h2>
           <p>
@@ -250,6 +341,7 @@ export default function Home() {
                 <Playback
                   segments={segments}
                   genreHint={genreHint().trim() || undefined}
+                  voice={voice()}
                   onBack={() => {
                     setScreen("review");
                     reportStatus("已返回校對", "success");
@@ -261,6 +353,7 @@ export default function Home() {
               <Review
                 detectedLanguage={language()}
                 genreHint={genreHint().trim() || undefined}
+                voice={voice()}
                 segments={segments}
                 setSegments={setSegments}
                 onStartPlayback={() => {
