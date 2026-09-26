@@ -38,7 +38,7 @@ Bragi can be installed using the browser's app installation controls. Its versio
 
 The app reports offline status and requires manual retry after reconnecting. “Clear current content” confirms before cancelling work and removing the image, draft and audio, while preserving login.
 
-Reading font presets are saved locally. Set optional `GEMINI_TTS_VOICES` to a comma-separated allowlist to enable voice selection alongside `GEMINI_TTS_VOICE`. The server rejects other voices. Previous/next controls select a segment without starting generation. Playback supports 0.75×, 1×, 1.25× and 1.5× speed; choose the speed before playing. PCM and WAV playback both change pitch with speed.
+Reading font presets are saved locally. When the browser supports the Screen Wake Lock API, the playback screen offers an opt-in “朗讀時保持螢幕常亮” setting. The choice is saved locally, the lock is reacquired when the page becomes visible again, and it is released when leaving playback. Set optional `GEMINI_TTS_VOICES` to a comma-separated allowlist to enable voice selection alongside `GEMINI_TTS_VOICE`. The server rejects other voices. Previous/next controls select a segment without starting generation. Playback supports 0.75×, 1×, 1.25× and 1.5× speed; choose the speed before playing. PCM and WAV playback both change pitch with speed.
 
 ## Operational logs
 

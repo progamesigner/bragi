@@ -443,3 +443,45 @@ test("streamed playback recovers after the system suspends audio", async ({ page
   await expect(page.getByRole("button", { name: "繼續播放" })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
+
+test("keeps the screen awake during playback only when chosen", async ({ page }) => {
+  await mockApi(page, true);
+  await page.addInitScript(() => {
+    const log: string[] = [];
+    Object.assign(window, { bragiWakeLog: log });
+    Object.defineProperty(navigator, "wakeLock", {
+      configurable: true,
+      value: {
+        async request(type: string) {
+          log.push(`request:${type}`);
+          const sentinel = {
+            released: false,
+            async release() {
+              sentinel.released = true;
+              log.push("release");
+            },
+            addEventListener() {},
+          };
+          return sentinel;
+        },
+      },
+    });
+  });
+  const wakeLog = () =>
+    page.evaluate(() => (window as unknown as { bragiWakeLog: string[] }).bragiWakeLog);
+  await page.goto("/");
+  await recognize(page);
+  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  const toggle = page.getByLabel("朗讀時保持螢幕常亮");
+  await expect(toggle).not.toBeChecked();
+  expect(await wakeLog()).toEqual([]);
+
+  await toggle.check();
+  await expect.poll(wakeLog).toEqual(["request:screen"]);
+  await page.getByRole("button", { name: /返回校對/ }).click();
+  await expect.poll(wakeLog).toEqual(["request:screen", "release"]);
+
+  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await expect(page.getByLabel("朗讀時保持螢幕常亮")).toBeChecked();
+  await expect.poll(wakeLog).toEqual(["request:screen", "release", "request:screen"]);
+});

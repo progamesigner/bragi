@@ -6,6 +6,7 @@ import { requestCachedSpeech, speechCache } from "~/lib/speech-cache";
 import { openSpeechStream, PcmStreamPlayer } from "~/lib/speech-stream";
 import { type Segment, speechText } from "~/lib/state";
 import type { StatusReporter } from "~/lib/status";
+import { ScreenWakeLock } from "~/lib/wake-lock";
 import { pcmDurationMs, pcmToWav } from "~/lib/wav";
 
 type PlaybackProps = {
@@ -22,6 +23,8 @@ export default function Playback(props: PlaybackProps) {
   const [duration, setDuration] = createSignal<number>();
   const [streaming, setStreaming] = createSignal(false);
   const [rate, setRate] = createSignal(1);
+  const wakeLock = new ScreenWakeLock();
+  const [keepAwake, setKeepAwake] = createSignal(false);
   const [prefetch, setPrefetch] = createSignal<{
     index: number;
     phase: "loading" | "ready";
@@ -276,14 +279,38 @@ export default function Playback(props: PlaybackProps) {
     prefetchRequest?.abort();
     clearAudio();
   });
+  async function changeKeepAwake(enabled: boolean) {
+    setKeepAwake(enabled);
+    try {
+      localStorage.setItem("bragi-keep-awake", String(enabled));
+    } catch {}
+    try {
+      if (enabled) await wakeLock.enable();
+      else await wakeLock.disable();
+    } catch {
+      setKeepAwake(false);
+      props.onStatus("此裝置目前無法保持螢幕常亮", "error");
+    }
+  }
+
   onMount(() => {
     heading.focus();
+    try {
+      if (wakeLock.supported && localStorage.getItem("bragi-keep-awake") === "true") {
+        setKeepAwake(true);
+        wakeLock.enable().catch(() => setKeepAwake(false));
+      }
+    } catch {}
     const visibilityChanged = () => {
-      if (document.visibilityState === "visible" && streamContext)
-        handleInterruption(streamContext);
+      if (document.visibilityState !== "visible") return;
+      if (streamContext) handleInterruption(streamContext);
+      wakeLock.reacquire().catch(() => setKeepAwake(false));
     };
     document.addEventListener("visibilitychange", visibilityChanged);
-    onCleanup(() => document.removeEventListener("visibilitychange", visibilityChanged));
+    onCleanup(() => {
+      document.removeEventListener("visibilitychange", visibilityChanged);
+      void wakeLock.disable().catch(() => undefined);
+    });
   });
 
   return (
@@ -321,6 +348,16 @@ export default function Playback(props: PlaybackProps) {
         <option value="1.25">1.25 倍</option>
         <option value="1.5">1.5 倍</option>
       </select>
+      <Show when={wakeLock.supported}>
+        <label class="checkbox">
+          <input
+            type="checkbox"
+            checked={keepAwake()}
+            onChange={(event) => void changeKeepAwake(event.currentTarget.checked)}
+          />
+          朗讀時保持螢幕常亮
+        </label>
+      </Show>
       <nav aria-label="選擇朗讀段落">
         <button
           type="button"
