@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 export default function pwaBuild() {
   return {
@@ -7,8 +9,9 @@ export default function pwaBuild() {
     applyToEnvironment(environment) {
       return environment.name === "client";
     },
-    async closeBundle() {
-      const root = new URL("../.output/public/", import.meta.url);
+    async writeBundle(options) {
+      if (!options.dir) throw new Error("PWA build requires a directory output");
+      const root = pathToFileURL(`${resolve(options.dir)}/`);
       const assets = ["/offline.html", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
       async function walk(path) {
         for (const entry of await readdir(new URL(path, root), { withFileTypes: true })) {

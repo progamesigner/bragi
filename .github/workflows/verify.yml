@@ -15,6 +15,13 @@ jobs:
       - run: npm test
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - name: Build Vercel deployment assets
+        run: |
+          npm run build
+          test -s .vercel/output/static/sw.js
+        env:
+          VERCEL: "1"
+          VERCEL_ENV: production
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
