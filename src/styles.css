@@ -114,6 +114,14 @@ textarea.invalid {
   color: #ef9a91;
   font-size: 0.8rem;
 }
+.spoken-toggle {
+  margin-top: 12px;
+}
+.spoken-correction {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-left: 3px solid #8a735e;
+}
 label + input {
   margin-top: 8px;
 }
@@ -392,6 +400,12 @@ button.danger {
   font-size: clamp(1.35rem, 5vw, 2rem);
   line-height: 1.55;
   white-space: pre-wrap;
+}
+.playback-script p.spoken-text {
+  margin-top: 16px;
+  color: #c8bbaa;
+  font-family: inherit;
+  font-size: 0.9rem;
 }
 .playback-script span {
   display: block;

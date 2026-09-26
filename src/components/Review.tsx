@@ -6,7 +6,9 @@ import {
   mergeWithNext,
   removeSegment,
   type Segment,
+  speechText,
   splitAtCursor,
+  withSpokenText,
 } from "~/lib/state";
 import type { StatusReporter } from "~/lib/status";
 import SpeechPreview from "./SpeechPreview";
@@ -55,7 +57,10 @@ export default function Review(props: ReviewProps) {
     setHistoryVersion((v) => v + 1);
   };
   const canStartPlayback = () =>
-    props.segments.length > 0 && props.segments.every((segment) => textBudget(segment.text).valid);
+    props.segments.length > 0 &&
+    props.segments.every(
+      (segment) => textBudget(segment.text).valid && textBudget(speechText(segment)).valid,
+    );
 
   onMount(() => heading.focus());
 
@@ -73,6 +78,14 @@ export default function Review(props: ReviewProps) {
       `${props.segments[index]?.id}:${field}`,
     );
   }
+  function editSpokenText(index: number, value: string | undefined) {
+    replaceSegments(
+      props.segments.map((segment, position) =>
+        position === index ? withSpokenText(segment, value) : { ...segment },
+      ),
+      value === undefined ? undefined : `${props.segments[index]?.id}:spokenText`,
+    );
+  }
   function autoSplit(index: number) {
     const segment = props.segments[index];
     if (!segment) return;
@@ -84,22 +97,30 @@ export default function Review(props: ReviewProps) {
       }
       replaceSegments([
         ...props.segments.slice(0, index),
-        ...parts.map((text, i) => ({
-          ...segment,
-          id: i === 0 ? segment.id : `segment-${crypto.randomUUID()}`,
-          text,
-        })),
+        ...parts.map((text, i) =>
+          withSpokenText(
+            { ...segment, id: i === 0 ? segment.id : `segment-${crypto.randomUUID()}`, text },
+            undefined,
+          ),
+        ),
         ...props.segments.slice(index + 1),
       ]);
-      props.onStatus(`已分成 ${parts.length} 個可朗讀段落`, "success");
+      props.onStatus(
+        `已分成 ${parts.length} 個可朗讀段落${spokenCorrectionNotice(segment)}`,
+        "success",
+      );
     } catch (error) {
       props.onStatus(error instanceof Error ? error.message : "無法自動分段", "error");
     }
   }
+  function spokenCorrectionNotice(segment: Segment) {
+    return segment.spokenText === undefined ? "" : "；原本的朗讀修正已移除，請依新段落重新設定";
+  }
   function split(index: number, editor: HTMLTextAreaElement) {
+    const segment = props.segments[index];
     try {
       replaceSegments(splitAtCursor(props.segments, index, editor.selectionStart));
-      props.onStatus("段落已分割", "success");
+      props.onStatus(`段落已分割${segment ? spokenCorrectionNotice(segment) : ""}`, "success");
     } catch (error) {
       props.onStatus(error instanceof Error ? error.message : "無法分割段落", "error");
       editor.focus();
@@ -237,6 +258,51 @@ export default function Review(props: ReviewProps) {
                       edit(index(), "suggestedToneHint", event.currentTarget.value)
                     }
                   />
+                  <Show
+                    when={segment.spokenText !== undefined}
+                    fallback={
+                      <button
+                        type="button"
+                        class="small secondary spoken-toggle"
+                        onClick={() => editSpokenText(index(), segment.text)}
+                      >
+                        另設朗讀文字
+                      </button>
+                    }
+                  >
+                    <div class="spoken-correction">
+                      <label for={`segment-spoken-${segment.id}`}>朗讀文字（只影響語音）</label>
+                      <textarea
+                        id={`segment-spoken-${segment.id}`}
+                        rows="3"
+                        value={segment.spokenText ?? ""}
+                        classList={{ invalid: !textBudget(speechText(segment)).valid }}
+                        aria-invalid={!textBudget(speechText(segment)).valid}
+                        aria-describedby={`segment-spoken-help-${segment.id}`}
+                        onInput={(event) => editSpokenText(index(), event.currentTarget.value)}
+                      />
+                      <p class="text-budget" id={`segment-spoken-help-${segment.id}`}>
+                        <Show
+                          when={textBudget(speechText(segment)).valid}
+                          fallback={
+                            <span class="field-error">
+                              請輸入可朗讀文字；超過 400 字或 2,000 位元組時請縮短
+                            </span>
+                          }
+                        >
+                          畫面仍顯示口白文字，語音改念這段 ·{" "}
+                          {textBudget(speechText(segment)).graphemes} / 400 字
+                        </Show>
+                      </p>
+                      <button
+                        type="button"
+                        class="small secondary"
+                        onClick={() => editSpokenText(index(), undefined)}
+                      >
+                        改回朗讀口白文字
+                      </button>
+                    </div>
+                  </Show>
                   <div class="segment-actions">
                     <button
                       type="button"
@@ -288,7 +354,7 @@ export default function Review(props: ReviewProps) {
                     </button>
                   </div>
                   <SpeechPreview
-                    text={segment.text}
+                    text={speechText(segment)}
                     toneHint={segment.suggestedToneHint}
                     genreHint={props.genreHint}
                     voice={props.voice}

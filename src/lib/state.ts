@@ -1,6 +1,18 @@
 import type { OcrResponse } from "./schemas";
 
-export type Segment = OcrResponse["segments"][number];
+export type Segment = OcrResponse["segments"][number] & {
+  /** Replacement text sent to speech synthesis while the displayed transcript stays unchanged. */
+  spokenText?: string;
+};
+
+export function speechText(segment: Segment): string {
+  return segment.spokenText ?? segment.text;
+}
+
+export function withSpokenText(segment: Segment, spokenText: string | undefined): Segment {
+  const { spokenText: _previous, ...transcript } = segment;
+  return spokenText === undefined ? transcript : { ...transcript, spokenText };
+}
 
 function nextId(): string {
   return `segment-${crypto.randomUUID()}`;
@@ -10,11 +22,18 @@ export function mergeWithNext(segments: Segment[], index: number): Segment[] {
   const current = segments[index];
   const next = segments[index + 1];
   if (!current || !next) return segments;
-  const merged: Segment = {
-    ...current,
-    text: [current.text.trim(), next.text.trim()].filter(Boolean).join("\n\n"),
-    suggestedToneHint: current.suggestedToneHint.trim() || next.suggestedToneHint.trim(),
-  };
+  const join = (first: string, second: string) =>
+    [first.trim(), second.trim()].filter(Boolean).join("\n\n");
+  const merged = withSpokenText(
+    {
+      ...current,
+      text: join(current.text, next.text),
+      suggestedToneHint: current.suggestedToneHint.trim() || next.suggestedToneHint.trim(),
+    },
+    current.spokenText === undefined && next.spokenText === undefined
+      ? undefined
+      : join(speechText(current), speechText(next)),
+  );
   return [...segments.slice(0, index), merged, ...segments.slice(index + 2)];
 }
 
@@ -31,8 +50,8 @@ export function splitAtCursor(
   if (!before || !after) throw new Error("請先把游標放在段落中間再分割");
   return [
     ...segments.slice(0, index),
-    { ...segment, text: before },
-    { ...segment, id, text: after },
+    withSpokenText({ ...segment, text: before }, undefined),
+    withSpokenText({ ...segment, id, text: after }, undefined),
     ...segments.slice(index + 1),
   ];
 }

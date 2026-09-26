@@ -4,7 +4,7 @@ import { initialPlaybackState, type PlaybackEvent, transitionPlayback } from "~/
 import type { SpeechRequest } from "~/lib/speech";
 import { requestCachedSpeech, speechCache } from "~/lib/speech-cache";
 import { openSpeechStream, PcmStreamPlayer } from "~/lib/speech-stream";
-import type { Segment } from "~/lib/state";
+import { type Segment, speechText } from "~/lib/state";
 import type { StatusReporter } from "~/lib/status";
 import { pcmDurationMs, pcmToWav } from "~/lib/wav";
 
@@ -39,7 +39,7 @@ export default function Playback(props: PlaybackProps) {
     const target = props.segments[index];
     if (!target) return undefined;
     return {
-      text: target.text,
+      text: speechText(target),
       voice: props.voice,
       toneHint: target.suggestedToneHint || undefined,
       genreHint: props.genreHint,
@@ -51,7 +51,8 @@ export default function Playback(props: PlaybackProps) {
   }
 
   function captionsUrl() {
-    const transcript = segment()?.text.replaceAll("-->", "→") ?? "";
+    const current = segment();
+    const transcript = (current ? speechText(current) : "").replaceAll("-->", "→") ?? "";
     return `data:text/vtt;charset=utf-8,${encodeURIComponent(`WEBVTT\n\n00:00.000 --> 01:00.000\n${transcript}`)}`;
   }
 
@@ -281,6 +282,9 @@ export default function Playback(props: PlaybackProps) {
 
       <article class="playback-script" aria-live="polite">
         <p>{segment()?.text}</p>
+        <Show when={segment()?.spokenText}>
+          {(spoken) => <p class="spoken-text">朗讀文字：{spoken()}</p>}
+        </Show>
         <Show when={segment()?.suggestedToneHint}>
           <span>語氣：{segment()?.suggestedToneHint}</span>
         </Show>

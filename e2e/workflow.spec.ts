@@ -310,3 +310,38 @@ test("overlong drafts split safely and editing history survives playback", async
   await original.fill("新版本");
   await expect(page.getByRole("button", { name: "重做", exact: true })).toBeDisabled();
 });
+
+test("spoken corrections change synthesis without changing the transcript", async ({ page }) => {
+  const calls = await mockApi(page, true);
+  await page.goto("/");
+  await recognize(page);
+  await page.getByRole("button", { name: "另設朗讀文字" }).first().click();
+  const spoken = page.getByLabel("朗讀文字（只影響語音）");
+  await expect(spoken).toHaveValue("故事開始。");
+  await spoken.fill("");
+  await expect(spoken).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByRole("button", { name: "開始逐段朗讀" })).toBeDisabled();
+  await spoken.fill("故事，開始。");
+  await page.getByRole("button", { name: "產生試聽" }).first().click();
+  await expect(page.getByLabel("段落試聽")).toBeVisible();
+  expect(calls.find((c) => c.path === "/api/tts")?.body).toMatchObject({ text: "故事，開始。" });
+  await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue("故事開始。");
+
+  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await expect(page.locator(".playback-script")).toContainText("故事開始。");
+  await expect(page.locator(".playback-script")).toContainText("朗讀文字：故事，開始。");
+  await page.getByRole("button", { name: "串流播放第一段" }).click();
+  await expect(page.getByRole("button", { name: "播放第 1 段" })).toBeVisible();
+  // The preview already cached the corrected audio, so playback must reuse it.
+  expect(calls.filter((c) => c.path === "/api/tts-stream")).toHaveLength(0);
+
+  await page.getByRole("button", { name: /返回校對/ }).click();
+  await page.getByRole("button", { name: "改回朗讀口白文字" }).click();
+  await expect(page.getByLabel("朗讀文字（只影響語音）")).toHaveCount(0);
+  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByRole("button", { name: "串流播放第一段" }).click();
+  await expect(page.getByRole("button", { name: "重播本段" })).toBeVisible();
+  expect(calls.find((c) => c.path === "/api/tts-stream")?.body).toMatchObject({
+    text: "故事開始。",
+  });
+});
