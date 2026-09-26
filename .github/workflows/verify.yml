@@ -20,6 +20,7 @@ jobs:
           npm run build
           test -s .vercel/output/static/sw.js
         env:
+          NITRO_PRESET: vercel
           VERCEL: "1"
           VERCEL_ENV: production
       - uses: actions/upload-artifact@v4
