@@ -44,7 +44,7 @@ Reading font presets are saved locally. Set optional `GEMINI_TTS_VOICES` to a co
 
 Server JSON logs record endpoint, request ID, model, status, latency, input size bucket and speech duration, with completion, cancellation and interruption outcomes. Browser cache logs record only hit/miss/pending and request purpose. Logs exclude images, transcripts, credentials, upload capabilities and provider error details.
 
-Pipe exported JSON log lines to `npm run metrics` for request counts, errors, 429s, p95 latency, audio duration and peak global request volume. These are operational measurements, not a billing estimate. WAF recalibration is cancelled; existing protection remains unchanged. Billing and quota alerts require configuration in the connected cloud account.
+Pipe exported JSON log lines to `npm run metrics` for request counts, errors, 429s, p95 latency, audio duration and peak global request volume. These are operational measurements, not a billing estimate. WAF recalibration and external billing/quota alert setup are cancelled; existing protection remains unchanged.
 
 `POST /api/uploads`, `/api/ocr`, `/api/tts`, and `/api/tts-stream` require the signed `__Host-bragi-session` cookie and an exact same-origin `Origin` header. The JWT and persistent cookie expire together after 90 days. `GET /api/session` restores the signed-in interface without exposing the token, while `DELETE /api/session` expires it and clears the active browser workspace.
 
