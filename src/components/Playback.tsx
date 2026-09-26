@@ -158,6 +158,7 @@ export default function Playback(props: PlaybackProps) {
     request = controller;
     clearAudio();
     const context = new AudioContext({ sampleRate: 24_000 });
+    context.addEventListener("statechange", () => handleInterruption(context));
     const player = new PcmStreamPlayer(context, 24_000, rate());
     streamContext = context;
     streamPlayer = player;
@@ -223,6 +224,7 @@ export default function Playback(props: PlaybackProps) {
       try {
         await streamPlayer?.resume();
         dispatch({ type: "play" });
+        props.onStatus(`正在播放第 ${state().index + 1} 段`);
       } catch {
         props.onStatus("瀏覽器阻止播放，請再按一次播放按鈕", "error");
       }
@@ -238,10 +240,20 @@ export default function Playback(props: PlaybackProps) {
     }
   }
 
+  /** Phones suspend or interrupt Web Audio for calls, lock screens and other apps. */
+  function handleInterruption(context: AudioContext) {
+    if (context !== streamContext || context.state === "running" || context.state === "closed")
+      return;
+    if (state().phase !== "playing") return;
+    dispatch({ type: "pause" });
+    props.onStatus("播放被系統中斷，請按「繼續播放」從中斷處恢復", "error");
+  }
+
   async function pause() {
+    // Update state first so the resulting suspension is not reported as an interruption.
+    dispatch({ type: "pause" });
     if (streaming()) await streamPlayer?.pause();
     else audio.pause();
-    dispatch({ type: "pause" });
   }
 
   function leavePlayback() {
@@ -264,7 +276,15 @@ export default function Playback(props: PlaybackProps) {
     prefetchRequest?.abort();
     clearAudio();
   });
-  onMount(() => heading.focus());
+  onMount(() => {
+    heading.focus();
+    const visibilityChanged = () => {
+      if (document.visibilityState === "visible" && streamContext)
+        handleInterruption(streamContext);
+    };
+    document.addEventListener("visibilitychange", visibilityChanged);
+    onCleanup(() => document.removeEventListener("visibilitychange", visibilityChanged));
+  });
 
   return (
     <section class="card playback" aria-labelledby="playback-heading">

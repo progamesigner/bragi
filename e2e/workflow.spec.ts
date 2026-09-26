@@ -397,3 +397,49 @@ test("drafts export text only and import without an image or provider call", asy
   await expect(page.getByRole("button", { name: "復原", exact: true })).toBeDisabled();
   expect(calls.slice(before)).toHaveLength(0);
 });
+
+test("streamed playback recovers after the system suspends audio", async ({ page }) => {
+  await mockApi(page, true);
+  await page.addInitScript(() => {
+    const contexts: AudioContext[] = [];
+    Object.assign(window, { bragiContexts: contexts });
+    const Original = window.AudioContext;
+    window.AudioContext = class extends Original {
+      constructor(options?: AudioContextOptions) {
+        super(options);
+        contexts.push(this);
+      }
+    };
+  });
+  // Five seconds of audio keeps the segment playing while the interruption happens.
+  await page.route("**/api/tts-stream", (route) =>
+    route.fulfill({
+      contentType: "audio/l16",
+      headers: { "x-audio-sample-rate": "24000" },
+      body: Buffer.alloc(240_000),
+    }),
+  );
+  await page.goto("/");
+  await recognize(page);
+  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByRole("button", { name: "串流播放第一段" }).click();
+  await expect(page.getByRole("button", { name: "暫停" })).toBeVisible();
+
+  await page.evaluate(() =>
+    (window as unknown as { bragiContexts: AudioContext[] }).bragiContexts.at(-1)?.suspend(),
+  );
+  await expect(page.getByRole("button", { name: "繼續播放" })).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText("播放被系統中斷");
+
+  await page.getByRole("button", { name: "繼續播放" }).click();
+  await expect(page.getByRole("button", { name: "暫停" })).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { bragiContexts: AudioContext[] }).bragiContexts.at(-1)?.state,
+    ),
+  ).toBe("running");
+
+  await page.getByRole("button", { name: "暫停" }).click();
+  await expect(page.getByRole("button", { name: "繼續播放" })).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
