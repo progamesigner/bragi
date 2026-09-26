@@ -51,7 +51,6 @@ describe("POST /api/tts-stream", () => {
 
   it("streams raw PCM from Gemini", async () => {
     process.env.GEMINI_API_KEY = "test-key";
-    process.env.GEMINI_TTS_VOICE = "Kore";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(upstreamStream([0, 1, 2, 3])));
 
     const response = await POST({ request: await request({ text: "第一段" }) } as APIEvent);
@@ -64,7 +63,6 @@ describe("POST /api/tts-stream", () => {
 
   it("maps a rate limit before opening the response body", async () => {
     process.env.GEMINI_API_KEY = "test-key";
-    process.env.GEMINI_TTS_VOICE = "Kore";
     vi.stubGlobal(
       "fetch",
       vi

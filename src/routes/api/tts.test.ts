@@ -27,7 +27,6 @@ async function request(body: unknown) {
 
 describe("POST /api/tts", () => {
   it("rejects a voice outside the server allowlist before contacting Gemini", async () => {
-    process.env.GEMINI_TTS_VOICE = "Kore";
     const fetcher = vi.fn();
     vi.stubGlobal("fetch", fetcher);
     const response = await POST({
@@ -38,7 +37,6 @@ describe("POST /api/tts", () => {
   });
   it("returns playable WAV audio from Gemini PCM", async () => {
     process.env.GEMINI_API_KEY = "test-key";
-    process.env.GEMINI_TTS_VOICE = "Kore";
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -78,7 +76,6 @@ describe("POST /api/tts", () => {
 
   it("maps Gemini rate limits to the shared error contract", async () => {
     process.env.GEMINI_API_KEY = "test-key";
-    process.env.GEMINI_TTS_VOICE = "Kore";
     vi.stubGlobal(
       "fetch",
       vi

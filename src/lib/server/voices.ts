@@ -1,19 +1,15 @@
 import "server-only";
-import { requiredEnv } from "./config";
+import { DEFAULT_VOICE, VOICE_CATALOG } from "../voices";
 
+const catalog = new Set<string>(VOICE_CATALOG.map(([name]) => name));
+
+/** Every prebuilt voice, with the default first so the picker can label it. */
 export function allowedVoices(): string[] {
-  return [
-    ...new Set(
-      [process.env.GEMINI_TTS_VOICE ?? "", ...(process.env.GEMINI_TTS_VOICES ?? "").split(",")]
-        .map((value) => value.trim())
-        .filter(Boolean),
-    ),
-  ];
+  return [DEFAULT_VOICE, ...[...catalog].filter((voice) => voice !== DEFAULT_VOICE)];
 }
 
 export function resolveVoice(voice?: string): string {
-  const voices = allowedVoices();
-  const selected = voice ?? requiredEnv("GEMINI_TTS_VOICE");
-  if (!selected || !voices.includes(selected)) throw new Error("Voice is not allowed");
+  const selected = voice ?? DEFAULT_VOICE;
+  if (!catalog.has(selected)) throw new Error("Voice is not allowed");
   return selected;
 }

@@ -21,7 +21,6 @@ async function collect(stream: AsyncGenerator<Uint8Array>): Promise<number[]> {
 describe("Gemini speech streaming", () => {
   it("yields validated PCM deltas", async () => {
     process.env.GEMINI_API_KEY = "test-key";
-    process.env.GEMINI_TTS_VOICE = "Kore";
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       eventStream([
         { event_type: "interaction.created" },
@@ -47,7 +46,6 @@ describe("Gemini speech streaming", () => {
 
   it("rejects a completed stream without audio", async () => {
     process.env.GEMINI_API_KEY = "test-key";
-    process.env.GEMINI_TTS_VOICE = "Kore";
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValue(eventStream([{ event_type: "interaction.completed" }]));
@@ -59,7 +57,6 @@ describe("Gemini speech streaming", () => {
 
   it("maps an upstream rate limit before streaming starts", async () => {
     process.env.GEMINI_API_KEY = "test-key";
-    process.env.GEMINI_TTS_VOICE = "Kore";
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValue(new Response(null, { status: 429, headers: { "retry-after": "5" } }));

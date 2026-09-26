@@ -507,3 +507,32 @@ test("non-1× speeds skip streaming and keep the original pitch", async ({ page 
   expect(calls.filter((call) => call.path === "/api/tts-stream")).toHaveLength(0);
   expect(calls.filter((call) => call.path === "/api/tts").length).toBeGreaterThan(0);
 });
+
+test("voice picker labels voices, samples them and remembers the choice", async ({ page }) => {
+  const calls = await mockApi(page, true);
+  await page.goto("/");
+  const picker = page.getByLabel("朗讀聲音");
+  await expect(picker.locator("option")).toHaveText(["預設聲音（Kore · 堅定）", "Puck · 輕快"]);
+
+  await page.getByRole("button", { name: "試聽這個聲音" }).click();
+  await expect(page.getByLabel("聲音試聽")).toBeVisible();
+  expect(calls.filter((c) => c.path === "/api/tts").at(-1)?.body).toMatchObject({
+    voice: "Kore",
+    text: "夜色降臨，古老的城門在眾人面前緩緩開啟。",
+  });
+
+  await picker.selectOption("Puck");
+  await expect(page.getByLabel("聲音試聽")).toHaveCount(0);
+  await page.getByRole("button", { name: "試聽這個聲音" }).click();
+  await expect(page.getByLabel("聲音試聽")).toBeVisible();
+  expect(calls.filter((c) => c.path === "/api/tts").at(-1)?.body).toMatchObject({ voice: "Puck" });
+
+  // Returning to a voice that was already sampled reuses its audio.
+  await picker.selectOption("");
+  await page.getByRole("button", { name: "試聽這個聲音" }).click();
+  expect(calls.filter((c) => c.path === "/api/tts")).toHaveLength(2);
+
+  await picker.selectOption("Puck");
+  await page.reload();
+  await expect(page.getByLabel("朗讀聲音")).toHaveValue("Puck");
+});

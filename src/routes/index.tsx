@@ -3,6 +3,7 @@ import { createStore, reconcile } from "solid-js/store";
 import Capture from "~/components/Capture";
 import Playback from "~/components/Playback";
 import Review from "~/components/Review";
+import VoiceSample from "~/components/VoiceSample";
 import { apiErrorMessage } from "~/lib/api";
 import { MAX_DRAFT_BYTES, parseDraft } from "~/lib/draft";
 import { History } from "~/lib/editing";
@@ -11,6 +12,7 @@ import { networkErrorMessage, requireOnline } from "~/lib/network";
 import { speechCache } from "~/lib/speech-cache";
 import type { Segment } from "~/lib/state";
 import type { StatusMessage, StatusTone } from "~/lib/status";
+import { voiceLabel } from "~/lib/voices";
 
 type UploadTarget = {
   uploadId: string;
@@ -45,6 +47,14 @@ export default function Home() {
   const [authenticated, setAuthenticated] = createSignal(false);
   const [recognitionBusy, setRecognitionBusy] = createSignal(false);
   const [screen, setScreen] = createSignal<"review" | "playback">("review");
+
+  function restoreVoice(available: string[]) {
+    setVoices(available);
+    try {
+      const saved = localStorage.getItem("bragi-voice");
+      setVoice(saved && available.includes(saved) ? saved : undefined);
+    } catch {}
+  }
 
   function reportStatus(message: string, tone: StatusTone = "info") {
     setStatus({ message, tone });
@@ -86,7 +96,7 @@ export default function Home() {
       if (!response.ok) throw new Error(await apiErrorMessage(response, "無法確認登入狀態"));
       const session = (await response.json()) as { authenticated: boolean; voices?: string[] };
       setAuthenticated(session.authenticated);
-      setVoices(session.voices ?? []);
+      restoreVoice(session.voices ?? []);
       reportStatus(
         session.authenticated ? "已恢復登入狀態" : "請先使用 Authenticator 驗證碼登入",
         session.authenticated ? "success" : "info",
@@ -110,7 +120,7 @@ export default function Home() {
       });
       if (!response.ok) throw new Error(await apiErrorMessage(response, "驗證失敗"));
       const session = await response.json();
-      setVoices(session.voices ?? []);
+      restoreVoice(session.voices ?? []);
       setAuthenticated(true);
       setOtp("");
       reportStatus("驗證成功，可以上傳圖片", "success");
@@ -294,11 +304,17 @@ export default function Home() {
             onChange={(event) => {
               speechCache.clear();
               setVoice(event.currentTarget.value || undefined);
+              try {
+                localStorage.setItem("bragi-voice", voice() ?? "");
+              } catch {}
             }}
           >
-            <option value="">預設聲音</option>
-            <For each={voices()}>{(value) => <option value={value}>{value}</option>}</For>
+            <option value="">預設聲音（{voiceLabel(voices()[0] ?? "")}）</option>
+            <For each={voices().slice(1)}>
+              {(value) => <option value={value}>{voiceLabel(value)}</option>}
+            </For>
           </select>
+          <VoiceSample voice={voice() ?? voices()[0]} onStatus={reportStatus} />
         </Show>
       </section>
       <Show when={!online()}>

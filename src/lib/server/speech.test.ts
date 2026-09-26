@@ -38,7 +38,6 @@ describe("Gemini speech", () => {
   it("requests configured inline PCM and returns its duration", async () => {
     process.env.GEMINI_API_KEY = "test-key";
     process.env.GEMINI_TTS_MODEL = "gemini-tts-test";
-    process.env.GEMINI_TTS_VOICE = "Kore";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(audioResponse(new Uint8Array(48_000))));
 
     await expect(synthesizeSpeech({ text: "冒險開始" })).resolves.toMatchObject({
@@ -56,7 +55,6 @@ describe("Gemini speech", () => {
 
   it("retries one response that omits audio", async () => {
     process.env.GEMINI_API_KEY = "test-key";
-    process.env.GEMINI_TTS_VOICE = "Kore";
     vi.stubGlobal(
       "fetch",
       vi
@@ -71,7 +69,6 @@ describe("Gemini speech", () => {
 
   it("passes rate limits through without retrying", async () => {
     process.env.GEMINI_API_KEY = "test-key";
-    process.env.GEMINI_TTS_VOICE = "Kore";
     vi.stubGlobal(
       "fetch",
       vi

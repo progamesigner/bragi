@@ -1,13 +1,15 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import { allowedVoices, resolveVoice } from "./voices";
 
-afterEach(() => vi.unstubAllEnvs());
+it("offers every prebuilt voice with the default first", () => {
+  const voices = allowedVoices();
+  expect(voices).toHaveLength(30);
+  expect(new Set(voices).size).toBe(30);
+  expect(voices[0]).toBe("Kore");
+});
 
-it("uses the server default and permits only configured alternatives", () => {
-  vi.stubEnv("GEMINI_TTS_VOICE", "Kore");
-  vi.stubEnv("GEMINI_TTS_VOICES", " Puck , Kore , Puck ");
-  expect(allowedVoices()).toEqual(["Kore", "Puck"]);
+it("uses the default voice and rejects voices outside the catalog", () => {
   expect(resolveVoice()).toBe("Kore");
-  expect(resolveVoice("Puck")).toBe("Puck");
+  expect(resolveVoice("Sulafat")).toBe("Sulafat");
   expect(() => resolveVoice("arbitrary-client-voice")).toThrow("not allowed");
 });
