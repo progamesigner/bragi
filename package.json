@@ -1,6 +1,6 @@
 {
   "name": "bragi",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -20,13 +20,13 @@
   },
   "dependencies": {
     "@solidjs/router": "1.0.0",
-    "@solidjs/start": "2.0.5",
+    "@solidjs/start": "2.0.6",
     "jose": "6.2.12",
     "nitro": "3.0.260903-beta",
     "otpauth": "9.5.2",
     "server-only": "0.0.1",
-    "solid-js": "1.9.15",
-    "vite": "8.3.0",
+    "solid-js": "1.9.17",
+    "vite": "8.3.4",
     "zod": "4.6.5"
   },
   "devDependencies": {
