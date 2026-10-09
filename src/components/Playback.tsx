@@ -1,6 +1,7 @@
 import {
   createEffect,
   createSignal,
+  For,
   Match,
   on,
   onCleanup,
@@ -384,135 +385,168 @@ export default function Playback(props: PlaybackProps) {
         </Button>
       </div>
 
-      <article class="playback-script" aria-live="polite">
-        <p>{segment()?.text}</p>
-        <Show when={segment()?.spokenText}>
-          {(spoken) => <p class="spoken-text">{t("playback.spokenText", { text: spoken() })}</p>}
-        </Show>
-        <Show when={segment()?.suggestedToneHint}>
-          <span>{t("playback.tone", { tone: segment()?.suggestedToneHint ?? "" })}</span>
-        </Show>
-      </article>
-      <div class="playback-rate">
-        <p>{t("playback.rateCurrent", { n: playbackRate() })}</p>
-        <Button variant="ghost" size="compact" onClick={props.onSettings}>
-          {t("playback.rateChange")}
-        </Button>
-      </div>
-      <nav class="playback-nav" aria-label={t("playback.segmentNav")}>
-        <Button
-          variant="secondary"
-          disabled={state().index === 0}
-          onClick={() => navigate(state().index - 1)}
-        >
-          {t("playback.previous")}
-        </Button>
-        <Button
-          variant="secondary"
-          disabled={state().index >= props.segments.length - 1}
-          onClick={() => navigate(state().index + 1)}
-        >
-          {t("playback.next")}
-        </Button>
-      </nav>
-      <progress
-        aria-label={t("playback.progress")}
-        max={props.segments.length}
-        value={state().phase === "complete" ? props.segments.length : state().index}
-      />
-
-      <Show when={audioUrl()}>
-        {(url) => (
-          <div class="playback-audio">
-            <audio
-              ref={audio}
-              controls
-              preload="metadata"
-              src={url()}
-              aria-label={t("playback.audio", { n: state().index + 1 })}
-              onPlay={() => {
-                audio.playbackRate = playbackSettings().rate;
-                audio.preservesPitch = true;
-                dispatch({ type: "play" });
-                void prefetchNext();
-              }}
-              onPause={() => {
-                if (!audio.ended) dispatch({ type: "pause" });
-              }}
-              onEnded={() => {
-                dispatch({ type: "ended" });
-                report(
-                  t(state().phase === "complete" ? "playback.complete" : "playback.segmentDone"),
-                  "success",
-                );
-              }}
-            >
-              <track kind="captions" src={captionsUrl()} label={t("audio.captions")} default />
-            </audio>
-            <Show when={duration()}>
-              {(durationMs) => (
-                <span>{t("common.seconds", { s: (durationMs() / 1000).toFixed(1) })}</span>
+      <div class="playback-layout">
+        <article class="playback-script" aria-live="polite">
+          <p>{segment()?.text}</p>
+          <Show when={segment()?.spokenText}>
+            {(spoken) => <p class="spoken-text">{t("playback.spokenText", { text: spoken() })}</p>}
+          </Show>
+          <Show when={segment()?.suggestedToneHint}>
+            <span>{t("playback.tone", { tone: segment()?.suggestedToneHint ?? "" })}</span>
+          </Show>
+        </article>
+        <aside class="playback-controls">
+          <ol class="playback-segments" aria-label={t("playback.segments")}>
+            <For each={props.segments}>
+              {(entry, index) => (
+                <li>
+                  <Button
+                    variant="ghost"
+                    wide
+                    aria-current={state().index === index() ? "true" : undefined}
+                    class="playback-segment-button"
+                    aria-label={t("playback.selectSegment", { n: index() + 1 })}
+                    onClick={() => navigate(index())}
+                  >
+                    <span>{index() + 1}</span>
+                    <span class="segment-excerpt">{entry.text}</span>
+                  </Button>
+                </li>
               )}
-            </Show>
+            </For>
+          </ol>
+          <div class="playback-rate">
+            <p>{t("playback.rateCurrent", { n: playbackRate() })}</p>
+            <Button variant="ghost" size="compact" onClick={props.onSettings}>
+              {t("playback.rateChange")}
+            </Button>
           </div>
-        )}
-      </Show>
-
-      <InlineStatus status={status()} class="playback-status" />
-      <div class="playback-actions">
-        <Switch>
-          <Match when={state().phase === "idle"}>
-            <Button onClick={() => streamAndPlay("start")}>
-              {t(
-                state().index > 0
-                  ? "playback.playThis"
-                  : playbackRate() === 1
-                    ? "playback.streamFirst"
-                    : "playback.playFirst",
-              )}
-            </Button>
-          </Match>
-          <Match when={state().phase === "loading"}>
-            <Button disabled>{t("playback.generating")}</Button>
-          </Match>
-          <Match when={state().phase === "ready"}>
-            <Button onClick={play}>
-              {streaming()
-                ? t("playback.resume")
-                : t("playback.playNumber", { n: state().index + 1 })}
-            </Button>
-          </Match>
-          <Match when={state().phase === "playing"}>
-            <Button onClick={pause}>{t("playback.pause")}</Button>
-          </Match>
-          <Match when={state().phase === "waiting"}>
-            <Show when={prefetch()?.index === state().index + 1}>
-              <p class="prefetch-status">
-                {t(prefetch()?.phase === "ready" ? "playback.nextReady" : "playback.nextPreparing")}
-              </p>
-            </Show>
-            <Button variant="secondary" onClick={play}>
-              {t("playback.replay")}
-            </Button>
-            <Button onClick={() => prepare("next")}>
-              {t(prefetch()?.phase === "ready" ? "playback.continueNext" : "playback.prepareNext")}
-            </Button>
-          </Match>
-          <Match when={state().phase === "error"}>
-            <Button onClick={() => streamAndPlay("retry")}>{t("playback.retry")}</Button>
-          </Match>
-          <Match when={state().phase === "complete"}>
-            <p>{t("playback.allDone")}</p>
+          <nav class="playback-nav" aria-label={t("playback.segmentNav")}>
             <Button
-              onClick={() => {
-                dispatch({ type: "reset" });
-                void streamAndPlay("start");
-              }}
+              variant="secondary"
+              disabled={state().index === 0}
+              onClick={() => navigate(state().index - 1)}
             >
-              {t("playback.restart")}
+              {t("playback.previous")}
             </Button>
-          </Match>
-        </Switch>
+            <Button
+              variant="secondary"
+              disabled={state().index >= props.segments.length - 1}
+              onClick={() => navigate(state().index + 1)}
+            >
+              {t("playback.next")}
+            </Button>
+          </nav>
+          <progress
+            aria-label={t("playback.progress")}
+            max={props.segments.length}
+            value={state().phase === "complete" ? props.segments.length : state().index}
+          />
+
+          <Show when={audioUrl()}>
+            {(url) => (
+              <div class="playback-audio">
+                <audio
+                  ref={audio}
+                  controls
+                  preload="metadata"
+                  src={url()}
+                  aria-label={t("playback.audio", { n: state().index + 1 })}
+                  onPlay={() => {
+                    audio.playbackRate = playbackSettings().rate;
+                    audio.preservesPitch = true;
+                    dispatch({ type: "play" });
+                    void prefetchNext();
+                  }}
+                  onPause={() => {
+                    if (!audio.ended) dispatch({ type: "pause" });
+                  }}
+                  onEnded={() => {
+                    dispatch({ type: "ended" });
+                    report(
+                      t(
+                        state().phase === "complete" ? "playback.complete" : "playback.segmentDone",
+                      ),
+                      "success",
+                    );
+                  }}
+                >
+                  <track kind="captions" src={captionsUrl()} label={t("audio.captions")} default />
+                </audio>
+                <Show when={duration()}>
+                  {(durationMs) => (
+                    <span>{t("common.seconds", { s: (durationMs() / 1000).toFixed(1) })}</span>
+                  )}
+                </Show>
+              </div>
+            )}
+          </Show>
+
+          <InlineStatus status={status()} class="playback-status" />
+          <div class="playback-actions">
+            <Switch>
+              <Match when={state().phase === "idle"}>
+                <Button onClick={() => streamAndPlay("start")}>
+                  {t(
+                    state().index > 0
+                      ? "playback.playThis"
+                      : playbackRate() === 1
+                        ? "playback.streamFirst"
+                        : "playback.playFirst",
+                  )}
+                </Button>
+              </Match>
+              <Match when={state().phase === "loading"}>
+                <Button disabled>{t("playback.generating")}</Button>
+              </Match>
+              <Match when={state().phase === "ready"}>
+                <Button onClick={play}>
+                  {streaming()
+                    ? t("playback.resume")
+                    : t("playback.playNumber", { n: state().index + 1 })}
+                </Button>
+              </Match>
+              <Match when={state().phase === "playing"}>
+                <Button onClick={pause}>{t("playback.pause")}</Button>
+              </Match>
+              <Match when={state().phase === "waiting"}>
+                <Show when={prefetch()?.index === state().index + 1}>
+                  <p class="prefetch-status">
+                    {t(
+                      prefetch()?.phase === "ready"
+                        ? "playback.nextReady"
+                        : "playback.nextPreparing",
+                    )}
+                  </p>
+                </Show>
+                <Button variant="secondary" onClick={play}>
+                  {t("playback.replay")}
+                </Button>
+                <Button onClick={() => prepare("next")}>
+                  {t(
+                    prefetch()?.phase === "ready"
+                      ? "playback.continueNext"
+                      : "playback.prepareNext",
+                  )}
+                </Button>
+              </Match>
+              <Match when={state().phase === "error"}>
+                <Button onClick={() => streamAndPlay("retry")}>{t("playback.retry")}</Button>
+              </Match>
+              <Match when={state().phase === "complete"}>
+                <p>{t("playback.allDone")}</p>
+                <Button
+                  onClick={() => {
+                    dispatch({ type: "reset" });
+                    void streamAndPlay("start");
+                  }}
+                >
+                  {t("playback.restart")}
+                </Button>
+              </Match>
+            </Switch>
+          </div>
+        </aside>
       </div>
     </section>
   );

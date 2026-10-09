@@ -5,6 +5,7 @@ import { exportDraft as downloadDraft } from "~/lib/draft-export";
 import { MAX_DRAFT_SEGMENTS } from "~/lib/draft-limits";
 import { splitNarration, textBudget } from "~/lib/editing";
 import { t } from "~/lib/i18n";
+import { useWideLayout } from "~/lib/layout";
 import {
   insertAfter,
   mergeWithNext,
@@ -33,6 +34,66 @@ type ReviewProps = {
 };
 
 export default function Review(props: ReviewProps) {
+  const wide = useWideLayout();
+  let section!: HTMLElement;
+  let footer!: HTMLDivElement;
+  const firstIssue = () =>
+    workspace.segments.findIndex(
+      (segment) => !textBudget(segment.text).valid || !textBudget(speechText(segment)).valid,
+    );
+  function focusIssue() {
+    const segment = workspace.segments[firstIssue()];
+    if (!segment) return;
+    const field = textBudget(segment.text).valid ? "spoken" : "text";
+    const editor = document.getElementById(`segment-${field}-${segment.id}`);
+    editor?.scrollIntoView({ block: "center" });
+    editor?.focus({ preventScroll: true });
+  }
+  onMount(() => {
+    const root = document.documentElement;
+    const measure = () =>
+      root.style.setProperty(
+        "--review-action-height",
+        `${footer.getBoundingClientRect().height}px`,
+      );
+    const observer = new ResizeObserver(measure);
+    observer.observe(footer);
+    measure();
+    const viewport = window.visualViewport;
+    const keyboard = () => {
+      const inset = viewport
+        ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+        : 0;
+      root.style.setProperty("--keyboard-inset", `${inset}px`);
+      const focused = document.activeElement;
+      if (
+        inset &&
+        focused instanceof HTMLElement &&
+        section.contains(focused) &&
+        focused.matches("input, textarea")
+      ) {
+        focused.scrollIntoView({ block: "center" });
+        const bounds = focused.getBoundingClientRect();
+        const visibleTop = (viewport?.offsetTop ?? 0) + 88;
+        const visibleBottom =
+          (viewport?.offsetTop ?? 0) +
+          (viewport?.height ?? window.innerHeight) -
+          footer.getBoundingClientRect().height -
+          16;
+        if (bounds.bottom > visibleBottom) window.scrollBy(0, bounds.bottom - visibleBottom);
+        else if (bounds.top < visibleTop) window.scrollBy(0, bounds.top - visibleTop);
+      }
+    };
+    viewport?.addEventListener("resize", keyboard);
+    viewport?.addEventListener("scroll", keyboard);
+    onCleanup(() => {
+      observer.disconnect();
+      viewport?.removeEventListener("resize", keyboard);
+      viewport?.removeEventListener("scroll", keyboard);
+      root.style.removeProperty("--review-action-height");
+      root.style.removeProperty("--keyboard-inset");
+    });
+  });
   const [imageUrl, setImageUrl] = createSignal<string>();
   const [zoom, setZoom] = createSignal("1");
   const [imageFailed, setImageFailed] = createSignal(false);
@@ -166,7 +227,12 @@ export default function Review(props: ReviewProps) {
   }
 
   return (
-    <section class="card review" aria-labelledby="review-heading">
+    <section
+      ref={section}
+      class="card review"
+      classList={{ "has-image": !!props.image }}
+      aria-labelledby="review-heading"
+    >
       <div class="review-heading">
         <div>
           <h1 ref={heading} id="review-heading" tabindex="-1">
@@ -178,6 +244,10 @@ export default function Review(props: ReviewProps) {
               n: workspace.segments.length,
             })}
           </p>
+          <Show when={workspace.dirty()}>
+            <p class="draft-dirty">{t("review.dirty")}</p>
+            <p class="settings-note">{t("review.savedLocally")}</p>
+          </Show>
         </div>
         <div class="review-heading-actions">
           <Button
@@ -210,9 +280,6 @@ export default function Review(props: ReviewProps) {
           <Button variant="secondary" size="compact" onClick={exportDraft}>
             {t("review.export")}
           </Button>
-          <Button disabled={!workspace.playable()} onClick={props.onStartPlayback}>
-            {t("review.startPlayback")}
-          </Button>
         </div>
       </div>
 
@@ -224,7 +291,7 @@ export default function Review(props: ReviewProps) {
 
       <Show when={imageUrl()}>
         {(url) => (
-          <details class="image-comparison">
+          <details class="image-comparison" open={wide()}>
             <summary>{t("review.compare")}</summary>
             <label for="comparison-zoom">{t("review.zoom")}</label>
             <Select
@@ -239,7 +306,7 @@ export default function Review(props: ReviewProps) {
             </Select>
             <Show when={!imageFailed()} fallback={<p>{t("review.imageUnsupported")}</p>}>
               <section
-                style={{ overflow: "auto", "max-height": "60vh" }}
+                class="comparison-scroller"
                 tabindex="0"
                 aria-label={t("review.imageScroller")}
               >
@@ -257,6 +324,9 @@ export default function Review(props: ReviewProps) {
             </Show>
           </details>
         )}
+      </Show>
+      <Show when={!props.image}>
+        <p class="review-no-image">{t("review.noImage")}</p>
       </Show>
       <Show
         when={workspace.segments.length > 0}
@@ -288,10 +358,11 @@ export default function Review(props: ReviewProps) {
                     }}
                   />
                   <p class="text-budget">
-                    {t("review.budget", {
-                      chars: textBudget(segment.text).graphemes,
-                      bytes: textBudget(segment.text).bytes,
-                    })}
+                    {t("review.budget", { chars: textBudget(segment.text).graphemes })}
+                    <Show when={textBudget(segment.text).bytes > 2000}>
+                      {" "}
+                      · {t("review.budgetBytes", { bytes: textBudget(segment.text).bytes })}
+                    </Show>
                   </p>
                   <Show when={!textBudget(segment.text).valid}>
                     <span class="field-error" id={`segment-text-error-${segment.id}`}>
@@ -424,6 +495,18 @@ export default function Review(props: ReviewProps) {
           </For>
         </ol>
       </Show>
+      <div ref={footer} class="review-footer">
+        <Button
+          class="review-primary"
+          wide
+          disabled={workspace.segments.length === 0}
+          onClick={() => (firstIssue() >= 0 ? focusIssue() : props.onStartPlayback())}
+        >
+          {firstIssue() >= 0
+            ? t("review.fixSegment", { n: firstIssue() + 1 })
+            : t("review.enterPlayback", { n: workspace.segments.length })}
+        </Button>
+      </div>
     </section>
   );
 }

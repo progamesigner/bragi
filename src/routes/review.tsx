@@ -12,7 +12,14 @@ let saved: { view: object; scroll: number } | undefined;
 export default function ReviewScreen() {
   const app = useApp();
   return (
-    <Show when={workspace.detectedLanguage()} fallback={<Navigate href="/" />}>
+    <Show
+      when={
+        workspace.hasDraft() && workspace.segments.length > 0
+          ? workspace.detectedLanguage()
+          : undefined
+      }
+      fallback={<Navigate href="/" />}
+    >
       {(language) => (
         <Show when={app.view()} keyed>
           {(view) => {
