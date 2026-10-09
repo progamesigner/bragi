@@ -80,3 +80,33 @@ it("isolates controller stop from a valid preload, aborting upstream only for th
     controller.dispose();
   }
 });
+
+it("re-prepares a segment at another rate by joining its in-flight WAV request", async () => {
+  const resolve: ((response: Response) => void)[] = [];
+  const signals: AbortSignal[] = [];
+  const fetcher = vi.fn<typeof fetch>((_url, options) => {
+    if (options?.signal) signals.push(options.signal);
+    return new Promise((yes) => resolve.push(yes));
+  });
+  vi.stubGlobal("fetch", fetcher);
+  const controller = new AudioController({
+    speech: cachedSpeechAdapter,
+    document: null,
+    settings: () => ({ rate: 1 }),
+    subscribeSettings: () => () => {},
+  });
+  try {
+    const input = { text: "same words" };
+    const first = controller.preload({ segmentKey: "a", input }).catch((error) => error);
+    const second = controller.preload({ segmentKey: "a", input, rate: 1.5 });
+    expect((await first).name).toBe("AbortError");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(signals[0]?.aborted).toBe(false);
+    resolve[0]?.(new Response(new Blob([new Uint8Array(10)], { type: "audio/wav" })));
+    await second;
+    expect(controller.isPrepared({ segmentKey: "a", input, rate: 1.5 })).toBe(true);
+    expect(controller.isPrepared({ segmentKey: "a", input })).toBe(false);
+  } finally {
+    controller.dispose();
+  }
+});

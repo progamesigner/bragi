@@ -287,9 +287,16 @@ test("choosing a voice while reading leaves the current audio untouched until th
 
   await expect(reading).toHaveAttribute("data-phase", "playing");
   expect(await outputs(page)).toBe(1);
-  // The part that is playing is never requested again; only later parts may be prepared anew.
+  // The part that is playing is never requested again. The next part is prepared once more, with
+  // the new voice, and that preload is kept (prefetch.spec.ts covers the request lifecycle).
   expect(current()).toHaveLength(before);
   expect(current().every((call) => call.voice === undefined)).toBe(true);
+  await expect.poll(() => calls.length).toBe(3);
+  expect(calls[2]).toMatchObject({ path: "/api/tts", text: segments[1]?.text, voice: "Puck" });
+  expect(
+    await page.evaluate(() => (window as unknown as { abortedSpeech: string[] }).abortedSpeech),
+  ).not.toContain("Puck");
+  await expect(page.locator(".playback-segment-button").nth(1)).toHaveAccessibleName(/已備妥$/);
   await expect(page.getByText(/下一次播放套用：.*Puck/)).toBeVisible();
   await expect(page.locator(".playback-settings-summary")).toContainText("Kore");
 

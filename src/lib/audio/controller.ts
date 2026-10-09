@@ -119,7 +119,12 @@ export class AudioController {
   readonly #urls: Pick<typeof URL, "createObjectURL" | "revokeObjectURL">;
   readonly #document?: Document;
   readonly #listeners = new Set<(snapshot: AudioSnapshot) => void>();
-  readonly #preloads = new Set<{ key: string; segmentKey: string; abort: AbortController }>();
+  readonly #preloads = new Set<{
+    key: string;
+    segmentKey: string;
+    request: Omit<PreloadInput, "signal">;
+    abort: AbortController;
+  }>();
   readonly #prepared = new Map<string, string>();
   #unsubscribeSettings?: () => void;
   #audio?: HTMLAudioElement;
@@ -163,7 +168,7 @@ export class AudioController {
       options.document === null ? undefined : (options.document ?? globalThis.document);
     this.#document?.addEventListener("visibilitychange", this.#visibility);
     this.#unsubscribeSettings = (options.subscribeSettings ?? subscribePlaybackSettings)(() =>
-      this.invalidatePreloads(),
+      this.#settingsChanged(),
     );
   }
 
@@ -233,21 +238,43 @@ export class AudioController {
     this.#publish();
   }
 
+  /**
+   * Preloads made with the old settings are cancelled. One already made with the new settings, for
+   * example by a screen reacting to the same change first, is kept rather than synthesized twice.
+   */
+  #settingsChanged(): void {
+    this.#prepared.clear();
+    for (const preload of this.#preloads) {
+      const { input, rate } = this.#settings(preload.request.input, preload.request.rate);
+      if (playbackCacheKey(input, rate) === preload.key) continue;
+      preload.abort.abort();
+      this.#preloads.delete(preload);
+    }
+    this.#publish();
+  }
+
   async preload(request: PreloadInput): Promise<void> {
     if (this.#disposed) throw new Error("Audio controller is disposed");
     request.signal?.throwIfAborted();
     const { input, rate } = this.#settings(request.input, request.rate);
     const key = playbackCacheKey(input, rate);
-    // A new version for this segment supersedes its old preload subscriptions.
-    for (const old of this.#preloads) {
-      if (old.segmentKey === request.segmentKey && old.key !== key) old.abort.abort();
-    }
-    const pending = { key, segmentKey: request.segmentKey, abort: new AbortController() };
+    const pending = {
+      key,
+      segmentKey: request.segmentKey,
+      request: { segmentKey: request.segmentKey, input: request.input, rate: request.rate },
+      abort: new AbortController(),
+    };
     const cancel = () => pending.abort.abort();
     request.signal?.addEventListener("abort", cancel, { once: true });
     this.#preloads.add(pending);
     try {
-      await this.#speech.request(input, pending.abort.signal, "prefetch");
+      const speech = this.#speech.request(input, pending.abort.signal, "prefetch");
+      // A new version for this segment supersedes its old preload subscriptions. They leave only
+      // after this one joined, so a version that differs only in rate keeps the same synthesis.
+      for (const old of this.#preloads) {
+        if (old.segmentKey === request.segmentKey && old.key !== key) old.abort.abort();
+      }
+      await speech;
       pending.abort.signal.throwIfAborted();
       this.#prepared.set(request.segmentKey, key);
       this.#publish();

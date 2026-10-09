@@ -249,10 +249,11 @@ export default function Playback(props: PlaybackProps) {
           !existing.abort.signal.aborted
         )
           return;
-        cancelPreload();
-        if (prepared(index)) return;
+        if (prepared(index)) {
+          cancelPreload();
+          return;
+        }
         const pending = { key: key(index), settings, abort: new AbortController() };
-        setPrefetch(pending);
         void session
           .controller()
           .preload({ segmentKey: pending.key, input: input(index), signal: pending.abort.signal })
@@ -260,6 +261,10 @@ export default function Playback(props: PlaybackProps) {
           .finally(() => {
             if (!disposed && untrack(prefetch) === pending) setPrefetch(undefined);
           });
+        // As in start(): the replacement joins a shared WAV request (same text and voice, another
+        // rate) before the old preload leaves, so the shared request is not aborted and redone.
+        cancelPreload();
+        setPrefetch(pending);
       },
     ),
   );

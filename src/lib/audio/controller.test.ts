@@ -174,10 +174,12 @@ function setup(overrides: Partial<AudioControllerOptions> = {}) {
     cancelled,
     urls,
     doc,
-    settings(value: typeof settings) {
+    /** `announce: false` changes the value first, as the store does before it notifies. */
+    settings(value: typeof settings, announce = true) {
       settings = value;
-      changed();
+      if (announce) changed();
     },
+    announce: () => changed(),
   };
 }
 beforeEach(() => vi.useFakeTimers());
@@ -462,10 +464,35 @@ describe("audio controller", () => {
     const pending = deferred<SpeechAudio>();
     vi.mocked(s.speech.request).mockImplementationOnce(() => pending.promise);
     const work = s.controller.preload(request).catch((error) => error);
-    s.settings({ voice: "A", rate: 1.5 });
+    s.settings({ voice: "B", rate: 1 });
     pending.resolve(asset);
     expect((await work).name).toBe("AbortError");
     expect(s.controller.isPrepared(request)).toBe(false);
+  });
+
+  it("keeps a preload made with the new settings before they are announced", async () => {
+    const s = setup();
+    const stale = deferred<SpeechAudio>();
+    const fresh = deferred<SpeechAudio>();
+    vi.mocked(s.speech.request)
+      .mockImplementationOnce(() => stale.promise)
+      .mockImplementationOnce(async (input) => {
+        const audio = await fresh.promise;
+        s.cache.set(input, audio);
+        return audio;
+      });
+    const next = { ...request, rate: undefined };
+    const old = s.controller.preload(next).catch((error) => error);
+    // A screen reacting to the new value can preload before the store notifies the controller.
+    s.settings({ voice: "B", rate: 1 }, false);
+    const current = s.controller.preload(next);
+    s.announce();
+    stale.resolve(asset);
+    fresh.resolve(asset);
+    expect((await old).name).toBe("AbortError");
+    await current;
+    expect(s.speech.request).toHaveBeenCalledTimes(2);
+    expect(s.controller.isPrepared(next)).toBe(true);
   });
 
   it("joins a pending preload through the shared WAV adapter instead of starting PCM", async () => {
