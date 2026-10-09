@@ -16,6 +16,7 @@ type SheetProps = {
    * drawer on phones and becomes a panel along the right edge on landscape tablets.
    */
   placement?: "bottom" | "side";
+  class?: string;
   children: JSX.Element;
 };
 
@@ -86,7 +87,7 @@ export default function Sheet(props: SheetProps) {
     // biome-ignore lint/a11y/useKeyWithClickEvents: the keyboard equivalent of a backdrop click is Escape, which the native dialog handles.
     <dialog
       ref={dialog}
-      class={`sheet${props.placement === "side" ? " sheet-side" : ""}`}
+      class={`sheet${props.placement === "side" ? " sheet-side" : ""}${props.class ? ` ${props.class}` : ""}`}
       aria-labelledby={titleId}
       onClose={closed}
       onClick={(event) => {

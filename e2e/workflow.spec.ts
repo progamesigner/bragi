@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
 import { pcmToWav } from "../src/lib/wav";
 import {
+  chooseVoice,
   clearContent,
   closeComparison,
   closeSettings,
@@ -10,6 +11,7 @@ import {
   observeAudio,
   openComparison,
   openSettings,
+  openVoicePicker,
   signIn,
   signOut,
   toast,
@@ -103,7 +105,7 @@ test("font preference persists and selected voice follows both speech paths", as
   await page.reload();
   settings = await openSettings(page);
   await expect(settings.getByRole("radio", { name: "特大" })).toBeChecked();
-  await settings.getByLabel("朗讀聲音").selectOption("Puck");
+  await chooseVoice(page, "Puck");
   await closeSettings(page);
   await recognize(page);
   await page.getByRole("button", { name: /^進入朗讀/ }).click();
@@ -584,8 +586,13 @@ test("voice picker labels voices, samples them and remembers the choice", async 
   const calls = await mockApi(page, true);
   await page.goto("/");
   const settings = await openSettings(page);
-  const picker = settings.getByLabel("朗讀聲音");
-  await expect(picker.locator("option")).toHaveText(["預設聲音（Kore · 堅定）", "Puck · 輕快"]);
+  const opener = settings.getByRole("button", { name: /^朗讀聲音 / });
+  await expect(opener).toHaveAccessibleName("朗讀聲音 預設聲音（Kore · 堅定） 更換");
+  const picker = await openVoicePicker(page);
+  await expect(picker.getByRole("radio")).toHaveCount(2);
+  await expect(picker.getByRole("radio").nth(0)).toHaveAccessibleName("Kore · 堅定 · 預設");
+  await expect(picker.getByRole("radio").nth(1)).toHaveAccessibleName("Puck · 輕快");
+  await picker.getByRole("button", { name: "完成", exact: true }).click();
 
   await page.getByRole("button", { name: "試聽這個聲音" }).click();
   await expect(page.getByLabel("聲音試聽", { exact: true }).getByRole("slider")).toBeEnabled();
@@ -594,21 +601,21 @@ test("voice picker labels voices, samples them and remembers the choice", async 
     text: "夜色降臨，古老的城門在眾人面前緩緩開啟。",
   });
 
-  await picker.selectOption("Puck");
+  await chooseVoice(page, "Puck");
   await expect(page.getByLabel("聲音試聽")).toHaveCount(0);
   await page.getByRole("button", { name: "試聽這個聲音" }).click();
   await expect(page.getByLabel("聲音試聽", { exact: true }).getByRole("slider")).toBeEnabled();
   expect(calls.filter((c) => c.path === "/api/tts").at(-1)?.body).toMatchObject({ voice: "Puck" });
 
   // Returning to a voice that was already sampled reuses its audio.
-  await picker.selectOption("");
+  await chooseVoice(page, "Kore");
   await page.getByRole("button", { name: "試聽這個聲音" }).click();
   expect(calls.filter((c) => c.path === "/api/tts")).toHaveLength(2);
 
-  await picker.selectOption("Puck");
+  await chooseVoice(page, "Puck");
   await page.reload();
   await openSettings(page);
-  await expect(page.getByLabel("朗讀聲音")).toHaveValue("Puck");
+  await expect(opener).toHaveAccessibleName("朗讀聲音 Puck · 輕快 更換");
 });
 
 test("reading presets preserve the normal editor size and secondary spoken hierarchy", async ({

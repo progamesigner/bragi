@@ -828,9 +828,29 @@ label.file-button:has(+ input:focus-visible) {
   align-items: flex-start;
   gap: var(--space-1);
 }
-.voice-row .select {
+.settings-label {
+  display: block;
+  color: var(--text);
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+.button.voice-current {
   flex: 1 1 12em;
+  justify-content: space-between;
   min-width: 0;
+  margin-top: var(--space-1);
+  padding: 8px 14px;
+  font-weight: 500;
+  text-align: start;
+}
+.voice-current-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.voice-current-action {
+  flex: none;
+  color: var(--accent-text);
+  font-weight: 700;
 }
 .voice-row .voice-sample {
   display: contents;
@@ -843,6 +863,147 @@ label.file-button:has(+ input:focus-visible) {
 }
 .voice-row .inline-status {
   flex: 1 0 100%;
+}
+/* The voice picker: a second sheet with search, an official-trait filter and one row per voice.
+   Only its body scrolls, so the title and close button stay in reach on phones too. */
+@media (max-width: 899px) {
+  .voice-picker-sheet .sheet-panel {
+    max-height: min(85dvh, 720px);
+  }
+}
+.voice-picker-sheet .sheet-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.voice-picker {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.voice-picker p {
+  margin: 0;
+}
+.voice-picker .settings-note {
+  margin: 0;
+}
+.voice-picker-current {
+  color: var(--text);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.voice-picker-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11em), 1fr));
+  gap: var(--space-2);
+}
+.voice-picker-filters input {
+  min-height: 48px;
+  margin-top: var(--space-1);
+}
+.voice-picker-sample span {
+  color: var(--text-2);
+}
+.voice-picker-count {
+  color: var(--text-3);
+  font-size: 0.8125rem;
+}
+.voice-list {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.voice-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0 var(--space-1);
+  padding: 4px 6px 4px 4px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.voice-option-current {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.sheet-body .voice-option-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 1rem;
+  cursor: pointer;
+}
+.voice-option-choice input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.voice-option-choice input:focus-visible {
+  outline-offset: 2px;
+}
+.voice-option-text {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+  min-width: 0;
+}
+.voice-option-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.voice-option-trait {
+  color: var(--text-3);
+  font-size: 0.875rem;
+}
+.voice-option-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.voice-option-badges:empty {
+  display: none;
+}
+.voice-badge {
+  padding: 1px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.voice-badge-current {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+.voice-sample-compact {
+  display: contents;
+}
+.voice-sample-compact .inline-status {
+  grid-column: 1 / -1;
+}
+.voice-sample-compact .inline-status [role="status"]:empty {
+  display: none;
+}
+.voice-sample-compact .inline-status [role="status"]:not(:empty),
+.voice-sample-compact .inline-status-error {
+  margin: 0 8px 6px;
 }
 .choice-group {
   min-width: 0;

@@ -180,3 +180,23 @@ export async function openComparison(page: Page) {
     await page.locator(".image-comparison summary").click();
   await expect(page.getByAltText("校對用圖片")).toBeVisible();
 }
+
+export const voicePicker = (page: Page) => page.getByRole("dialog", { name: "選擇朗讀聲音" });
+
+/** Opens the voice picker from settings, opening settings first when needed. */
+export async function openVoicePicker(page: Page) {
+  if (!(await settingsSheet(page).isVisible())) await openSettings(page);
+  await settingsSheet(page)
+    .getByRole("button", { name: /^朗讀聲音 / })
+    .click();
+  await expect(voicePicker(page)).toBeVisible();
+  return voicePicker(page);
+}
+
+/** Chooses a voice in the picker and returns to settings. */
+export async function chooseVoice(page: Page, name: string) {
+  const picker = await openVoicePicker(page);
+  await picker.getByRole("radio", { name: new RegExp(`^${name} `) }).check();
+  await picker.getByRole("button", { name: "完成", exact: true }).click();
+  await expect(picker).toBeHidden();
+}

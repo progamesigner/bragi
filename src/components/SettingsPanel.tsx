@@ -1,4 +1,4 @@
-import { createUniqueId, For, Show } from "solid-js";
+import { createEffect, createSignal, createUniqueId, For, Show } from "solid-js";
 import { useApp } from "~/lib/app-controller";
 import { LOCALE_NAMES, LOCALES, type Locale, t } from "~/lib/i18n";
 import {
@@ -26,6 +26,7 @@ import ChoiceGroup from "./ui/ChoiceGroup";
 import Select from "./ui/Select";
 import Sheet from "./ui/Sheet";
 import Switch from "./ui/Switch";
+import VoicePicker from "./VoicePicker";
 import VoiceSample from "./VoiceSample";
 
 type SettingsPanelProps = {
@@ -48,6 +49,12 @@ export default function SettingsPanel(props: SettingsPanelProps) {
   const app = useApp();
   const id = createUniqueId();
   const wakeLockSupported = typeof navigator !== "undefined" && "wakeLock" in navigator;
+  const [pickerOpen, setPickerOpen] = createSignal(false);
+  // Closing settings closes the picker too, so reopening settings starts at the overview.
+  createEffect(() => {
+    if (!props.open) setPickerOpen(false);
+  });
+  const currentVoice = () => voice() ?? voices()[0] ?? "";
 
   return (
     <Sheet
@@ -92,32 +99,46 @@ export default function SettingsPanel(props: SettingsPanelProps) {
           <h3 id={`${id}-voice`}>{t("settings.voiceSection")}</h3>
           <div class="settings-group">
             <div class="settings-field">
-              <label for={`${id}-voice-select`}>{t("prefs.voice")}</label>
+              <span id={`${id}-voice-label`} class="settings-label">
+                {t("prefs.voice")}
+              </span>
               <div class="voice-row">
-                <Select
-                  id={`${id}-voice-select`}
-                  value={voice() ?? ""}
+                <Button
+                  variant="secondary"
+                  class="voice-current"
+                  aria-haspopup="dialog"
+                  aria-labelledby={`${id}-voice-label ${id}-voice-current ${id}-voice-action`}
                   aria-describedby={`${id}-voice-note`}
-                  onChange={(event) => setVoice(event.currentTarget.value || undefined)}
+                  onClick={() => setPickerOpen(true)}
                 >
-                  <option value="">
-                    {t("prefs.defaultVoice", { voice: voiceLabel(voices()[0] ?? "") })}
-                  </option>
-                  <For each={voices().slice(1)}>
-                    {(value) => <option value={value}>{voiceLabel(value)}</option>}
-                  </For>
-                </Select>
+                  <span id={`${id}-voice-current`} class="voice-current-name">
+                    {voice()
+                      ? voiceLabel(currentVoice())
+                      : t("prefs.defaultVoice", { voice: voiceLabel(currentVoice()) })}
+                  </span>
+                  <span id={`${id}-voice-action`} class="voice-current-action">
+                    {t("voicePicker.open")}
+                  </span>
+                </Button>
                 <Show when={app.view()} keyed>
                   <VoiceSample
-                    voice={voice() ?? voices()[0]}
+                    voice={currentVoice()}
                     requestRevision={app.requestRevision()}
-                    active={props.open}
+                    active={props.open && !pickerOpen()}
                   />
                 </Show>
               </div>
               <p id={`${id}-voice-note`} class="settings-note">
                 {t("settings.nextPlayback")}
               </p>
+              <VoicePicker
+                open={props.open && pickerOpen()}
+                voices={voices()}
+                current={currentVoice()}
+                requestRevision={app.requestRevision()}
+                onSelect={(next) => setVoice(next === voices()[0] ? undefined : next)}
+                onClose={() => setPickerOpen(false)}
+              />
             </div>
             <ChoiceGroup<`${PlaybackRate}`>
               legend={t("playback.rate")}

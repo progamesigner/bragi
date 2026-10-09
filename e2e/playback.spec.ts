@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import { mockAudio } from "./audio-fixture";
 import {
+  chooseVoice,
   closeSettings,
   goToStep,
   mockSignedInApi,
@@ -256,7 +257,7 @@ test("settings changes explain next playback and preserve the current voice, rat
   await phase(page, "playing");
   await primary(page).click();
   const sheet = await openSettings(page);
-  await sheet.getByLabel("朗讀聲音").selectOption("Puck");
+  await chooseVoice(page, "Puck");
   await sheet.getByRole("radio", { name: "0.75 倍" }).check();
   await closeSettings(page);
   await expect(page.getByText(/下一次播放套用：.*Puck.*0.75/)).toBeVisible();
@@ -329,7 +330,7 @@ test("Space and paging keys respect focus, sheets, repeat and route scope", asyn
   await expect(page.locator(".playback-position")).toContainText("第 2 段");
   expect(await page.evaluate(() => window.audioTest.outputCount())).toBe(0);
   const sheet = await openSettings(page);
-  const select = sheet.getByLabel("朗讀聲音");
+  const select = sheet.getByRole("button", { name: /^朗讀聲音 / });
   await select.focus();
   await page.keyboard.press("ArrowLeft");
   await page.evaluate(() =>

@@ -18,6 +18,11 @@ export default function AudioPreview(props: {
   valid: boolean;
   requestRevision?: object;
   describedBy?: string;
+  /**
+   * A one-button preview for lists: play, cancel while preparing, stop while playing. The visible
+   * text stays short and the accessible name adds `subject`.
+   */
+  compact?: { subject: string };
 }) {
   const id = createUniqueId();
   const key = () => JSON.stringify([props.owner, id, props.input]);
@@ -64,6 +69,24 @@ export default function AudioPreview(props: {
         captionsLabel: t("audio.captions"),
       });
   }
+  function act() {
+    if (phase() === "loading" || phase() === "playing") session.controller().stop(props.owner);
+    else play();
+  }
+  const compactLabel = () =>
+    t(
+      phase() === "loading"
+        ? "playback.cancel"
+        : phase() === "playing"
+          ? "playback.stop"
+          : ["paused", "interrupted"].includes(phase())
+            ? "playback.resume"
+            : phase() === "blocked"
+              ? "playback.tapToPlay"
+              : phase() === "error"
+                ? "playback.retry"
+                : "voicePicker.preview",
+    );
   const buttonLabel = () =>
     t(
       phase() === "playing"
@@ -77,6 +100,25 @@ export default function AudioPreview(props: {
               : phase() === "error"
                 ? "playback.retry"
                 : "preview.generate",
+    );
+  if (props.compact)
+    return (
+      <div class="voice-sample voice-sample-compact" data-phase={phase()}>
+        <Button
+          variant={phase() === "playing" || phase() === "loading" ? "primary" : "secondary"}
+          size="compact"
+          disabled={!props.valid || !props.active}
+          aria-label={t("voicePicker.action", {
+            action: compactLabel(),
+            voice: props.compact?.subject ?? "",
+          })}
+          aria-describedby={props.describedBy}
+          onClick={act}
+        >
+          {compactLabel()}
+        </Button>
+        <InlineStatus status={status()} />
+      </div>
     );
   return (
     <div class={props.owner === "sample" ? "voice-sample" : "speech-preview"}>

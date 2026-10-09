@@ -34,6 +34,8 @@ never translated.
 | Transcript (playback script) | 逐字稿 | 逐字稿 | 書き起こし | 대본 | Transcript | Transkript | Transcripción |
 | Next story (finish page) | 下一段故事 | 下一段故事 | 次の物語 | 다음 이야기 | next story | nächste Geschichte | siguiente historia |
 | Ready / preparing / not prepared | 已備妥／準備中／尚未準備 | 已就绪／准备中／尚未准备 | 準備済み／準備中／未準備 | 준비 완료／준비 중／준비 전 | Ready / Preparing / Not prepared | Bereit / In Vorbereitung / Nicht vorbereitet | Lista / Preparando / Sin preparar |
+| Voice trait (Gemini's official voice character) | 特質 | 特质 | 特徴 | 특징 | trait | Merkmal | rasgo |
+| Voice in use (picker badge) | 使用中 | 使用中 | 使用中 | 사용 중 | In use | Aktiv | En uso |
 
 ## Reasons for the choices
 
@@ -64,6 +66,11 @@ never translated.
   "Absatz" and 문단; they now follow the part / parte / Abschnitt / 단락 rule, Korean 해요체, and
   name the real Resume button. The full-width space in "下一段　{text}" stays in Chinese and
   Japanese; Latin-script languages and Korean use "Next: {text}".
+- **Voice picker (batch F2).** The trait names are Google's official one-word descriptions of each
+  Gemini voice (`src/lib/voices.ts`), translated once under `voiceTrait.*`; the picker filters
+  only by those, never by categories of our own. "Trait" is 特質／特徴／특징／Merkmal／rasgo,
+  kept apart from 語氣 (tone of a part). Preview buttons in the list show only the action
+  (試聽／Preview／Hörprobe…) and add the voice name to the accessible name, e.g. "Preview Puck".
 - **Font size.** English, German and Spanish used "L" for the middle size; it is now
   Large / Groß / Grande, consistent with the other two sizes.
 - **Informal address.** German uses du, Spanish uses tú, Korean uses 해요체, Japanese uses です／ます.
@@ -74,6 +81,7 @@ never translated.
 ## Checks
 
 - `src/lib/i18n/i18n.test.ts` checks that every language has every key and the same placeholders.
-- `e2e/i18n-layout.spec.ts` opens capture, review (with every disclosure open) and settings in all
+- `e2e/i18n-layout.spec.ts` opens capture, review (with every disclosure open), settings and the
+  voice picker (full catalog, filtered, previewing) in all
   seven languages at 390 px and 320 px. It fails if the page scrolls sideways or a button, link,
   label or summary is narrower than its text or cut off with an ellipsis.

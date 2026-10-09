@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  chooseVoice,
   closeSettings,
   goToStep,
   mockSignedInApi,
@@ -256,7 +257,7 @@ test("settings trial pauses narration, stops on close and cancels a pending tria
   // A new owner stops the old intent. Starting main again is an explicit playback action.
   await expect(page.getByRole("button", { name: "播放此段", exact: true })).toBeVisible();
   await openSettings(page);
-  await settings.getByLabel("朗讀聲音").selectOption("Puck");
+  await chooseVoice(page, "Puck");
   await page.route("**/api/tts", (route) =>
     route.request().postDataJSON().text ? new Promise(() => {}) : route.fallback(),
   );
