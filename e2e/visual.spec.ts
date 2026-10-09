@@ -1,4 +1,3 @@
-import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
 import { mockAudio } from "./audio-fixture";
 import {
@@ -9,26 +8,7 @@ import {
   recognize,
   selectImage,
 } from "./fixtures";
-
-// Baselines for the routed screens and shared settings. Animations are off, fonts are the
-// system Noto CJK faces and every API response is mocked, so only real visual changes show up.
-const pageStyle = fileURLToPath(new URL("./visual.css", import.meta.url));
-const elementStyle = fileURLToPath(new URL("./element.visual.css", import.meta.url));
-// BRAGI_VISUAL_DELAY=7000 waits out every self-dismissing timer (toasts last six seconds) before
-// each capture, to prove that no picture depends on how fast the run is.
-const captureDelay = Number(process.env.BRAGI_VISUAL_DELAY ?? 0);
-
-async function settle(page: Page) {
-  // Park the pointer outside the page so no hover state depends on where the last click landed.
-  await page.mouse.move(-1, -1);
-  if (captureDelay) await page.waitForTimeout(captureDelay);
-  await page.evaluate(() => document.fonts.ready);
-  await page.evaluate(() =>
-    Promise.all(Array.from(document.images, (image) => image.decode().catch(() => undefined))),
-  );
-  // Keep the caret and focus rings out of the pictures.
-  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-}
+import { elementStyle, pageStyle, settle } from "./visual-capture";
 
 async function snap(page: Page, name: string, stylePath: string[] = [pageStyle]) {
   await settle(page);
