@@ -24,12 +24,12 @@ export default defineConfig({
   projects: [
     {
       name: "mobile-chromium",
-      testIgnore: ["pwa.spec.ts", "visual.spec.ts"],
+      testIgnore: ["pwa.spec.ts", "visual.spec.ts", "voice-picker.visual.spec.ts"],
       use: { ...devices["Pixel 7"] },
     },
     {
       name: "visual-phone",
-      testMatch: "visual.spec.ts",
+      testMatch: ["visual.spec.ts", "voice-picker.visual.spec.ts"],
       use: {
         ...devices["Pixel 7"],
         viewport: { width: 390, height: 844 },
@@ -41,7 +41,7 @@ export default defineConfig({
     },
     {
       name: "visual-tablet",
-      testMatch: "visual.spec.ts",
+      testMatch: ["visual.spec.ts", "voice-picker.visual.spec.ts"],
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1180, height: 820 },
