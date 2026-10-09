@@ -1,6 +1,15 @@
 import { readFile } from "node:fs/promises";
-import { expect, type Locator, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { pcmToWav } from "../src/lib/wav";
+import {
+  clearContent,
+  closeSettings,
+  goToStep,
+  openSettings,
+  signIn,
+  signOut,
+  toast,
+} from "./fixtures";
 
 const pcm = Buffer.alloc(12_000);
 const wav = Buffer.from(pcmToWav(pcm));
@@ -72,21 +81,28 @@ async function recognize(page: Page) {
     .getByLabel("從相簿選擇")
     .setInputFiles({ name: "card.png", mimeType: "image/png", buffer: image });
   await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "3. 校對辨識草稿" })).toBeFocused();
+  await expect(page).toHaveURL(/\/review$/);
+  await expect(page.getByRole("heading", { name: "校對辨識草稿" })).toBeFocused();
 }
 
 test("font preference persists and selected voice follows both speech paths", async ({ page }) => {
   const calls = await mockApi(page, true);
   await page.goto("/");
-  await page.getByLabel("朗讀字級").selectOption("largest");
+  let settings = await openSettings(page);
+  await settings.getByRole("radio", { name: "特大" }).check();
   await page.reload();
-  await expect(page.getByLabel("朗讀字級")).toHaveValue("largest");
-  await page.getByLabel("朗讀聲音").selectOption("Puck");
+  settings = await openSettings(page);
+  await expect(settings.getByRole("radio", { name: "特大" })).toBeChecked();
+  await settings.getByLabel("朗讀聲音").selectOption("Puck");
+  await closeSettings(page);
   await recognize(page);
   await page.getByRole("button", { name: "開始逐段朗讀" }).click();
   await page.getByRole("button", { name: "串流播放第一段" }).click();
   await expect(page.getByRole("button", { name: "重播本段" })).toBeVisible();
-  await page.getByLabel("播放速度").selectOption("1.5");
+  settings = await openSettings(page);
+  await settings.getByRole("radio", { name: "1.5 倍" }).check();
+  await closeSettings(page);
+  await expect(page.getByText("語速 1.5 倍")).toBeVisible();
   await page.getByRole("button", { name: /^(繼續|準備)下一段$/ }).click();
   await page.getByRole("button", { name: "播放第 2 段", exact: true }).click();
   await expect
@@ -119,23 +135,28 @@ test("offline requests wait for a manual retry after reconnecting", async ({ pag
   await expect(page.getByText("目前離線。", { exact: false })).toHaveCount(0);
   expect(calls.filter((call) => call.path === "/api/uploads")).toHaveLength(0);
   await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "3. 校對辨識草稿" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "校對辨識草稿" })).toBeVisible();
 });
 
 test("workspace clear confirms, stops playback and preserves login", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/");
   await recognize(page);
-  page.once("dialog", (dialog) => dialog.dismiss());
-  await page.getByRole("button", { name: "清除目前內容" }).click();
+  const sheet = await openSettings(page);
+  await sheet.getByRole("button", { name: "清除目前內容" }).click();
+  await page
+    .getByRole("dialog", { name: "清除目前內容？" })
+    .getByRole("button", { name: "取消" })
+    .last()
+    .click();
+  await closeSettings(page);
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(2);
   await page.getByRole("button", { name: "開始逐段朗讀" }).click();
   await page.getByRole("button", { name: "串流播放第一段" }).click();
   await expect(page.getByRole("button", { name: "重播本段" })).toBeVisible();
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "清除目前內容" }).click();
-  await expect(page.getByRole("status")).toContainText("已清除目前內容");
-  await expect(page.getByRole("button", { name: "登出", exact: true })).toBeVisible();
+  await clearContent(page, "proceed");
+  await expect(toast(page)).toContainText("已清除目前內容");
+  await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("button", { name: "上傳並辨識文字", exact: true })).toBeDisabled();
   await expect(page.locator("audio")).toHaveCount(0);
   await expect(page.getByAltText("準備上傳的圖片預覽")).toHaveCount(0);
@@ -167,20 +188,18 @@ test("clearing an in-flight OCR aborts it without restoring the old draft", asyn
   const aborted = page.waitForEvent("requestfailed", (request) =>
     request.url().endsWith("/api/ocr"),
   );
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "清除目前內容" }).click();
+  await clearContent(page, "proceed");
   await aborted;
   release();
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "上傳並辨識文字", exact: true })).toBeDisabled();
-  await expect(page.getByRole("status")).toContainText("已清除目前內容");
+  await expect(toast(page)).toContainText("已清除目前內容");
 });
 
 test("login, upload, edit, stream, manually continue, return and sign out", async ({ page }) => {
   const calls = await mockApi(page);
   await page.goto("/");
-  await page.getByLabel("Authenticator 6 位驗證碼").fill("123456");
-  await page.getByRole("button", { name: "登入", exact: true }).click();
+  await signIn(page);
   await page.getByLabel("題材提示（選填）").fill("奇幻");
   await recognize(page);
   await page.getByLabel("口白文字", { exact: true }).first().fill("修改後的故事。");
@@ -199,21 +218,28 @@ test("login, upload, edit, stream, manually continue, return and sign out", asyn
   expect(calls.filter((call) => call.path === "/api/tts")).toHaveLength(1);
   await page.getByRole("button", { name: "返回校對" }).click();
   await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue("修改後的故事。");
-  await page.getByRole("button", { name: "登出", exact: true }).click();
-  await expect(page.getByLabel("Authenticator 6 位驗證碼")).toBeVisible();
+  await signOut(page, "proceed");
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(0);
-  await page.getByLabel("Authenticator 6 位驗證碼").fill("123456");
-  await page.getByRole("button", { name: "登入", exact: true }).click();
+  await signIn(page);
+  await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("button", { name: "上傳並辨識文字", exact: true })).toBeDisabled();
 });
 
 test("restores session and blocks playback until empty segments are fixed", async ({ page }) => {
   await mockApi(page, true);
   await page.goto("/");
-  await expect(page.getByRole("status")).toHaveText("已恢復登入狀態");
   await recognize(page);
   await page.getByLabel("口白文字", { exact: true }).first().fill("");
   await expect(page.getByRole("button", { name: "開始逐段朗讀" })).toBeDisabled();
+  // The step bar explains why reading is unavailable, and a direct visit is sent back.
+  await expect(page.getByRole("link", { name: "朗讀", exact: true })).toHaveCount(0);
+  await page.goto("/play");
+  await expect(page).toHaveURL(/\/$/);
+  await recognize(page);
+  await page.getByLabel("口白文字", { exact: true }).first().fill("");
+  await page.evaluate(() => history.pushState(null, "", "/play"));
+  await page.evaluate(() => dispatchEvent(new PopStateEvent("popstate")));
+  await expect(page).toHaveURL(/\/review$/);
   await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveAttribute(
     "aria-invalid",
     "true",
@@ -246,7 +272,7 @@ test("OCR failure keeps the image available for explicit retry", async ({ page }
   await expect(page.getByRole("alert")).toContainText("ocr-test");
   expect(calls.filter((call) => call.path === "/api/uploads")).toHaveLength(1);
   await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "3. 校對辨識草稿" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "校對辨識草稿" })).toBeVisible();
 });
 
 test("speech failure recovers only after manual retry", async ({ page }) => {
@@ -302,14 +328,14 @@ test("overlong drafts split safely and editing history survives playback", async
   await page.getByRole("button", { name: "按句自動分段" }).first().click();
   await expect(page.getByRole("button", { name: "開始逐段朗讀" })).toBeEnabled();
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(3);
-  await page.getByRole("button", { name: "復原", exact: true }).click();
+  await page.locator("#main").getByRole("button", { name: "復原", exact: true }).click();
   await expect(original).toHaveValue(long);
   await page.getByRole("button", { name: "重做", exact: true }).click();
   await page.getByRole("button", { name: "開始逐段朗讀" }).click();
   await page.getByRole("button", { name: /返回校對/ }).click();
-  await page.getByRole("button", { name: "復原", exact: true }).click();
+  await page.locator("#main").getByRole("button", { name: "復原", exact: true }).click();
   await expect(original).toHaveValue(long);
-  await page.getByRole("button", { name: "復原", exact: true }).click();
+  await page.locator("#main").getByRole("button", { name: "復原", exact: true }).click();
   await expect(original).toHaveValue("故事開始。");
   await original.fill("新版本");
   await expect(page.getByRole("button", { name: "重做", exact: true })).toBeDisabled();
@@ -376,15 +402,16 @@ test("drafts export text only and import without an image or provider call", asy
     ["detectedLanguage", "exportedAt", "format", "segments", "version"].sort(),
   );
 
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "清除目前內容" }).click();
-  await expect(page.getByRole("heading", { name: "3. 校對辨識草稿" })).toHaveCount(0);
+  // The text is exported, but the picture and history will still be discarded.
+  await clearContent(page, "proceed");
+  await expect(page.getByRole("heading", { name: "校對辨識草稿" })).toHaveCount(0);
   await page.getByLabel("匯入草稿 JSON").setInputFiles({
     name: "broken.json",
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify({ ...exported, version: 2 })),
   });
   await expect(page.getByRole("alert")).toContainText("不支援這個版本");
+  await expect(page.getByRole("alert")).toHaveCount(1);
 
   const before = calls.length;
   await page.getByLabel("匯入草稿 JSON").setInputFiles({
@@ -392,12 +419,15 @@ test("drafts export text only and import without an image or provider call", asy
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify(exported)),
   });
-  await expect(page.getByText("已匯入草稿 · 2 個段落")).toBeVisible();
+  await expect(toast(page)).toContainText("已匯入草稿 · 2 個段落");
+  await expect(page).toHaveURL(/\/review$/);
   await expect(page.getByLabel("口白文字", { exact: true }).nth(1)).toHaveValue("門打開了。");
   await expect(page.getByLabel("朗讀文字（只影響語音）")).toHaveValue("門，打開了。");
   await expect(page.getByLabel("朗讀語氣").first()).toHaveValue("低沉");
   await expect(page.getByText("查看圖片對照")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "復原", exact: true })).toBeDisabled();
+  await expect(
+    page.locator("#main").getByRole("button", { name: "復原", exact: true }),
+  ).toBeDisabled();
   expect(calls.slice(before)).toHaveLength(0);
 });
 
@@ -474,19 +504,30 @@ test("keeps the screen awake during playback only when chosen", async ({ page })
     page.evaluate(() => (window as unknown as { bragiWakeLog: string[] }).bragiWakeLog);
   await page.goto("/");
   await recognize(page);
-  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
-  const toggle = page.getByLabel("朗讀時保持螢幕常亮");
+  // The preference can be set anywhere, but only the playback screen holds the lock.
+  let settings = await openSettings(page);
+  const toggle = settings.getByRole("switch", { name: "朗讀時保持螢幕常亮" });
   await expect(toggle).not.toBeChecked();
+  await toggle.check();
+  await closeSettings(page);
   expect(await wakeLog()).toEqual([]);
 
-  await toggle.check();
+  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
   await expect.poll(wakeLog).toEqual(["request:screen"]);
-  await page.getByRole("button", { name: /返回校對/ }).click();
+  // Opening and closing settings on the playback screen keeps the lock.
+  settings = await openSettings(page);
+  await closeSettings(page);
+  expect(await wakeLog()).toEqual(["request:screen"]);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/review$/);
   await expect.poll(wakeLog).toEqual(["request:screen", "release"]);
 
-  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
-  await expect(page.getByLabel("朗讀時保持螢幕常亮")).toBeChecked();
+  await page.goForward();
+  await expect(page).toHaveURL(/\/play$/);
   await expect.poll(wakeLog).toEqual(["request:screen", "release", "request:screen"]);
+  settings = await openSettings(page);
+  await settings.getByRole("switch", { name: "朗讀時保持螢幕常亮" }).uncheck();
+  await expect.poll(wakeLog).toEqual(["request:screen", "release", "request:screen", "release"]);
 });
 
 test("non-1× speeds skip streaming and keep the original pitch", async ({ page }) => {
@@ -494,8 +535,11 @@ test("non-1× speeds skip streaming and keep the original pitch", async ({ page 
   await page.goto("/");
   await recognize(page);
   await page.getByRole("button", { name: "開始逐段朗讀" }).click();
-  await page.getByLabel("播放速度").selectOption("0.75");
-  await expect(page.getByText("非 1 倍速會先產生整段音訊再播放")).toBeVisible();
+  const settings = await openSettings(page);
+  await expect(settings.getByText("非 1 倍速會先產生整段音訊再播放")).toHaveCount(0);
+  await settings.getByRole("radio", { name: "0.75 倍" }).check();
+  await expect(settings.getByText("非 1 倍速會先產生整段音訊再播放")).toBeVisible();
+  await closeSettings(page);
   await page.getByRole("button", { name: "播放第一段" }).click();
   await page.getByRole("button", { name: "播放第 1 段", exact: true }).click();
   await expect
@@ -511,7 +555,8 @@ test("non-1× speeds skip streaming and keep the original pitch", async ({ page 
 test("voice picker labels voices, samples them and remembers the choice", async ({ page }) => {
   const calls = await mockApi(page, true);
   await page.goto("/");
-  const picker = page.getByLabel("朗讀聲音");
+  const settings = await openSettings(page);
+  const picker = settings.getByLabel("朗讀聲音");
   await expect(picker.locator("option")).toHaveText(["預設聲音（Kore · 堅定）", "Puck · 輕快"]);
 
   await page.getByRole("button", { name: "試聽這個聲音" }).click();
@@ -534,6 +579,7 @@ test("voice picker labels voices, samples them and remembers the choice", async 
 
   await picker.selectOption("Puck");
   await page.reload();
+  await openSettings(page);
   await expect(page.getByLabel("朗讀聲音")).toHaveValue("Puck");
 });
 
@@ -545,8 +591,14 @@ test("reading presets preserve the normal editor size and secondary spoken hiera
   await recognize(page);
   await page.getByRole("button", { name: "另設朗讀文字" }).first().click();
   const editorSizes: number[] = [];
-  for (const preset of ["normal", "large", "largest"]) {
-    await page.getByLabel("朗讀字級").selectOption(preset);
+  const presets = { normal: "標準", large: "大", largest: "特大" } as const;
+  const choose = async (preset: keyof typeof presets) => {
+    const settings = await openSettings(page);
+    await settings.getByRole("radio", { name: presets[preset], exact: true }).check();
+    await closeSettings(page);
+  };
+  for (const preset of ["normal", "large", "largest"] as const) {
+    await choose(preset);
     const size = await page
       .getByLabel("口白文字", { exact: true })
       .first()
@@ -565,8 +617,8 @@ test("reading presets preserve the normal editor size and secondary spoken hiera
   await page.getByRole("button", { name: "開始逐段朗讀" }).click();
   const scriptSizes: number[] = [];
   const spokenSizes: number[] = [];
-  for (const preset of ["normal", "large", "largest"]) {
-    await page.getByLabel("朗讀字級").selectOption(preset);
+  for (const preset of ["normal", "large", "largest"] as const) {
+    await choose(preset);
     const script = await page
       .locator(".playback-script p")
       .first()
@@ -625,18 +677,33 @@ test("new photos preserve the draft, language, genre, comparison and undo until 
   await page.goto("/");
   await recognize(page);
   await page.getByLabel("口白文字", { exact: true }).first().fill("保留這段修改。");
-  await page.getByLabel("題材提示（選填）").fill("舊題材");
   await page.getByText("查看圖片對照").click();
-  const oldImage = await page.getByAltText("校對用圖片").getAttribute("src");
+  const imageBytes = () =>
+    page
+      .getByAltText("校對用圖片")
+      .evaluate(async (img: HTMLImageElement) =>
+        Array.from(new Uint8Array(await (await fetch(img.src)).arrayBuffer())),
+      );
+  const oldImage = await imageBytes();
+  await goToStep(page, "取圖");
+  await page.getByLabel("題材提示（選填）").fill("舊題材");
   await page
     .getByLabel("從相簿選擇")
     .setInputFiles({ name: "candidate.png", mimeType: "image/png", buffer: image });
   await expect(page.getByAltText("準備上傳的圖片預覽")).toBeVisible();
   await page.getByLabel("題材提示（選填）").fill("候選題材");
+  // The draft and its history are untouched while the candidate waits.
+  await goToStep(page, "校對");
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(2);
   await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue("保留這段修改。");
-  await expect(page.getByRole("button", { name: "復原", exact: true })).toBeEnabled();
-  expect(await page.getByAltText("校對用圖片").getAttribute("src")).toBe(oldImage);
+  await expect(
+    page.locator("#main").getByRole("button", { name: "復原", exact: true }),
+  ).toBeEnabled();
+  await page.getByText("查看圖片對照").click();
+  expect(await imageBytes()).toEqual(oldImage);
+  await goToStep(page, "取圖");
+  // Coming back shows the candidate again.
+  await expect(page.getByAltText("準備上傳的圖片預覽")).toBeVisible();
   await page.getByRole("button", { name: "取消候選圖片" }).click();
   await expect(page.getByLabel("題材提示（選填）")).toHaveValue("舊題材");
 
@@ -644,14 +711,10 @@ test("new photos preserve the draft, language, genre, comparison and undo until 
     .getByLabel("從相簿選擇")
     .setInputFiles({ name: "broken.png", mimeType: "image/png", buffer: Buffer.from("broken") });
   await expect(page.getByRole("alert")).toBeVisible();
-  await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(2);
-  await expect(page.getByRole("button", { name: "復原", exact: true })).toBeEnabled();
-
   await expect(page.getByRole("button", { name: "重試圖片處理" })).toBeVisible();
   await expect(page.locator(".capture-preview .file")).toContainText("broken.png");
   await page.getByRole("button", { name: "重試圖片處理" }).click();
   await expect(page.getByRole("alert")).toBeVisible();
-  await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue("保留這段修改。");
 
   await page
     .getByLabel("從相簿選擇")
@@ -661,9 +724,7 @@ test("new photos preserve the draft, language, genre, comparison and undo until 
   );
   await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
   await expect(page.getByRole("alert")).toBeVisible();
-  await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(2);
   await expect(page.getByAltText("準備上傳的圖片預覽")).toBeVisible();
-  await expect(page.getByRole("button", { name: "復原", exact: true })).toBeEnabled();
 
   await page.route("**/api/ocr", (route) =>
     route.fulfill({
@@ -676,15 +737,23 @@ test("new photos preserve the draft, language, genre, comparison and undo until 
   page.once("dialog", (dialog) => dialog.dismiss());
   await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
   await expect(page.getByText("已保留目前稿件；候選圖片可重新辨識")).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+  await goToStep(page, "校對");
   await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue("保留這段修改。");
-  await expect(page.getByRole("button", { name: "復原", exact: true })).toBeEnabled();
+  await expect(
+    page.locator("#main").getByRole("button", { name: "復原", exact: true }),
+  ).toBeEnabled();
+  await goToStep(page, "取圖");
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
-  await expect(page.getByText("辨識完成 · 1 個段落")).toBeVisible();
+  await expect(page).toHaveURL(/\/review$/);
+  await expect(toast(page)).toContainText("辨識完成 · 1 個段落");
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(1);
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveValue("A new story.");
   await expect(page.getByText("主要語言：English · 1 個段落")).toBeVisible();
-  await expect(page.getByRole("button", { name: "復原", exact: true })).toBeDisabled();
+  await expect(
+    page.locator("#main").getByRole("button", { name: "復原", exact: true }),
+  ).toBeDisabled();
 });
 
 test("late OCR success and failure cannot restore a cleared workspace or overwrite status", async ({
@@ -722,14 +791,15 @@ test("late OCR success and failure cannot restore a cleared workspace or overwri
       .setInputFiles({ name: "card.png", mimeType: "image/png", buffer: image });
     await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
     await expect(page.getByText("Gemini 正在辨識與分段…")).toBeVisible();
-    page.once("dialog", (dialog) => dialog.accept());
-    await page.getByRole("button", { name: "清除目前內容" }).click();
+    await clearContent(page, "proceed");
     await page.evaluate(
       (fail) => (window as unknown as { finishOcr: (fail: boolean) => void }).finishOcr(fail),
       fail,
     );
-    await expect(page.getByText("已清除目前內容，登入狀態已保留")).toBeVisible();
+    await expect(toast(page)).toContainText("已清除目前內容，登入狀態已保留");
+    await expect(page.getByRole("alert")).toHaveCount(0);
     await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(0);
+    await expect(page).toHaveURL(/\/$/);
     expect(await page.evaluate(() => localStorage.getItem("bragi:autosave:v1"))).toBeNull();
   }
 });
@@ -750,6 +820,7 @@ test("late import cannot replace a newer image and invalid import preserves edit
   await page.goto("/");
   await recognize(page);
   await page.getByLabel("口白文字", { exact: true }).first().fill("保留舊稿。");
+  await goToStep(page, "取圖");
   await page
     .getByLabel("匯入草稿 JSON")
     .setInputFiles({ name: "late.json", mimeType: "application/json", buffer: Buffer.from("{}") });
@@ -766,13 +837,16 @@ test("late import cannot replace a newer image and invalid import preserves edit
     (window as unknown as { finishImport: (source: string) => void }).finishImport("{"),
   );
   await expect(page.getByText("圖片已準備完成，可以開始辨識")).toBeVisible();
-  await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue("保留舊稿。");
   await page
     .getByLabel("匯入草稿 JSON")
     .setInputFiles({ name: "bad.json", mimeType: "application/json", buffer: Buffer.from("{") });
   await expect(page.getByRole("alert")).toContainText("JSON");
+  await goToStep(page, "校對");
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(2);
-  await expect(page.getByRole("button", { name: "復原", exact: true })).toBeEnabled();
+  await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue("保留舊稿。");
+  await expect(
+    page.locator("#main").getByRole("button", { name: "復原", exact: true }),
+  ).toBeEnabled();
 });
 
 test("late image preparation and successful import cannot write after clear", async ({ page }) => {
@@ -795,18 +869,19 @@ test("late image preparation and successful import cannot write after clear", as
   });
   await page.goto("/");
   await recognize(page);
+  await goToStep(page, "取圖");
   await page
     .getByLabel("從相簿選擇")
     .setInputFiles({ name: "slow.png", mimeType: "image/png", buffer: image });
   await expect(page.getByText("正在調整方向與圖片大小…")).toBeVisible();
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "清除目前內容" }).click();
+  await clearContent(page, "proceed");
   await page.evaluate(() =>
     (window as unknown as { failImage: (error: Error) => void }).failImage(
       new Error("late image error"),
     ),
   );
-  await expect(page.getByText("已清除目前內容，登入狀態已保留")).toBeVisible();
+  await expect(toast(page)).toContainText("已清除目前內容，登入狀態已保留");
+  await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "上傳並辨識文字", exact: true })).toBeDisabled();
 
   await page
@@ -817,8 +892,7 @@ test("late image preparation and successful import cannot write after clear", as
       page.evaluate(() => typeof (window as unknown as { finishImport: unknown }).finishImport),
     )
     .toBe("function");
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "清除目前內容" }).click();
+  await clearContent(page);
   await page.evaluate(() =>
     (window as unknown as { finishImport: (source: string) => void }).finishImport(
       JSON.stringify({
@@ -831,7 +905,7 @@ test("late image preparation and successful import cannot write after clear", as
     ),
   );
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("已清除目前內容，登入狀態已保留")).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
   expect(await page.evaluate(() => localStorage.getItem("bragi:autosave:v1"))).toBeNull();
 });
 
@@ -852,27 +926,29 @@ test("autosave restores only text after reload, and clear or logout removes it",
       ),
     )
     .toBe("重新整理，仍保留。");
+  // A reload empties the in-memory draft, so review sends the person to capture to recover it.
   await page.reload();
+  await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("button", { name: "恢復上次的草稿" })).toBeVisible();
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(0);
   const before = calls.filter((call) => call.path !== "/api/session").length;
   await page.getByRole("button", { name: "恢復上次的草稿" }).click();
+  await expect(page).toHaveURL(/\/review$/);
   await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue(
     "重新整理後仍保留。",
   );
   await expect(page.getByLabel("朗讀文字（只影響語音）")).toHaveValue("重新整理，仍保留。");
   await expect(page.getByText("查看圖片對照")).toHaveCount(0);
   expect(calls.filter((call) => call.path !== "/api/session")).toHaveLength(before);
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "清除目前內容" }).click();
+  // A recovered draft has no exported copy, so clearing asks first.
+  await clearContent(page, "proceed");
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem("bragi:autosave:v1")))
     .toBeNull();
   await page.reload();
   await expect(page.getByRole("button", { name: "恢復上次的草稿" })).toHaveCount(0);
   await recognize(page);
-  await page.getByRole("button", { name: "登出", exact: true }).click();
-  await expect(page.getByRole("button", { name: "登入", exact: true })).toBeVisible();
+  await signOut(page, "proceed");
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem("bragi:autosave:v1")))
     .toBeNull();
@@ -890,8 +966,8 @@ test("saved drafts require a choice and discard or malformed data removes the lo
   expect(await page.evaluate(() => localStorage.getItem("bragi:autosave:v1"))).toBeNull();
   await page.evaluate(() => localStorage.setItem("bragi:autosave:v1", "{"));
   await page.reload();
+  await expect(page.getByRole("heading", { name: "上傳並辨識" })).toBeVisible();
   await expect(page.getByRole("button", { name: "恢復上次的草稿" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "登出", exact: true })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("bragi:autosave:v1"))).toBeNull();
 });
 
@@ -920,26 +996,26 @@ test("draft recovery stays private until session checking and sign-in complete",
     await checking;
     return route.fulfill({ json: { authenticated: false } });
   });
-  await page.goto("/");
+  // A deep link waits for sign-in too.
+  await page.goto("/review");
   await expect(page.getByText("正在確認登入狀態…")).toBeVisible();
   await expect(page.getByRole("region", { name: "本機暫存草稿" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "恢復上次的草稿" })).toHaveCount(0);
   finishSession();
   await expect(page.getByRole("button", { name: "登入", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "本機暫存草稿" })).toHaveCount(0);
-  await page.getByLabel("Authenticator 6 位驗證碼").fill("123456");
-  await page.getByRole("button", { name: "登入", exact: true }).click();
+  await signIn(page);
+  await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("button", { name: "恢復上次的草稿" })).toBeVisible();
   await page.getByRole("button", { name: "恢復上次的草稿" }).click();
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveValue("登入後才能恢復。");
   expect(calls.filter((call) => call.path !== "/api/session")).toHaveLength(0);
-  await page.getByRole("button", { name: "登出", exact: true }).click();
-  await expect(page.getByRole("button", { name: "登入", exact: true })).toBeVisible();
+  await signOut(page, "proceed");
   expect(await page.evaluate(() => localStorage.getItem("bragi:autosave:v1"))).toBeNull();
 });
 
-for (const mode of ["voice", "preview", "playback", "stream"] as const) {
-  test(`${mode} audio keeps playing through candidate failure and cancellation until replacement`, async ({
+for (const mode of ["playback", "stream"] as const) {
+  test(`${mode} audio keeps playing while a background recognition fails or is declined, until replacement`, async ({
     page,
   }) => {
     await mockApi(page, true);
@@ -955,7 +1031,7 @@ for (const mode of ["voice", "preview", "playback", "stream"] as const) {
         window.AudioContext = class extends Original {
           constructor(options?: AudioContextOptions) {
             super(options);
-            Object.assign(window, { originalStream: this });
+            Object.assign(window, { originalStream: this, originalAudio: undefined });
           }
         };
       });
@@ -969,50 +1045,6 @@ for (const mode of ["voice", "preview", "playback", "stream"] as const) {
     }
     await page.goto("/");
     await recognize(page);
-    let audio: Locator | undefined;
-    if (mode === "stream") {
-      await page.getByRole("button", { name: "開始逐段朗讀" }).click();
-      await page.getByRole("button", { name: "串流播放第一段" }).click();
-      await expect(page.getByRole("button", { name: "暫停", exact: true })).toBeVisible();
-    } else if (mode === "playback") {
-      await page.getByRole("button", { name: "開始逐段朗讀" }).click();
-      await page.getByLabel("播放速度").selectOption("1.25");
-      await page.getByRole("button", { name: "播放第一段" }).click();
-      await expect(page.getByRole("button", { name: "播放第 1 段", exact: true })).toBeVisible();
-      audio = page.getByLabel("第 1 段朗讀", { exact: true });
-    } else {
-      await page
-        .getByRole("button", { name: mode === "voice" ? "試聽這個聲音" : "產生試聽", exact: true })
-        .first()
-        .click();
-      audio = page.getByLabel(mode === "voice" ? "聲音試聽" : "段落試聽", { exact: true }).first();
-      await expect(audio).toBeVisible();
-    }
-    await audio?.evaluate(async (element: HTMLAudioElement) => {
-      Object.assign(window, { originalAudio: element });
-      await element.play();
-    });
-    const paused = () =>
-      mode === "stream"
-        ? page.evaluate(
-            () =>
-              (window as unknown as { originalStream: AudioContext }).originalStream.state !==
-              "running",
-          )
-        : page.evaluate(
-            () => (window as unknown as { originalAudio: HTMLAudioElement }).originalAudio.paused,
-          );
-    await expect.poll(paused).toBe(false);
-    await page
-      .getByLabel("從相簿選擇")
-      .setInputFiles({ name: "broken.png", mimeType: "image/png", buffer: Buffer.from("broken") });
-    await expect(page.getByRole("button", { name: "重試圖片處理" })).toBeVisible();
-    expect(await paused()).toBe(false);
-    await page.getByRole("button", { name: "取消候選圖片" }).click();
-    expect(await paused()).toBe(false);
-    await page
-      .getByLabel("從相簿選擇")
-      .setInputFiles({ name: "new.png", mimeType: "image/png", buffer: image });
     let finishOcr!: () => void;
     let ocrPending = false;
     let failure = true;
@@ -1029,106 +1061,90 @@ for (const mode of ["voice", "preview", "playback", "stream"] as const) {
         },
       });
     });
-    const startOcr = async () => {
+    // Start a recognition on capture, then go and read the current draft while it runs.
+    const startOcrAndPlay = async () => {
       ocrPending = false;
+      await goToStep(page, "取圖");
+      await page
+        .getByLabel("從相簿選擇")
+        .setInputFiles({ name: "new.png", mimeType: "image/png", buffer: image });
       await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
       await expect.poll(() => ocrPending).toBe(true);
-      expect(await paused()).toBe(false);
-      finishOcr();
+      await goToStep(page, "朗讀");
+      if (mode === "stream") {
+        await page.getByRole("button", { name: "串流播放第一段" }).click();
+        // A previous run may already have cached the complete WAV.
+        const ready = page.getByRole("button", { name: "播放第 1 段", exact: true });
+        await expect(
+          page.getByRole("button", { name: "暫停", exact: true }).or(ready),
+        ).toBeVisible();
+        if (await ready.isVisible()) {
+          await page
+            .getByLabel("第 1 段朗讀", { exact: true })
+            .evaluate((audio: HTMLAudioElement) =>
+              Object.assign(window, { originalAudio: audio, originalStream: undefined }),
+            );
+          await ready.click();
+        }
+        await expect(page.getByRole("button", { name: "暫停", exact: true })).toBeVisible();
+      } else {
+        await page.getByRole("button", { name: /^播放(第一段|此段)$/ }).click();
+        const audio = page.getByLabel("第 1 段朗讀", { exact: true });
+        await audio.evaluate(async (element: HTMLAudioElement) => {
+          Object.assign(window, { originalAudio: element });
+          await element.play();
+        });
+      }
     };
-    await startOcr();
-    await expect(page.getByRole("alert")).toBeVisible();
+    const paused = () =>
+      mode === "stream"
+        ? page.evaluate(() =>
+            (
+              window as unknown as {
+                originalStream?: AudioContext;
+                originalAudio?: HTMLAudioElement;
+              }
+            ).originalStream
+              ? (window as unknown as { originalStream: AudioContext }).originalStream.state !==
+                "running"
+              : (window as unknown as { originalAudio: HTMLAudioElement }).originalAudio.paused,
+          )
+        : page.evaluate(
+            () => (window as unknown as { originalAudio: HTMLAudioElement }).originalAudio.paused,
+          );
+    if (mode === "playback") {
+      const settings = await openSettings(page);
+      await settings.getByRole("radio", { name: "1.25 倍" }).check();
+      await closeSettings(page);
+    }
+    await startOcrAndPlay();
+    await expect.poll(paused).toBe(false);
+    const response = page.waitForResponse("**/api/ocr");
+    finishOcr();
+    await response;
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
     expect(await paused()).toBe(false);
+
     failure = false;
+    await page.getByRole("button", { name: /返回校對/ }).click();
     page.once("dialog", (dialog) => dialog.dismiss());
-    await startOcr();
-    await expect(page.getByText("已保留目前稿件；候選圖片可重新辨識")).toBeVisible();
+    await startOcrAndPlay();
+    await expect.poll(paused).toBe(false);
+    finishOcr();
+    await expect(page.getByRole("button", { name: "暫停", exact: true })).toBeVisible();
     expect(await paused()).toBe(false);
-    await page.getByRole("button", { name: "取消候選圖片" }).click();
-    expect(await paused()).toBe(false);
-    await page
-      .getByLabel("從相簿選擇")
-      .setInputFiles({ name: "new.png", mimeType: "image/png", buffer: image });
+
+    await page.getByRole("button", { name: /返回校對/ }).click();
     page.once("dialog", (dialog) => dialog.accept());
-    await startOcr();
-    await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(1);
+    await startOcrAndPlay();
+    finishOcr();
+    await expect(page).toHaveURL(/\/review$/);
     await expect(page.getByLabel("口白文字", { exact: true })).toHaveValue("Replacement.");
     await expect.poll(paused).toBe(true);
-  });
-}
-
-for (const mode of ["voice", "preview"] as const) {
-  test(`pending ${mode} synthesis stays valid during OCR and is cancelled only on replacement`, async ({
-    page,
-  }) => {
-    await mockApi(page, true);
-    await page.addInitScript((encodedWav) => {
-      const originalFetch = window.fetch;
-      const aborts: string[] = [];
-      Object.assign(window, { speechAborts: aborts });
-      window.fetch = (input, init) => {
-        if (input === "/api/tts")
-          return new Promise<Response>((resolve) => {
-            init?.signal?.addEventListener("abort", () => aborts.push("abort"));
-            Object.assign(window, {
-              finishSpeech: () =>
-                resolve(
-                  new Response(
-                    Uint8Array.from(atob(encodedWav), (character) => character.charCodeAt(0)),
-                    { headers: { "content-type": "audio/wav" } },
-                  ),
-                ),
-            });
-          });
-        return originalFetch(input, init);
-      };
-    }, wav.toString("base64"));
-    await page.goto("/");
-    await recognize(page);
-    await page
-      .getByRole("button", { name: mode === "voice" ? "試聽這個聲音" : "產生試聽", exact: true })
-      .first()
-      .click();
-    await expect
-      .poll(() =>
-        page.evaluate(() => typeof (window as unknown as { finishSpeech: unknown }).finishSpeech),
-      )
-      .toBe("function");
-    const aborted = () =>
-      page.evaluate(() => (window as unknown as { speechAborts: string[] }).speechAborts.length);
-    await page
-      .getByLabel("從相簿選擇")
-      .setInputFiles({ name: "new.png", mimeType: "image/png", buffer: image });
-    await expect(page.getByRole("button", { name: "上傳並辨識文字", exact: true })).toBeEnabled();
-    expect(await aborted()).toBe(0);
-    await page.route("**/api/ocr", (route) =>
-      route.fulfill({ status: 502, json: { error: "OCR failed" } }),
-    );
-    await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
-    await expect(page.getByRole("alert")).toBeVisible();
-    expect(await aborted()).toBe(0);
-    await page.getByRole("button", { name: "取消候選圖片" }).click();
-    expect(await aborted()).toBe(0);
-    await page
-      .getByLabel("從相簿選擇")
-      .setInputFiles({ name: "new.png", mimeType: "image/png", buffer: image });
-    await page.route("**/api/ocr", (route) =>
-      route.fulfill({
-        json: {
-          detectedLanguage: "en",
-          segments: [{ id: "new", text: "Replacement.", suggestedToneHint: "" }],
-        },
-      }),
-    );
-    page.once("dialog", (dialog) => dialog.accept());
-    await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
-    await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(1);
-    await expect(page.getByLabel("口白文字", { exact: true })).toHaveValue("Replacement.");
-    await expect.poll(aborted).toBe(1);
-    await page.evaluate(() => (window as unknown as { finishSpeech: () => void }).finishSpeech());
-    await expect(page.getByText("辨識完成 · 1 個段落")).toBeVisible();
-    await expect(
-      page.getByLabel(mode === "voice" ? "聲音試聽" : "段落試聽", { exact: true }),
-    ).toHaveCount(0);
   });
 }

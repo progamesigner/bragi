@@ -1,8 +1,8 @@
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
-import { mockSignedInApi, recognize, selectImage } from "./fixtures";
+import { mockSignedInApi, openSettings, recognize, selectImage } from "./fixtures";
 
-// Baselines for the current screens before the C/D redesign. Animations are off, fonts are the
+// Baselines for the routed screens and shared settings. Animations are off, fonts are the
 // system Noto CJK faces and every API response is mocked, so only real visual changes show up.
 async function settle(page: Page) {
   await page.evaluate(() => document.fonts.ready);
@@ -26,15 +26,24 @@ for (const colorScheme of ["light", "dark"] as const) {
     test("sign-in", async ({ page }) => {
       await mockSignedInApi(page, { authenticated: false });
       await page.goto("/");
-      await expect(page.getByRole("status")).toHaveText("請先使用 Authenticator 驗證碼登入");
+      await expect(page.getByLabel("驗證碼")).toBeVisible();
       await snap(page, `sign-in-${colorScheme}`);
+    });
+
+    test("settings", async ({ page }) => {
+      await mockSignedInApi(page);
+      await page.goto("/");
+      await openSettings(page);
+      await snap(page, `settings-${colorScheme}`);
     });
 
     test("capture", async ({ page }) => {
       await mockSignedInApi(page);
       await page.goto("/");
       await selectImage(page);
-      await expect(page.getByRole("status")).toHaveText("圖片已準備完成，可以開始辨識");
+      await expect(page.locator(".capture-status").getByRole("status")).toHaveText(
+        "圖片已準備完成，可以開始辨識",
+      );
       await snap(page, `capture-${colorScheme}`);
     });
 
@@ -42,6 +51,9 @@ for (const colorScheme of ["light", "dark"] as const) {
       await mockSignedInApi(page);
       await page.goto("/");
       await recognize(page);
+      await page.locator(".toast").evaluate((element) => {
+        element.style.visibility = "hidden";
+      });
       await snap(page, `review-${colorScheme}`);
     });
 
@@ -51,6 +63,9 @@ for (const colorScheme of ["light", "dark"] as const) {
       await recognize(page);
       await page.getByRole("button", { name: "開始逐段朗讀" }).click();
       await expect(page.getByRole("heading", { name: "第 1 段，共 2 段" })).toBeFocused();
+      await page.locator(".toast").evaluate((element) => {
+        element.style.visibility = "hidden";
+      });
       await snap(page, `playback-${colorScheme}`);
     });
   });

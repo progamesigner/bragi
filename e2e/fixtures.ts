@@ -72,5 +72,59 @@ export async function selectImage(page: Page) {
 export async function recognize(page: Page) {
   await selectImage(page);
   await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "3. 校對辨識草稿" })).toBeFocused();
+  await expect(page).toHaveURL(/\/review$/);
+  await expect(page.getByRole("heading", { name: "校對辨識草稿" })).toBeFocused();
 }
+
+export const settingsButton = (page: Page) =>
+  page.getByRole("button", { name: "設定", exact: true });
+
+export const settingsSheet = (page: Page) => page.getByRole("dialog", { name: "設定" });
+
+export async function openSettings(page: Page) {
+  await settingsButton(page).click();
+  await expect(settingsSheet(page)).toBeVisible();
+  return settingsSheet(page);
+}
+
+export async function closeSettings(page: Page) {
+  await settingsSheet(page).getByRole("button", { name: "關閉設定" }).click();
+  await expect(settingsSheet(page)).toBeHidden();
+}
+
+/** Clears from settings; `confirm` answers the export-first question when it is asked. */
+export async function clearContent(page: Page, confirm: "proceed" | "none" = "none") {
+  const sheet = await openSettings(page);
+  await sheet.getByRole("button", { name: "清除目前內容" }).click();
+  if (confirm === "proceed")
+    await page
+      .getByRole("dialog", { name: "清除目前內容？" })
+      .getByRole("button", { name: "不匯出，直接清除" })
+      .click();
+  await expect(settingsSheet(page)).toBeHidden();
+}
+
+export async function signOut(page: Page, confirm: "proceed" | "none" = "none") {
+  const sheet = await openSettings(page);
+  await sheet.getByRole("button", { name: "登出", exact: true }).click();
+  if (confirm === "proceed")
+    await page
+      .getByRole("dialog", { name: "登出？" })
+      .getByRole("button", { name: "不匯出，直接登出" })
+      .click();
+  await expect(page.getByLabel("驗證碼")).toBeVisible();
+}
+
+/** Types a code; six digits send it on their own. */
+export async function signIn(page: Page, code = "123456") {
+  await page.getByLabel("驗證碼").fill(code);
+  await page.getByRole("button", { name: "開始使用" }).click();
+}
+
+export const steps = (page: Page) => page.getByRole("navigation", { name: "步驟" });
+
+export async function goToStep(page: Page, name: "取圖" | "校對" | "朗讀") {
+  await steps(page).getByRole("link", { name, exact: true }).click();
+}
+
+export const toast = (page: Page) => page.locator(".toast");

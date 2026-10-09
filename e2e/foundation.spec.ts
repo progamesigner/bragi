@@ -9,7 +9,7 @@ test("settings sheet is a named modal that keeps and returns focus", async ({ pa
   await settingsButton(page).click();
   const sheet = page.getByRole("dialog", { name: "設定" });
   await expect(sheet).toBeVisible();
-  await expect(sheet.getByLabel("外觀")).toBeFocused();
+  await expect(sheet.getByRole("radio", { name: "標準", exact: true })).toBeFocused();
   await expect(sheet.getByRole("button", { name: "關閉設定" })).toBeVisible();
 
   // The page behind is inert: Tab moves through the sheet (and the browser's own UI), never the page.
@@ -34,7 +34,7 @@ test("settings sheet is a named modal that keeps and returns focus", async ({ pa
 
   // When the opener is gone, focus lands on the page heading instead of the document body.
   await settingsButton(page).click();
-  await page.evaluate(() => document.querySelector(".app-bar button")?.remove());
+  await page.evaluate(() => document.querySelector(".top-nav .settings-button")?.remove());
   await page.keyboard.press("Escape");
   await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
 });
@@ -49,7 +49,7 @@ test("theme follows the system until a choice is saved", async ({ page }) => {
   await expect(html).toHaveAttribute("data-theme", "light");
 
   await settingsButton(page).click();
-  await page.getByLabel("外觀").selectOption("dark");
+  await page.getByRole("group", { name: "外觀" }).getByRole("radio", { name: "深色" }).check();
   await expect(html).toHaveAttribute("data-theme", "dark");
   const background = () =>
     page.evaluate(() => getComputedStyle(document.body).getPropertyValue("--bg").trim());
@@ -62,10 +62,12 @@ test("theme follows the system until a choice is saved", async ({ page }) => {
   await page.reload();
   await expect(html).toHaveAttribute("data-theme", "dark");
   await settingsButton(page).click();
-  await expect(page.getByLabel("外觀")).toHaveValue("dark");
-  await page.getByLabel("外觀").selectOption("light");
+  await expect(
+    page.getByRole("group", { name: "外觀" }).getByRole("radio", { name: "深色" }),
+  ).toBeChecked();
+  await page.getByRole("group", { name: "外觀" }).getByRole("radio", { name: "淺色" }).check();
   expect(await background()).toBe("#f6f1e7");
-  await page.getByLabel("外觀").selectOption("system");
+  await page.getByRole("group", { name: "外觀" }).getByRole("radio", { name: "跟隨系統" }).check();
   await expect(html).toHaveAttribute("data-theme", "light");
 });
 
@@ -96,7 +98,7 @@ test("preferences still work when storage is blocked", async ({ page }) => {
   await mockSignedInApi(page);
   await page.goto("/");
   await settingsButton(page).click();
-  await page.getByLabel("外觀").selectOption("dark");
+  await page.getByRole("group", { name: "外觀" }).getByRole("radio", { name: "深色" }).check();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
 
