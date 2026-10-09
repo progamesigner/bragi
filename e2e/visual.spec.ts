@@ -208,8 +208,11 @@ for (const colorScheme of ["light", "dark"] as const) {
         await page.getByLabel("口白文字", { exact: true }).first().fill("保留這段舊稿。");
         await goToStep(page, "取圖");
         await selectImage(page);
+        // The recognition toast is not part of these sheets. In full-page shots the static toast
+        // takes up space, and whether its six-second timer has run out depends on the run's speed
+        // and on whether the pointer happens to rest over it, so take it out of the layout.
         await page.locator(".toast").evaluate((element) => {
-          element.style.visibility = "hidden";
+          element.style.display = "none";
         });
         if (action === "import")
           await page.locator("#draft-import").setInputFiles(draftFile("匯入的新稿。"));
