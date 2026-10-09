@@ -1,4 +1,6 @@
-/* A full-page capture would freeze the sticky status line over whatever is mid-page. */
+/* Toasts dismiss themselves after six seconds unless a pointer rests on them, so whether one is on
+   screen depends on run speed and where the last click landed. Keep the region out of every
+   picture; the toast-* baselines cover its look on their own. */
 html body .toast {
-  position: static;
+  display: none;
 }

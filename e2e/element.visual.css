@@ -1,0 +1,6 @@
+/* Element captures scroll the page, so the sticky top bar and the fixed review footer would land on
+   top of whatever is mid-page. */
+.top-nav,
+.review-footer {
+  visibility: hidden;
+}

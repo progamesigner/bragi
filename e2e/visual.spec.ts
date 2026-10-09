@@ -12,25 +12,32 @@ import {
 
 // Baselines for the routed screens and shared settings. Animations are off, fonts are the
 // system Noto CJK faces and every API response is mocked, so only real visual changes show up.
+const pageStyle = fileURLToPath(new URL("./visual.css", import.meta.url));
+const elementStyle = fileURLToPath(new URL("./element.visual.css", import.meta.url));
+// BRAGI_VISUAL_DELAY=7000 waits out every self-dismissing timer (toasts last six seconds) before
+// each capture, to prove that no picture depends on how fast the run is.
+const captureDelay = Number(process.env.BRAGI_VISUAL_DELAY ?? 0);
+
 async function settle(page: Page) {
-  // A hidden toast still occupies its original screenshot slot. Hold its dismissal timer
-  // so a second export-confirmation picture cannot change height midway through capture.
-  // The standalone offline page has no toast.
-  if (await page.locator(".toast").count())
-    await page.locator(".toast").dispatchEvent("pointerenter");
+  // Park the pointer outside the page so no hover state depends on where the last click landed.
+  await page.mouse.move(-1, -1);
+  if (captureDelay) await page.waitForTimeout(captureDelay);
   await page.evaluate(() => document.fonts.ready);
+  await page.evaluate(() =>
+    Promise.all(Array.from(document.images, (image) => image.decode().catch(() => undefined))),
+  );
   // Keep the caret and focus rings out of the pictures.
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
 }
 
-async function snap(page: Page, name: string) {
+async function snap(page: Page, name: string, stylePath: string[] = [pageStyle]) {
   await settle(page);
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(page).toHaveScreenshot(`${name}.png`, {
     // Keep the fixed review action in its real viewport position.
-    fullPage: !name.startsWith("review"),
+    fullPage: !name.startsWith("review") && !name.startsWith("toast"),
     animations: "disabled",
-    stylePath: fileURLToPath(new URL("./visual.css", import.meta.url)),
+    stylePath,
   });
 }
 
@@ -38,8 +45,7 @@ async function snapReviewCard(page: Page, name: string) {
   await settle(page);
   await expect(page.locator(".review-segment").first()).toHaveScreenshot(`${name}.png`, {
     animations: "disabled",
-    // Capture all editing tools even when the card exceeds the phone's viewport.
-    stylePath: fileURLToPath(new URL("./review-card.visual.css", import.meta.url)),
+    stylePath: [pageStyle, elementStyle],
   });
 }
 
@@ -81,9 +87,6 @@ for (const colorScheme of ["light", "dark"] as const) {
       await mockSignedInApi(page);
       await page.goto("/");
       await recognize(page);
-      await page.locator(".toast").evaluate((element) => {
-        element.style.visibility = "hidden";
-      });
       await snap(page, `review-${colorScheme}`);
     });
 
@@ -93,9 +96,6 @@ for (const colorScheme of ["light", "dark"] as const) {
       await recognize(page);
       await page.getByRole("button", { name: /^進入朗讀/ }).click();
       await expect(page.getByRole("heading", { name: "第 1 段，共 2 段" })).toBeFocused();
-      await page.locator(".toast").evaluate((element) => {
-        element.style.visibility = "hidden";
-      });
       await snap(page, `playback-${colorScheme}`);
     });
   });
@@ -153,9 +153,6 @@ for (const colorScheme of ["light", "dark"] as const) {
         ),
       });
       await expect(page.getByRole("button", { name: "新增文字段落" })).toBeVisible();
-      await page.locator(".toast").evaluate((element) => {
-        element.style.visibility = "hidden";
-      });
       await snap(page, `empty-draft-${colorScheme}`);
     });
 
@@ -165,9 +162,6 @@ for (const colorScheme of ["light", "dark"] as const) {
       await recognize(page);
       await page.getByLabel("口白文字", { exact: true }).first().fill("");
       await expect(page.getByRole("button", { name: "第 1 段需處理 →" })).toBeVisible();
-      await page.locator(".toast").evaluate((element) => {
-        element.style.visibility = "hidden";
-      });
       await page.evaluate(() => window.scrollTo(0, 0));
       await snap(page, `review-issue-${colorScheme}`);
     });
@@ -201,9 +195,6 @@ for (const locale of ["ja", "de"] as const) {
       ),
     });
     await expect(page).toHaveURL(/\/review$/);
-    await page.locator(".toast").evaluate((element) => {
-      element.style.visibility = "hidden";
-    });
     await snap(page, `review-${locale}`);
   });
 }
@@ -219,12 +210,6 @@ for (const colorScheme of ["light", "dark"] as const) {
         await page.getByLabel("口白文字", { exact: true }).first().fill("保留這段舊稿。");
         await goToStep(page, "取圖");
         await selectImage(page);
-        // The recognition toast is not part of these sheets. In full-page shots the static toast
-        // takes up space, and whether its six-second timer has run out depends on the run's speed
-        // and on whether the pointer happens to rest over it, so take it out of the layout.
-        await page.locator(".toast").evaluate((element) => {
-          element.style.display = "none";
-        });
         if (action === "import")
           await page.locator("#draft-import").setInputFiles(draftFile("匯入的新稿。"));
         else await page.getByRole("button", { name: "辨識文字", exact: true }).click();
@@ -301,9 +286,6 @@ for (const colorScheme of ["light", "dark"] as const) {
             });
         }
         await expect(page.locator(".playback")).toHaveAttribute("data-phase", target);
-        await page.locator(".toast").evaluate((element) => {
-          element.style.visibility = "hidden";
-        });
         await snap(page, `reading-${target}-${colorScheme}`);
         if (target === "loading") release();
       });
@@ -335,9 +317,6 @@ for (const colorScheme of ["light", "dark"] as const) {
           await page.getByRole("button", { name: "匯出草稿" }).click();
           await download;
         }
-        await page.locator(".toast").evaluate((element) => {
-          element.style.visibility = "hidden";
-        });
         await snap(page, `finished-${variant}-${colorScheme}`);
       });
     }
@@ -351,9 +330,6 @@ for (const colorScheme of ["light", "dark"] as const) {
       await mockSignedInApi(page);
       await page.goto("/");
       await recognize(page);
-      await page.locator(".toast").evaluate((element) => {
-        element.style.visibility = "hidden";
-      });
       await snapReviewCard(page, `review-compact-${colorScheme}`);
       await page
         .locator(".review-segment")
@@ -383,9 +359,6 @@ for (const colorScheme of ["light", "dark"] as const) {
         ),
       });
       await expect(page).toHaveURL(/\/review$/);
-      await page.locator(".toast").evaluate((element) => {
-        element.style.visibility = "hidden";
-      });
       if ((page.viewportSize()?.width ?? 0) < 900)
         await page.getByRole("button", { name: "段落列表", exact: true }).click();
       await snap(page, `review-list-${colorScheme}`);
@@ -422,9 +395,6 @@ for (const colorScheme of ["light", "dark"] as const) {
       });
       await page.getByRole("button", { name: "辨識文字", exact: true }).click();
       await expect(page).toHaveURL(/\/review$/);
-      await page.locator(".toast").evaluate((element) => {
-        element.style.visibility = "hidden";
-      });
       if ((page.viewportSize()?.width ?? 0) < 900)
         await page.getByRole("button", { name: "查看圖片對照", exact: true }).click();
       await page.getByLabel("圖片放大").selectOption("1.5");
@@ -433,6 +403,32 @@ for (const colorScheme of ["light", "dark"] as const) {
         element.scrollLeft = 0;
       });
       await snap(page, `review-image-${colorScheme}`);
+    });
+  });
+}
+
+for (const colorScheme of ["light", "dark"] as const) {
+  test.describe(`${colorScheme} toast`, () => {
+    test.use({ colorScheme });
+    test("confirmation with undo", async ({ page }) => {
+      await page.clock.install({ time: new Date("2026-10-09T10:00:00+08:00") });
+      await mockSignedInApi(page);
+      await page.goto("/");
+      await recognize(page);
+      await page
+        .locator(".review-segment")
+        .first()
+        .getByRole("button", { name: "更多編輯" })
+        .click();
+      // With the clock paused the six-second dismissal cannot run, whatever the pointer does.
+      await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+      await page.getByRole("button", { name: "在下方新增" }).click();
+      // Let the frame that focuses the new paragraph run; the toast timer stays far away.
+      await page.clock.runFor(500);
+      await expect(page.locator(".toast")).toContainText("已新增空白段落");
+      await expect(page.locator(".toast").getByRole("button", { name: "復原" })).toBeVisible();
+      // The page style would remove the toast, so this one capture goes without it.
+      await snap(page, `toast-${colorScheme}`, []);
     });
   });
 }
