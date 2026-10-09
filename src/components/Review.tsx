@@ -1,5 +1,7 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
-import { draftFileName, serializeDraft } from "~/lib/draft";
+import type { ToastAction } from "~/lib/app-controller";
+import { serializeDraft } from "~/lib/draft";
+import { exportDraft as downloadDraft } from "~/lib/draft-export";
 import { MAX_DRAFT_SEGMENTS } from "~/lib/draft-limits";
 import { splitNarration, textBudget } from "~/lib/editing";
 import { t } from "~/lib/i18n";
@@ -25,7 +27,9 @@ type ReviewProps = {
   genreHint?: string;
   voice?: string;
   onStartPlayback: () => void;
+  /** Errors; successes go to `onToast`. */
   onStatus: StatusReporter;
+  onToast: (message: string, action?: ToastAction) => void;
 };
 
 export default function Review(props: ReviewProps) {
@@ -53,13 +57,10 @@ export default function Review(props: ReviewProps) {
       props.onStatus(error instanceof Error ? error.message : t("review.restoreFailed"), "error");
     }
   };
-  const canStartPlayback = () =>
-    workspace.segments.length > 0 &&
-    workspace.segments.every(
-      (segment) => textBudget(segment.text).valid && textBudget(speechText(segment)).valid,
-    );
+  const undoAction = (): ToastAction => ({ label: t("review.undo"), run: () => restore() });
 
-  onMount(() => heading.focus());
+  // Without scrolling, so returning to review can restore where it was.
+  onMount(() => heading.focus({ preventScroll: true }));
 
   function replaceSegments(segments: Segment[], group?: string) {
     try {
@@ -107,7 +108,7 @@ export default function Review(props: ReviewProps) {
     try {
       const parts = splitNarration(segment.text);
       if (parts.length < 2) {
-        props.onStatus(t("review.alreadyShort"));
+        props.onToast(t("review.alreadyShort"));
         return;
       }
       const changed = replaceSegments([
@@ -121,9 +122,9 @@ export default function Review(props: ReviewProps) {
         ...workspace.segments.slice(index + 1),
       ]);
       if (!changed) return;
-      props.onStatus(
+      props.onToast(
         `${t("review.autoSplitDone", { n: parts.length })}${spokenCorrectionNotice(segment)}`,
-        "success",
+        undoAction(),
       );
     } catch (error) {
       props.onStatus(error instanceof Error ? error.message : t("review.autoSplitFailed"), "error");
@@ -131,25 +132,8 @@ export default function Review(props: ReviewProps) {
   }
   function exportDraft() {
     try {
-      const blob = new Blob(
-        [
-          serializeDraft({
-            detectedLanguage: props.detectedLanguage,
-            genreHint: props.genreHint,
-            segments: workspace.segments,
-          }),
-        ],
-        { type: "application/json" },
-      );
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = draftFileName();
-      link.click();
-      // Give the browser time to start the download before releasing the file.
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      workspace.markSaved();
-      props.onStatus(t("draft.exported"), "success");
+      downloadDraft();
+      props.onToast(t("draft.exported"));
     } catch (error) {
       props.onStatus(error instanceof Error ? error.message : t("draft.exportFailed"), "error");
     }
@@ -161,9 +145,9 @@ export default function Review(props: ReviewProps) {
     const segment = workspace.segments[index];
     try {
       if (!replaceSegments(splitAtCursor(workspace.segments, index, editor.selectionStart))) return;
-      props.onStatus(
+      props.onToast(
         `${t("review.splitDone")}${segment ? spokenCorrectionNotice(segment) : ""}`,
-        "success",
+        undoAction(),
       );
     } catch (error) {
       props.onStatus(error instanceof Error ? error.message : t("review.splitFailed"), "error");
@@ -175,9 +159,9 @@ export default function Review(props: ReviewProps) {
     <section class="card review" aria-labelledby="review-heading">
       <div class="review-heading">
         <div>
-          <h2 ref={heading} id="review-heading" tabindex="-1">
+          <h1 ref={heading} id="review-heading" tabindex="-1">
             {t("review.heading")}
-          </h2>
+          </h1>
           <p>
             {t("review.summary", {
               language: props.detectedLanguage,
@@ -216,7 +200,7 @@ export default function Review(props: ReviewProps) {
           <Button variant="secondary" size="compact" onClick={exportDraft}>
             {t("review.export")}
           </Button>
-          <Button disabled={!canStartPlayback()} onClick={props.onStartPlayback}>
+          <Button disabled={!workspace.playable()} onClick={props.onStartPlayback}>
             {t("review.startPlayback")}
           </Button>
         </div>
@@ -387,7 +371,7 @@ export default function Review(props: ReviewProps) {
                       aria-describedby={!canAdd() ? "draft-limit-note" : undefined}
                       onClick={() => {
                         if (!replaceSegments(insertAfter(workspace.segments, index()))) return;
-                        props.onStatus(t("review.inserted"), "success");
+                        props.onToast(t("review.inserted"), undoAction());
                       }}
                     >
                       {t("review.insertBelow")}
@@ -398,7 +382,7 @@ export default function Review(props: ReviewProps) {
                         size="compact"
                         onClick={() => {
                           if (!replaceSegments(mergeWithNext(workspace.segments, index()))) return;
-                          props.onStatus(t("review.merged"), "success");
+                          props.onToast(t("review.merged"), undoAction());
                         }}
                       >
                         {t("review.mergeNext")}
@@ -408,8 +392,9 @@ export default function Review(props: ReviewProps) {
                       variant="danger"
                       size="compact"
                       onClick={() => {
-                        replaceSegments(removeSegment(workspace.segments, index()));
-                        props.onStatus(t("review.deleted"), "success");
+                        const number = index() + 1;
+                        if (!replaceSegments(removeSegment(workspace.segments, index()))) return;
+                        props.onToast(t("review.deletedNumber", { n: number }), undoAction());
                       }}
                       aria-label={t("review.deleteLabel", { n: index() + 1 })}
                     >
@@ -422,7 +407,6 @@ export default function Review(props: ReviewProps) {
                     toneHint={segment.suggestedToneHint}
                     genreHint={props.genreHint}
                     voice={props.voice}
-                    onStatus={props.onStatus}
                   />
                 </li>
               );

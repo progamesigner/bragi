@@ -1,51 +1,77 @@
-import { Show } from "solid-js";
-import type { ErrorDetails } from "~/lib/api";
-import { t } from "~/lib/i18n";
-import type { StatusTone } from "~/lib/status";
+import { createEffect, on, onCleanup, Show } from "solid-js";
+import type { ToastMessage } from "~/lib/app-controller";
+import Button from "./Button";
 
 type ToastProps = {
-  tone: StatusTone;
-  message: string;
-  details?: ErrorDetails;
+  toast?: ToastMessage;
+  onDismiss: () => void;
+  /** How long a toast stays; the timer waits while focus or the pointer is inside it. */
+  duration?: number;
 };
 
 /**
- * The single live region for progress and results. Errors use `alert` so they interrupt; everything
- * else is a polite `status`. Request IDs and codes sit behind a disclosure for support.
+ * Short confirmations, optionally with one action such as undo. The polite live region stays in
+ * the page; errors never come here (they are banners or sit next to their control).
  */
 export default function Toast(props: ToastProps) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let held = false;
+  let region!: HTMLDivElement;
+
+  function stop() {
+    clearTimeout(timer);
+    timer = undefined;
+  }
+  function start() {
+    stop();
+    if (!props.toast || held) return;
+    timer = setTimeout(() => props.onDismiss(), props.duration ?? 6000);
+  }
+  function hold() {
+    held = true;
+    stop();
+  }
+  function release(event?: FocusEvent) {
+    if (event && region.contains(event.relatedTarget as Node | null)) return;
+    if (region.contains(document.activeElement) || region.matches(":hover")) return;
+    held = false;
+    start();
+  }
+
+  createEffect(on(() => props.toast?.id, start));
+  onCleanup(stop);
+
   return (
     <div
+      ref={region}
       class="toast"
-      classList={{ success: props.tone === "success", error: props.tone === "error" }}
-      role={props.tone === "error" ? "alert" : "status"}
+      classList={{ "toast-empty": !props.toast }}
+      role="status"
+      onFocusIn={hold}
+      onFocusOut={release}
+      onPointerEnter={hold}
+      onPointerLeave={() => release()}
     >
-      <p>{props.message}</p>
-      <Show when={props.details}>
-        {(details) => (
-          <details class="toast-details">
-            <summary>{t("apiError.details")}</summary>
-            <dl>
-              <Show when={details().code}>
-                <dt>{t("apiError.code")}</dt>
-                <dd>{details().code}</dd>
-              </Show>
-              <Show when={details().status}>
-                <dt>{t("apiError.status")}</dt>
-                <dd>{details().status}</dd>
-              </Show>
-              <Show when={details().requestId}>
-                <dt>{t("apiError.requestId")}</dt>
-                <dd>
-                  <code>{details().requestId}</code>
-                </dd>
-              </Show>
-              <Show when={details().retryAfter !== undefined}>
-                <dt>{t("apiError.retryAfterLabel")}</dt>
-                <dd>{t("common.seconds", { s: details().retryAfter ?? 0 })}</dd>
-              </Show>
-            </dl>
-          </details>
+      <Show when={props.toast}>
+        {(toast) => (
+          <>
+            <p>{toast().message}</p>
+            <Show when={toast().action}>
+              {(action) => (
+                <Button
+                  variant="ghost"
+                  size="compact"
+                  class="toast-action"
+                  onClick={() => {
+                    action().run();
+                    props.onDismiss();
+                  }}
+                >
+                  {action().label}
+                </Button>
+              )}
+            </Show>
+          </>
         )}
       </Show>
     </div>

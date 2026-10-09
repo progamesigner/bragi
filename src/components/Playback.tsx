@@ -1,7 +1,6 @@
 import {
   createEffect,
   createSignal,
-  For,
   Match,
   on,
   onCleanup,
@@ -10,27 +9,20 @@ import {
   Switch,
   untrack,
 } from "solid-js";
+import { type AudioClaim, claimAudio } from "~/lib/audio-focus";
 import { t } from "~/lib/i18n";
 import { type PlaybackEvent, type PlaybackState, transitionPlayback } from "~/lib/playback";
 import type { SpeechRequest } from "~/lib/speech";
 import { requestCachedSpeech, speechCache } from "~/lib/speech-cache";
 import { openSpeechStream, PcmStreamPlayer } from "~/lib/speech-stream";
 import { type Segment, speechText } from "~/lib/state";
-import { reportError, type StatusReporter } from "~/lib/status";
-import {
-  keepAwake,
-  PLAYBACK_RATES,
-  type PlaybackRate,
-  playbackRate,
-  playbackSettings,
-  setKeepAwake,
-  setPlaybackRate,
-} from "~/lib/store/preferences";
+import { reportError, type StatusMessage, type StatusReporter } from "~/lib/status";
+import { keepAwake, playbackRate, playbackSettings } from "~/lib/store/preferences";
 import { workspace } from "~/lib/store/workspace";
 import { ScreenWakeLock } from "~/lib/wake-lock";
 import { pcmDurationMs, pcmToWav } from "~/lib/wav";
 import Button from "./ui/Button";
-import Select from "./ui/Select";
+import InlineStatus from "./ui/InlineStatus";
 
 type PlaybackProps = {
   requestRevision?: object;
@@ -38,7 +30,7 @@ type PlaybackProps = {
   genreHint?: string;
   voice?: string;
   onBack: () => void;
-  onStatus: StatusReporter;
+  onSettings: () => void;
 };
 
 export default function Playback(props: PlaybackProps) {
@@ -52,8 +44,11 @@ export default function Playback(props: PlaybackProps) {
   const [duration, setDuration] = createSignal<number>();
   const [streaming, setStreaming] = createSignal(false);
   const wakeLock = new ScreenWakeLock();
-  // Whether the lock is actually held; the saved preference survives a failed request.
-  const [awake, setAwake] = createSignal(false);
+  // Progress and errors stay next to the controls; nothing here goes to the app-wide toast.
+  const [status, setStatus] = createSignal<StatusMessage>();
+  const report: StatusReporter = (message, tone = "info", details) =>
+    setStatus({ message, tone, details });
+  let claim: AudioClaim | undefined;
   const [prefetch, setPrefetch] = createSignal<{
     index: number;
     phase: "loading" | "ready";
@@ -135,7 +130,7 @@ export default function Playback(props: PlaybackProps) {
     request = new AbortController();
     const controller = request;
     clearAudio();
-    props.onStatus(t("playback.preparingNumber", { n: nextState.index + 1 }));
+    report(t("playback.preparingNumber", { n: nextState.index + 1 }));
     try {
       const input = speechInput(nextState.index);
       if (!input) throw new Error(t("playback.missingSegment"));
@@ -144,11 +139,11 @@ export default function Playback(props: PlaybackProps) {
       setAudioUrl(URL.createObjectURL(result.blob));
       setDuration(result.durationMs);
       dispatch({ type: "audio-ready" });
-      props.onStatus(t("playback.readyNumber", { n: nextState.index + 1 }), "success");
+      report(t("playback.readyNumber", { n: nextState.index + 1 }), "success");
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       if (controller.signal.aborted) return;
-      const message = reportError(props.onStatus, error, t("playback.failed"));
+      const message = reportError(report, error, t("playback.failed"));
       dispatch({ type: "fail", message });
     }
   }
@@ -193,7 +188,7 @@ export default function Playback(props: PlaybackProps) {
       setAudioUrl(URL.createObjectURL(cached.blob));
       setDuration(cached.durationMs);
       dispatch({ type: "audio-ready" });
-      props.onStatus(t("playback.readyNumber", { n: nextState.index + 1 }), "success");
+      report(t("playback.readyNumber", { n: nextState.index + 1 }), "success");
       return;
     }
     // Web Audio sources cannot keep their pitch when sped up, so other speeds use complete WAV
@@ -213,7 +208,7 @@ export default function Playback(props: PlaybackProps) {
     streamContext = context;
     streamPlayer = player;
     setStreaming(true);
-    props.onStatus(t("playback.streamingNumber", { n: nextState.index + 1 }));
+    report(t("playback.streamingNumber", { n: nextState.index + 1 }));
 
     try {
       await player.resume();
@@ -234,7 +229,7 @@ export default function Playback(props: PlaybackProps) {
           started = true;
           dispatch({ type: "audio-ready" });
           dispatch({ type: "play" });
-          props.onStatus(t("playback.playingNumber", { n: nextState.index + 1 }));
+          report(t("playback.playingNumber", { n: nextState.index + 1 }));
           void prefetchNext();
         }
       }
@@ -258,7 +253,7 @@ export default function Playback(props: PlaybackProps) {
       setAudioUrl(URL.createObjectURL(audio.blob));
       setDuration(audio.durationMs);
       dispatch({ type: "ended" });
-      props.onStatus(
+      report(
         t(state().phase === "complete" ? "playback.complete" : "playback.segmentDone"),
         "success",
       );
@@ -269,7 +264,7 @@ export default function Playback(props: PlaybackProps) {
       streamPlayer = undefined;
       streamContext = undefined;
       setStreaming(false);
-      const message = reportError(props.onStatus, error, t("playback.streamFailed"));
+      const message = reportError(report, error, t("playback.streamFailed"));
       dispatch({ type: "fail", message });
     }
   }
@@ -281,10 +276,10 @@ export default function Playback(props: PlaybackProps) {
         await streamPlayer?.resume();
         if (disposed || request !== currentRequest || currentRequest?.signal.aborted) return;
         dispatch({ type: "play" });
-        props.onStatus(t("playback.playingNumber", { n: state().index + 1 }));
+        report(t("playback.playingNumber", { n: state().index + 1 }));
       } catch {
         if (disposed || request !== currentRequest || currentRequest?.signal.aborted) return;
-        props.onStatus(t("playback.blocked"), "error");
+        report(t("playback.blocked"), "error");
       }
       return;
     }
@@ -295,7 +290,7 @@ export default function Playback(props: PlaybackProps) {
       await audio.play();
     } catch {
       if (disposed || request !== currentRequest || currentRequest?.signal.aborted) return;
-      props.onStatus(t("playback.blocked"), "error");
+      report(t("playback.blocked"), "error");
     }
   }
 
@@ -305,7 +300,7 @@ export default function Playback(props: PlaybackProps) {
       return;
     if (state().phase !== "playing") return;
     dispatch({ type: "pause" });
-    props.onStatus(t("playback.interrupted"), "error");
+    report(t("playback.interrupted"), "error");
   }
 
   async function pause() {
@@ -335,34 +330,38 @@ export default function Playback(props: PlaybackProps) {
     request?.abort();
     prefetchRequest?.abort();
     clearAudio();
+    claim?.release();
   });
-  async function changeKeepAwake(enabled: boolean) {
-    setKeepAwake(enabled);
-    setAwake(enabled);
-    try {
-      if (enabled) await wakeLock.enable();
-      else await wakeLock.disable();
-    } catch {
-      if (disposed || awake() !== enabled) return;
-      setAwake(false);
-      props.onStatus(t("playback.keepAwakeFailed"), "error");
-    }
-  }
+
+  // Only one source sounds at a time: starting narration pauses a voice sample, and a sample
+  // (or anything else that claims audio) pauses narration.
+  createEffect(
+    on(
+      () => state().phase === "playing",
+      (playing) => {
+        claim?.release();
+        claim = playing ? claimAudio(() => void pause()) : undefined;
+      },
+    ),
+  );
+
+  // The preference can change from settings on any screen; only this screen holds the lock.
+  createEffect(
+    on(keepAwake, (enabled) => {
+      if (!wakeLock.supported) return;
+      const change = enabled ? wakeLock.enable() : wakeLock.disable();
+      change.catch(() => {
+        if (!disposed && enabled) report(t("playback.keepAwakeFailed"), "error");
+      });
+    }),
+  );
 
   onMount(() => {
     heading.focus();
-    if (wakeLock.supported && keepAwake()) {
-      setAwake(true);
-      wakeLock.enable().catch(() => {
-        if (!disposed) setAwake(false);
-      });
-    }
     const visibilityChanged = () => {
       if (document.visibilityState !== "visible") return;
       if (streamContext) handleInterruption(streamContext);
-      wakeLock.reacquire().catch(() => {
-        if (!disposed) setAwake(false);
-      });
+      wakeLock.reacquire().catch(() => undefined);
     };
     document.addEventListener("visibilitychange", visibilityChanged);
     onCleanup(() => {
@@ -376,9 +375,9 @@ export default function Playback(props: PlaybackProps) {
       <div class="playback-heading">
         <div>
           <p class="eyebrow">{t("playback.eyebrow")}</p>
-          <h2 ref={heading} id="playback-heading" tabindex="-1">
+          <h1 ref={heading} id="playback-heading" tabindex="-1">
             {t("playback.heading", { n: state().index + 1, total: props.segments.length })}
-          </h2>
+          </h1>
         </div>
         <Button variant="secondary" size="compact" onClick={leavePlayback}>
           {t("playback.back")}
@@ -394,30 +393,12 @@ export default function Playback(props: PlaybackProps) {
           <span>{t("playback.tone", { tone: segment()?.suggestedToneHint ?? "" })}</span>
         </Show>
       </article>
-      <label for="playback-rate">{t("playback.rate")}</label>
-      <Select
-        id="playback-rate"
-        value={playbackRate()}
-        disabled={streaming() || state().phase === "playing" || state().phase === "loading"}
-        onChange={(event) => setPlaybackRate(Number(event.currentTarget.value) as PlaybackRate)}
-      >
-        <For each={PLAYBACK_RATES}>
-          {(value) => <option value={value}>{t("playback.rateOption", { n: value })}</option>}
-        </For>
-      </Select>
-      <Show when={playbackRate() !== 1}>
-        <p class="rate-note">{t("playback.rateNote")}</p>
-      </Show>
-      <Show when={wakeLock.supported}>
-        <label class="checkbox">
-          <input
-            type="checkbox"
-            checked={awake()}
-            onChange={(event) => void changeKeepAwake(event.currentTarget.checked)}
-          />
-          {t("playback.keepAwake")}
-        </label>
-      </Show>
+      <div class="playback-rate">
+        <p>{t("playback.rateCurrent", { n: playbackRate() })}</p>
+        <Button variant="ghost" size="compact" onClick={props.onSettings}>
+          {t("playback.rateChange")}
+        </Button>
+      </div>
       <nav class="playback-nav" aria-label={t("playback.segmentNav")}>
         <Button
           variant="secondary"
@@ -460,7 +441,7 @@ export default function Playback(props: PlaybackProps) {
               }}
               onEnded={() => {
                 dispatch({ type: "ended" });
-                props.onStatus(
+                report(
                   t(state().phase === "complete" ? "playback.complete" : "playback.segmentDone"),
                   "success",
                 );
@@ -477,6 +458,7 @@ export default function Playback(props: PlaybackProps) {
         )}
       </Show>
 
+      <InlineStatus status={status()} class="playback-status" />
       <div class="playback-actions">
         <Switch>
           <Match when={state().phase === "idle"}>
@@ -517,7 +499,6 @@ export default function Playback(props: PlaybackProps) {
             </Button>
           </Match>
           <Match when={state().phase === "error"}>
-            <p role="alert">{state().error}</p>
             <Button onClick={() => streamAndPlay("retry")}>{t("playback.retry")}</Button>
           </Match>
           <Match when={state().phase === "complete"}>

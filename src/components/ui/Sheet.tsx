@@ -11,6 +11,11 @@ type SheetProps = {
   initialFocus?: () => HTMLElement | undefined;
   /** Where focus goes on close when the opener is gone or disabled. */
   fallbackFocus?: () => HTMLElement | undefined;
+  /**
+   * `bottom` (default) is a drawer on phones and a centred dialog on wider screens; `side` stays a
+   * drawer on phones and becomes a panel along the right edge on landscape tablets.
+   */
+  placement?: "bottom" | "side";
   children: JSX.Element;
 };
 
@@ -37,7 +42,7 @@ function focusPageHeading() {
 }
 
 /**
- * A modal bottom sheet built on the native `<dialog>`: the browser keeps focus inside, makes the
+ * A modal sheet built on the native `<dialog>`: the browser keeps focus inside, makes the
  * page inert and closes it on Escape. Focus returns to whatever opened it.
  */
 export default function Sheet(props: SheetProps) {
@@ -79,7 +84,7 @@ export default function Sheet(props: SheetProps) {
     // biome-ignore lint/a11y/useKeyWithClickEvents: the keyboard equivalent of a backdrop click is Escape, which the native dialog handles.
     <dialog
       ref={dialog}
-      class="sheet"
+      class={`sheet${props.placement === "side" ? " sheet-side" : ""}`}
       aria-labelledby={titleId}
       onClose={closed}
       onClick={(event) => {

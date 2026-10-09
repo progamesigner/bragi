@@ -7,6 +7,8 @@ import Button, { buttonClass } from "./ui/Button";
 
 type CaptureProps = {
   disabled: boolean;
+  /** A candidate prepared earlier, shown again when the person comes back to this screen. */
+  initial?: PreparedImage;
   onChange: (image: PreparedImage) => void;
   onSelect: () => Operation;
   onCancel: () => void;
@@ -14,10 +16,12 @@ type CaptureProps = {
 };
 
 export default function Capture(props: CaptureProps) {
-  const [image, setImage] = createSignal<PreparedImage>();
-  const [sourceFile, setSourceFile] = createSignal<File>();
+  const [image, setImage] = createSignal<PreparedImage | undefined>(props.initial);
+  const [sourceFile, setSourceFile] = createSignal<File | undefined>(props.initial?.file);
   const [preparationFailed, setPreparationFailed] = createSignal(false);
-  const [previewUrl, setPreviewUrl] = createSignal<string>();
+  const [previewUrl, setPreviewUrl] = createSignal<string | undefined>(
+    props.initial ? URL.createObjectURL(props.initial.file) : undefined,
+  );
   const [previewFailed, setPreviewFailed] = createSignal(false);
   const [preparing, setPreparing] = createSignal(false);
   const operations = new WorkspaceRevision();

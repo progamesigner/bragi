@@ -15,3 +15,28 @@ export function SettingsIcon() {
     </svg>
   );
 }
+
+export function BackIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" class="icon">
+      <path d="m15 6-6 6 6 6" />
+    </svg>
+  );
+}
+
+export function StepArrowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" class="icon">
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  );
+}
+
+export function GlobeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" class="icon">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+    </svg>
+  );
+}

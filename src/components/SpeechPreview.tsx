@@ -1,9 +1,11 @@
 import { createEffect, createSignal, on, onCleanup, Show, untrack } from "solid-js";
+import { claimAudio } from "~/lib/audio-focus";
 import { textBudget } from "~/lib/editing";
 import { t } from "~/lib/i18n";
 import { requestCachedSpeech } from "~/lib/speech-cache";
-import { reportError, type StatusReporter } from "~/lib/status";
+import { reportError, type StatusMessage, type StatusReporter } from "~/lib/status";
 import Button from "./ui/Button";
+import InlineStatus from "./ui/InlineStatus";
 
 type SpeechPreviewProps = {
   requestRevision?: object;
@@ -11,13 +13,15 @@ type SpeechPreviewProps = {
   toneHint: string;
   genreHint?: string;
   voice?: string;
-  onStatus: StatusReporter;
 };
 
 export default function SpeechPreview(props: SpeechPreviewProps) {
   const [busy, setBusy] = createSignal(false);
   const [audioUrl, setAudioUrl] = createSignal<string>();
   const [duration, setDuration] = createSignal<number>();
+  const [status, setStatus] = createSignal<StatusMessage>();
+  const report: StatusReporter = (message, tone = "info", details) =>
+    setStatus({ message, tone, details });
   let request: AbortController | undefined;
   let audioElement: HTMLAudioElement | undefined;
 
@@ -41,6 +45,7 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
         request?.abort();
         request = undefined;
         setBusy(false);
+        setStatus(undefined);
         clearAudio();
       },
       { defer: true },
@@ -56,7 +61,7 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
 
   async function generate() {
     if (!textBudget(props.text).valid) {
-      props.onStatus(t("preview.invalid"), "error");
+      report(t("preview.invalid"), "error");
       return;
     }
     clearAudio();
@@ -64,7 +69,7 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
     const controller = new AbortController();
     request = controller;
     setBusy(true);
-    props.onStatus(t("preview.generating"));
+    report(t("preview.generating"));
     try {
       const audio = await requestCachedSpeech(
         {
@@ -78,10 +83,10 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
       controller.signal.throwIfAborted();
       setAudioUrl(URL.createObjectURL(audio.blob));
       setDuration(audio.durationMs);
-      props.onStatus(t("preview.ready"), "success");
+      report(t("preview.ready"), "success");
     } catch (error) {
       if (request !== controller || controller.signal.aborted) return;
-      reportError(props.onStatus, error, t("preview.failed"));
+      reportError(report, error, t("preview.failed"));
     } finally {
       if (request === controller && !controller.signal.aborted) setBusy(false);
     }
@@ -107,6 +112,10 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
               preload="metadata"
               src={url()}
               aria-label={t("preview.audio")}
+              onPlay={() => {
+                const claim = claimAudio(() => audioElement?.pause());
+                audioElement?.addEventListener("pause", () => claim.release(), { once: true });
+              }}
             >
               <track kind="captions" src={captionsUrl()} label={t("audio.captions")} default />
             </audio>
@@ -118,6 +127,7 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
           </div>
         )}
       </Show>
+      <InlineStatus status={status()} />
     </div>
   );
 }

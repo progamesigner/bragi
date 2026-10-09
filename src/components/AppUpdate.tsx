@@ -1,9 +1,16 @@
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
+import { useApp } from "~/lib/app-controller";
 import { t } from "~/lib/i18n";
 import Banner from "./ui/Banner";
 import Button from "./ui/Button";
 
+/**
+ * Registers the service worker and offers a waiting update as a banner. Applying it reloads the
+ * page, so it goes through the same "export first" confirmation as clearing when unexported text
+ * would be lost.
+ */
 export default function AppUpdate() {
+  const app = useApp();
   const [waiting, setWaiting] = createSignal<ServiceWorker>();
   const [failed, setFailed] = createSignal(false);
   const [otherTabs, setOtherTabs] = createSignal(false);
@@ -22,8 +29,13 @@ export default function AppUpdate() {
       }
     };
     navigator.serviceWorker.addEventListener("message", message);
+    app.setUpdateActivator(() => {
+      reload = true;
+      waiting()?.postMessage("ACTIVATE_UPDATE");
+    });
     onCleanup(() => {
       disposed = true;
+      app.setUpdateActivator(undefined);
       navigator.serviceWorker.removeEventListener("controllerchange", changed);
       navigator.serviceWorker.removeEventListener("message", message);
     });
@@ -37,20 +49,13 @@ export default function AppUpdate() {
         registration.addEventListener("updatefound", () =>
           registration.installing?.addEventListener("statechange", check),
         );
-        const activate = () => {
-          if (!window.confirm(t("update.confirm"))) return;
-          reload = true;
-          waiting()?.postMessage("ACTIVATE_UPDATE");
-        };
-        setActivate(() => activate);
       })
       .catch(() => {
         if (!disposed) setFailed(true);
       });
   });
-  const [activate, setActivate] = createSignal<() => void>(() => {});
   return (
-    <div class="app-notices">
+    <>
       <Show when={otherTabs()}>
         <Banner role="status" tone="warning">
           <p>{t("update.closeOtherTabs")}</p>
@@ -59,7 +64,7 @@ export default function AppUpdate() {
       <Show when={waiting()}>
         <Banner role="status">
           <p>{t("update.available")}</p>
-          <Button size="compact" onClick={() => activate()()}>
+          <Button size="compact" onClick={() => app.requestLoss("update")}>
             {t("update.apply")}
           </Button>
         </Banner>
@@ -69,6 +74,6 @@ export default function AppUpdate() {
           <p>{t("update.offlineUnavailable")}</p>
         </Banner>
       </Show>
-    </div>
+    </>
   );
 }
