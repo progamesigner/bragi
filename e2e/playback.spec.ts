@@ -4,6 +4,7 @@ import {
   closeSettings,
   goToStep,
   mockSignedInApi,
+  moreEditing,
   openSettings,
   recognize,
   segments,
@@ -472,10 +473,8 @@ test("identical preview content has one active control and one alert", async ({ 
     .getByLabel("口白文字", { exact: true })
     .nth(1)
     .fill(segments[0]?.text ?? "");
-  await page
-    .getByLabel("朗讀語氣", { exact: true })
-    .nth(1)
-    .fill(segments[0]?.suggestedToneHint ?? "");
+  await moreEditing(page, 1);
+  await page.getByLabel("朗讀語氣", { exact: true }).fill(segments[0]?.suggestedToneHint ?? "");
   await page.route("**/api/tts", (route) =>
     route.fulfill({ status: 503, json: { error: "Unavailable" } }),
   );

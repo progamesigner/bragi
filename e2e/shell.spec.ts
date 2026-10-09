@@ -3,6 +3,7 @@ import {
   closeSettings,
   goToStep,
   mockSignedInApi,
+  moreEditing,
   openSettings,
   recognize,
   selectImage,
@@ -42,7 +43,8 @@ test("route history keeps edits, reading position and the review scroll position
   await recognize(page);
   await expect(page.locator(".top-nav .wordmark")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "上一頁" })).toHaveAttribute("href", "/");
-  await page.getByLabel("朗讀語氣").first().fill("新語氣");
+  await moreEditing(page);
+  await page.getByLabel("朗讀語氣").fill("新語氣");
   await page.getByLabel("口白文字", { exact: true }).last().scrollIntoViewIfNeeded();
   const scroll = await page.evaluate(() => window.scrollY);
   expect(scroll).toBeGreaterThan(0);
@@ -51,13 +53,15 @@ test("route history keeps edits, reading position and the review scroll position
   await page.goBack();
   await expect(page).toHaveURL(/\/review$/);
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(scroll);
-  await expect(page.getByLabel("朗讀語氣").first()).toHaveValue("新語氣");
+  await moreEditing(page);
+  await expect(page.getByLabel("朗讀語氣")).toHaveValue("新語氣");
   await page.goForward();
   await expect(page.getByRole("heading", { name: "第 2 段，共 2 段" })).toBeVisible();
   await page.getByRole("link", { name: "上一頁" }).click();
   await expect(page).toHaveURL(/\/review$/);
   await page.locator("#main").getByRole("button", { name: "復原", exact: true }).click();
-  await expect(page.getByLabel("朗讀語氣").first()).toHaveValue("低沉、緩慢");
+  await moreEditing(page);
+  await expect(page.getByLabel("朗讀語氣")).toHaveValue("低沉、緩慢");
 });
 
 test("OTP paste submits once, blocks a rejected code and keeps the surrounding layout still", async ({
@@ -339,6 +343,7 @@ test("a focused toast action stays available and expires when another edit chang
   await mockSignedInApi(page);
   await page.goto("/");
   await recognize(page);
+  await moreEditing(page, 1);
   await page
     .getByRole("button", { name: /刪除段落/ })
     .last()
@@ -350,6 +355,7 @@ test("a focused toast action stays available and expires when another edit chang
   await expect(action).toBeFocused();
   await action.click();
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(2);
+  await moreEditing(page, 1);
   await page
     .getByRole("button", { name: /刪除段落/ })
     .last()

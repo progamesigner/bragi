@@ -158,3 +158,25 @@ export async function observeAudio(page: Page) {
     };
   });
 }
+
+/** Open only the requested paragraph's progressive editing tools. */
+export async function moreEditing(page: Page, index = 0) {
+  const card = page.locator(".review-segment").nth(index);
+  const opener = card.getByRole("button", { name: "更多編輯", exact: true });
+  if (await opener.count()) await opener.click();
+  await expect(card.locator(".segment-more")).toBeVisible();
+  return card;
+}
+
+export async function closeComparison(page: Page) {
+  const sheet = page.getByRole("dialog", { name: "查看圖片對照", exact: true });
+  if (await sheet.isVisible()) await sheet.getByRole("button", { name: "關閉原圖對照" }).click();
+}
+
+export async function openComparison(page: Page) {
+  const opener = page.getByRole("button", { name: "查看圖片對照", exact: true });
+  if (await opener.isVisible()) await opener.click();
+  else if ((await page.locator(".image-comparison").getAttribute("open")) === null)
+    await page.locator(".image-comparison summary").click();
+  await expect(page.getByAltText("校對用圖片")).toBeVisible();
+}

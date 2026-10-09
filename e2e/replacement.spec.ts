@@ -1,6 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
-import { draftFile, goToStep, mockSignedInApi, recognize, segments, selectImage } from "./fixtures";
+import {
+  draftFile,
+  goToStep,
+  mockSignedInApi,
+  openComparison,
+  recognize,
+  segments,
+  selectImage,
+} from "./fixtures";
 
 const title = (action: "import" | "replace") =>
   action === "import" ? "匯入草稿？" : "取代目前稿件？";
@@ -52,7 +60,7 @@ for (const action of ["import", "replace"] as const) {
       page.locator("#main").getByRole("button", { name: "復原", exact: true }),
     ).toBeDisabled();
     if (action === "replace") {
-      await page.getByText("查看圖片對照").click();
+      await openComparison(page);
       await expect(page.getByAltText("校對用圖片")).toBeVisible();
     } else await expect(page.locator(".review-no-image")).toBeVisible();
   });

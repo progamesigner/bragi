@@ -6,7 +6,15 @@ import ja from "../src/lib/i18n/messages/ja";
 import ko from "../src/lib/i18n/messages/ko";
 import zhHans from "../src/lib/i18n/messages/zh-Hans";
 import zhHant from "../src/lib/i18n/messages/zh-Hant";
-import { goToStep, image, mockSignedInApi, recognize, segments, selectImage } from "./fixtures";
+import {
+  goToStep,
+  image,
+  mockSignedInApi,
+  moreEditing,
+  recognize,
+  segments,
+  selectImage,
+} from "./fixtures";
 
 async function importDraft(page: Page, content = segments) {
   await page.locator("#draft-import").setInputFiles({
@@ -216,7 +224,8 @@ test("bottom action focuses the first invalid stable segment, including spoken t
   const footerBox = await bounds(page.locator(".review-footer"));
   expect(editorBox.y + editorBox.height).toBeLessThanOrEqual(footerBox.y);
   await second.fill("新的段落。");
-  await page.getByRole("button", { name: "另設朗讀文字" }).nth(1).click();
+  await moreEditing(page, 1);
+  await page.getByRole("button", { name: "另設朗讀文字" }).click();
   const spoken = page.getByLabel("朗讀文字（只影響語音）");
   await spoken.fill("");
   await page.getByRole("button", { name: "第 2 段需處理 →" }).click();
@@ -266,13 +275,14 @@ test("empty imports and deleting the final segment return to capture with a text
   await page.getByRole("button", { name: "新增文字段落" }).click();
   await expect(page).toHaveURL(/\/review$/);
   await expect(page.getByRole("button", { name: "第 1 段需處理 →" })).toBeEnabled();
+  await moreEditing(page);
   await page.getByRole("button", { name: "刪除段落 1" }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("button", { name: "新增文字段落" })).toBeVisible();
   await expect(page.getByRole("link", { name: "校對", exact: true })).toHaveCount(0);
 });
 
-test("tablet capture, review and reading use columns; text-only drafts use full width", async ({
+test("tablet capture, review and reading use columns; text-only drafts keep the paragraph sidebar", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1180, height: 820 });
@@ -304,7 +314,8 @@ test("tablet capture, review and reading use columns; text-only drafts use full 
   await expect(page.locator(".image-comparison")).toHaveCount(0);
   await expect(page.locator(".review-no-image")).toBeVisible();
   const full = await bounds(page.locator(".review-segments"));
-  expect(full.width).toBeGreaterThan(900);
+  expect(full.width).toBeGreaterThan(600);
+  await expect(page.locator(".review-sidebar")).toBeVisible();
   await expect(page.getByRole("button", { name: /^進入朗讀/ })).toBeEnabled();
   expect(await overflow(page)).toBe(0);
 });
@@ -331,6 +342,11 @@ for (const [locale, dictionary] of Object.entries({
     await importDraft(page);
     await expect(page.locator("#review-heading")).toHaveText(dictionary["review.heading"]);
     await expect(page.locator("#segment-text-one")).toHaveValue(segments[0]?.text ?? "");
+    await page
+      .locator(".review-segment")
+      .first()
+      .getByRole("button", { name: dictionary["review.moreEditing"], exact: true })
+      .click();
     await expect(page.locator("#segment-tone-one")).toHaveValue(
       segments[0]?.suggestedToneHint ?? "",
     );

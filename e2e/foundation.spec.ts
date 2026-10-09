@@ -1,5 +1,12 @@
 import { expect, type Page, test } from "@playwright/test";
-import { mockSignedInApi, recognize, selectImage } from "./fixtures";
+import {
+  closeComparison,
+  mockSignedInApi,
+  moreEditing,
+  openComparison,
+  recognize,
+  selectImage,
+} from "./fixtures";
 
 const settingsButton = (page: Page) => page.getByRole("button", { name: "設定", exact: true });
 
@@ -175,8 +182,9 @@ for (const width of [320, 1280]) {
       );
     expect(await overflow()).toBe(0);
     await recognize(page);
-    if (width < 900) await page.getByText("查看圖片對照", { exact: true }).click();
+    if (width < 900) await openComparison(page);
     expect(await overflow()).toBe(0);
+    await closeComparison(page);
     await page.getByRole("button", { name: /^進入朗讀/ }).click();
     expect(await overflow()).toBe(0);
     await settingsButton(page).click();
@@ -188,12 +196,14 @@ test("leaving playback keeps the draft, its history and the current segment", as
   await mockSignedInApi(page);
   await page.goto("/");
   await recognize(page);
-  await page.getByLabel("朗讀語氣").first().fill("急促");
+  await moreEditing(page);
+  await page.getByLabel("朗讀語氣").fill("急促");
   await page.getByRole("button", { name: /^進入朗讀/ }).click();
   await page.getByRole("button", { name: "下一段", exact: true }).click();
   await expect(page.getByRole("heading", { name: "第 2 段，共 2 段" })).toBeVisible();
   await page.getByRole("button", { name: "返回校對" }).click();
-  await expect(page.getByLabel("朗讀語氣").first()).toHaveValue("急促");
+  await moreEditing(page);
+  await expect(page.getByLabel("朗讀語氣")).toHaveValue("急促");
   await expect(page.getByRole("button", { name: "復原", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: /^進入朗讀/ }).click();
   await expect(page.getByRole("heading", { name: "第 2 段，共 2 段" })).toBeVisible();

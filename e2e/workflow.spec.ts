@@ -3,9 +3,12 @@ import { expect, type Page, test } from "@playwright/test";
 import { pcmToWav } from "../src/lib/wav";
 import {
   clearContent,
+  closeComparison,
   closeSettings,
   goToStep,
+  moreEditing,
   observeAudio,
+  openComparison,
   openSettings,
   signIn,
   signOut,
@@ -324,11 +327,12 @@ test("overlong drafts split safely and editing history survives playback", async
   const calls = await mockApi(page, true);
   await page.goto("/");
   await recognize(page);
-  await page.getByText("查看圖片對照", { exact: true }).click();
+  await openComparison(page);
   await expect(page.getByAltText("校對用圖片")).toBeVisible();
   await page.getByLabel("圖片放大").selectOption("2");
   const picture = page.getByAltText("校對用圖片");
   expect(await picture.evaluate((img) => img.getBoundingClientRect().width)).toBeGreaterThan(300);
+  await closeComparison(page);
   const original = page.getByLabel("口白文字", { exact: true }).first();
   const long = "故事開始。".repeat(150);
   await original.fill(long);
@@ -356,7 +360,8 @@ test("spoken corrections change synthesis without changing the transcript", asyn
   const calls = await mockApi(page, true);
   await page.goto("/");
   await recognize(page);
-  await page.getByRole("button", { name: "另設朗讀文字" }).first().click();
+  await moreEditing(page);
+  await page.getByRole("button", { name: "另設朗讀文字" }).click();
   const spoken = page.getByLabel("朗讀文字（只影響語音）");
   await expect(spoken).toHaveValue("故事開始。");
   await spoken.fill("");
@@ -379,6 +384,7 @@ test("spoken corrections change synthesis without changing the transcript", asyn
   expect(calls.filter((c) => c.path === "/api/tts-stream")).toHaveLength(0);
 
   await page.getByRole("button", { name: /返回校對/ }).click();
+  await moreEditing(page);
   await page.getByRole("button", { name: "改回朗讀口白文字" }).click();
   await expect(page.getByLabel("朗讀文字（只影響語音）")).toHaveCount(0);
   await page.getByRole("button", { name: /^進入朗讀/ }).click();
@@ -393,8 +399,10 @@ test("drafts export text only and import without an image or provider call", asy
   const calls = await mockApi(page, true);
   await page.goto("/");
   await recognize(page);
-  await page.getByLabel("朗讀語氣").first().fill("低沉");
-  await page.getByRole("button", { name: "另設朗讀文字" }).nth(1).click();
+  await moreEditing(page);
+  await page.getByLabel("朗讀語氣").fill("低沉");
+  await moreEditing(page, 1);
+  await page.getByRole("button", { name: "另設朗讀文字" }).click();
   await page.getByLabel("朗讀文字（只影響語音）").fill("門，打開了。");
   const [download] = await Promise.all([
     page.waitForEvent("download"),
@@ -435,8 +443,10 @@ test("drafts export text only and import without an image or provider call", asy
   await expect(toast(page)).toContainText("已匯入草稿 · 2 個段落");
   await expect(page).toHaveURL(/\/review$/);
   await expect(page.getByLabel("口白文字", { exact: true }).nth(1)).toHaveValue("門打開了。");
+  await moreEditing(page, 1);
   await expect(page.getByLabel("朗讀文字（只影響語音）")).toHaveValue("門，打開了。");
-  await expect(page.getByLabel("朗讀語氣").first()).toHaveValue("低沉");
+  await moreEditing(page);
+  await expect(page.getByLabel("朗讀語氣")).toHaveValue("低沉");
   await expect(page.getByText("查看圖片對照")).toHaveCount(0);
   await expect(
     page.locator("#main").getByRole("button", { name: "復原", exact: true }),
@@ -607,7 +617,8 @@ test("reading presets preserve the normal editor size and secondary spoken hiera
   await mockApi(page, true);
   await page.goto("/");
   await recognize(page);
-  await page.getByRole("button", { name: "另設朗讀文字" }).first().click();
+  await moreEditing(page);
+  await page.getByRole("button", { name: "另設朗讀文字" }).click();
   const editorSizes: number[] = [];
   const presets = { normal: "標準", large: "大", largest: "特大" } as const;
   const choose = async (preset: keyof typeof presets) => {
@@ -680,12 +691,14 @@ test("50-segment drafts disable insertion and splitting and reject oversized edi
     buffer: Buffer.from(JSON.stringify(draft)),
   });
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(50);
+  await moreEditing(page);
   for (const name of ["新增段落", "從游標分割", "在下方新增", "按句自動分段"])
     await expect(page.getByRole("button", { name, exact: true }).first()).toBeDisabled();
   await expect(page.locator("#draft-limit-note")).toContainText("50 個段落");
   await page.getByLabel("口白文字", { exact: true }).first().fill("😀".repeat(10_001));
   await expect(page.getByRole("alert")).toContainText("欄位限制");
   await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue("故事開始。");
+  await moreEditing(page, 49);
   await page.getByRole("button", { name: "刪除段落 50", exact: true }).click();
   await expect(page.getByRole("button", { name: "新增段落", exact: true })).toBeEnabled();
 });
@@ -697,7 +710,7 @@ test("new photos preserve the draft, language, genre, comparison and undo until 
   await page.goto("/");
   await recognize(page);
   await page.getByLabel("口白文字", { exact: true }).first().fill("保留這段修改。");
-  await page.getByText("查看圖片對照").click();
+  await openComparison(page);
   const imageBytes = () =>
     page
       .getByAltText("校對用圖片")
@@ -705,6 +718,7 @@ test("new photos preserve the draft, language, genre, comparison and undo until 
         Array.from(new Uint8Array(await (await fetch(img.src)).arrayBuffer())),
       );
   const oldImage = await imageBytes();
+  await closeComparison(page);
   await goToStep(page, "取圖");
   await page.getByLabel("題材提示（選填）").fill("舊題材");
   await page
@@ -719,8 +733,9 @@ test("new photos preserve the draft, language, genre, comparison and undo until 
   await expect(
     page.locator("#main").getByRole("button", { name: "復原", exact: true }),
   ).toBeEnabled();
-  await page.getByText("查看圖片對照").click();
+  await openComparison(page);
   expect(await imageBytes()).toEqual(oldImage);
+  await closeComparison(page);
   await goToStep(page, "取圖");
   // Coming back shows the candidate again.
   await expect(page.getByAltText("準備上傳的圖片預覽")).toBeVisible();
@@ -944,7 +959,8 @@ test("autosave restores only text after reload, and clear or logout removes it",
   await page.goto("/");
   await recognize(page);
   await page.getByLabel("口白文字", { exact: true }).first().fill("重新整理後仍保留。");
-  await page.getByRole("button", { name: "另設朗讀文字" }).first().click();
+  await moreEditing(page);
+  await page.getByRole("button", { name: "另設朗讀文字" }).click();
   await page.getByLabel("朗讀文字（只影響語音）").fill("重新整理，仍保留。");
   await expect
     .poll(() =>
@@ -965,6 +981,7 @@ test("autosave restores only text after reload, and clear or logout removes it",
   await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue(
     "重新整理後仍保留。",
   );
+  await moreEditing(page);
   await expect(page.getByLabel("朗讀文字（只影響語音）")).toHaveValue("重新整理，仍保留。");
   await expect(page.getByText("查看圖片對照")).toHaveCount(0);
   expect(calls.filter((call) => call.path !== "/api/session")).toHaveLength(before);
