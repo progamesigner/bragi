@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img">
-  <title>Bragi</title>
-  <!-- Full-bleed background; keep the glyph inside the central circle of radius 204.8 (the maskable safe zone). -->
-  <rect width="512" height="512" fill="#171512"/>
-  <path fill="#e8c790" fill-rule="evenodd" d="M154 113H333V154H359V236H333V277H359V359H333V400H154ZM200 154V236H318V154ZM200 277V359H318V277Z"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"><title>Bragi</title><rect width="512" height="512" fill="#e7a85c"/><g transform="translate(256 256) scale(0.84) translate(-256 -256)"><g transform="rotate(-8 256 256)">
+<rect x="156" y="116" width="200" height="280" rx="34" fill="#171512"/>
+<g stroke="#e7a85c" stroke-width="22" stroke-linecap="round">
+<path d="M196 226V286"/><path d="M226 191V321"/><path d="M256 161V351"/><path d="M286 201V311"/><path d="M316 221V291"/>
+</g>
+</g></g></svg>
