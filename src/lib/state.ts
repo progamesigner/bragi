@@ -1,3 +1,4 @@
+import { MAX_DRAFT_SEGMENTS } from "./draft-limits";
 import type { OcrResponse } from "./schemas";
 
 export type Segment = OcrResponse["segments"][number] & {
@@ -45,6 +46,12 @@ export function splitAtCursor(
 ): Segment[] {
   const segment = segments[index];
   if (!segment) return segments;
+  if (segments.length >= MAX_DRAFT_SEGMENTS) throw new Error("草稿最多 50 個段落，請先刪除或合併");
+  const boundaries = [
+    ...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(segment.text),
+  ].map(({ index }) => index);
+  if (!boundaries.includes(offset) && offset !== segment.text.length)
+    throw new Error("請把游標放在完整字元之間再分割");
   const before = segment.text.slice(0, offset).trim();
   const after = segment.text.slice(offset).trim();
   if (!before || !after) throw new Error("請先把游標放在段落中間再分割");
@@ -57,6 +64,7 @@ export function splitAtCursor(
 }
 
 export function insertAfter(segments: Segment[], index: number, id = nextId()): Segment[] {
+  if (segments.length >= MAX_DRAFT_SEGMENTS) throw new Error("草稿最多 50 個段落，請先刪除或合併");
   const insertion = Math.min(Math.max(index + 1, 0), segments.length);
   const segment: Segment = { id, text: "", suggestedToneHint: "" };
   return [...segments.slice(0, insertion), segment, ...segments.slice(insertion)];

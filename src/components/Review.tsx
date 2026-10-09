@@ -1,6 +1,7 @@
-import { createEffect, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { reconcile, type SetStoreFunction } from "solid-js/store";
 import { draftFileName, serializeDraft } from "~/lib/draft";
+import { MAX_DRAFT_SEGMENTS } from "~/lib/draft-limits";
 import { type History, splitNarration, textBudget } from "~/lib/editing";
 import {
   insertAfter,
@@ -54,7 +55,19 @@ export default function Review(props: ReviewProps) {
     return history().canRedo;
   };
   const restore = (redo = false) => {
-    props.setSegments(reconcile(redo ? history().redo() : history().undo()));
+    const restored = redo ? history().redo() : history().undo();
+    try {
+      serializeDraft({
+        detectedLanguage: props.detectedLanguage,
+        genreHint: props.genreHint,
+        segments: restored,
+      });
+      props.setSegments(reconcile(restored));
+    } catch (error) {
+      if (redo) history().undo();
+      else history().redo();
+      props.onStatus(error instanceof Error ? error.message : "無法復原草稿", "error");
+    }
     setHistoryVersion((v) => v + 1);
   };
   const canStartPlayback = () =>
@@ -66,13 +79,38 @@ export default function Review(props: ReviewProps) {
   onMount(() => heading.focus());
 
   function replaceSegments(segments: Segment[], group?: string) {
+    try {
+      serializeDraft({
+        detectedLanguage: props.detectedLanguage,
+        genreHint: props.genreHint,
+        segments,
+      });
+    } catch (error) {
+      props.onStatus(error instanceof Error ? error.message : "無法修改草稿", "error");
+      return false;
+    }
     history().commit(segments, group);
     setHistoryVersion((v) => v + 1);
     props.setSegments(reconcile(segments));
+    return true;
   }
 
+  const canAdd = createMemo(() => {
+    if (props.segments.length >= MAX_DRAFT_SEGMENTS) return false;
+    try {
+      serializeDraft({
+        detectedLanguage: props.detectedLanguage,
+        genreHint: props.genreHint,
+        segments: insertAfter(props.segments, props.segments.length - 1),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
   function edit(index: number, field: "text" | "suggestedToneHint", value: string) {
-    replaceSegments(
+    return replaceSegments(
       props.segments.map((segment, position) =>
         position === index ? { ...segment, [field]: value } : { ...segment },
       ),
@@ -80,7 +118,7 @@ export default function Review(props: ReviewProps) {
     );
   }
   function editSpokenText(index: number, value: string | undefined) {
-    replaceSegments(
+    return replaceSegments(
       props.segments.map((segment, position) =>
         position === index ? withSpokenText(segment, value) : { ...segment },
       ),
@@ -96,7 +134,7 @@ export default function Review(props: ReviewProps) {
         props.onStatus("這個段落已符合朗讀限制");
         return;
       }
-      replaceSegments([
+      const changed = replaceSegments([
         ...props.segments.slice(0, index),
         ...parts.map((text, i) =>
           withSpokenText(
@@ -106,6 +144,7 @@ export default function Review(props: ReviewProps) {
         ),
         ...props.segments.slice(index + 1),
       ]);
+      if (!changed) return;
       props.onStatus(
         `已分成 ${parts.length} 個可朗讀段落${spokenCorrectionNotice(segment)}`,
         "success",
@@ -115,24 +154,28 @@ export default function Review(props: ReviewProps) {
     }
   }
   function exportDraft() {
-    const blob = new Blob(
-      [
-        serializeDraft({
-          detectedLanguage: props.detectedLanguage,
-          genreHint: props.genreHint,
-          segments: props.segments,
-        }),
-      ],
-      { type: "application/json" },
-    );
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = draftFileName();
-    link.click();
-    // Give the browser time to start the download before releasing the file.
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    props.onStatus("已匯出草稿 JSON；檔案只含文字，不含圖片或音訊", "success");
+    try {
+      const blob = new Blob(
+        [
+          serializeDraft({
+            detectedLanguage: props.detectedLanguage,
+            genreHint: props.genreHint,
+            segments: props.segments,
+          }),
+        ],
+        { type: "application/json" },
+      );
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = draftFileName();
+      link.click();
+      // Give the browser time to start the download before releasing the file.
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      props.onStatus("已匯出草稿 JSON；檔案只含文字，不含圖片或音訊", "success");
+    } catch (error) {
+      props.onStatus(error instanceof Error ? error.message : "無法匯出草稿", "error");
+    }
   }
   function spokenCorrectionNotice(segment: Segment) {
     return segment.spokenText === undefined ? "" : "；原本的朗讀修正已移除，請依新段落重新設定";
@@ -140,7 +183,7 @@ export default function Review(props: ReviewProps) {
   function split(index: number, editor: HTMLTextAreaElement) {
     const segment = props.segments[index];
     try {
-      replaceSegments(splitAtCursor(props.segments, index, editor.selectionStart));
+      if (!replaceSegments(splitAtCursor(props.segments, index, editor.selectionStart))) return;
       props.onStatus(`段落已分割${segment ? spokenCorrectionNotice(segment) : ""}`, "success");
     } catch (error) {
       props.onStatus(error instanceof Error ? error.message : "無法分割段落", "error");
@@ -179,6 +222,8 @@ export default function Review(props: ReviewProps) {
           <button
             type="button"
             class="small secondary"
+            disabled={!canAdd()}
+            aria-describedby={!canAdd() ? "draft-limit-note" : undefined}
             onClick={() => replaceSegments(insertAfter(props.segments, props.segments.length - 1))}
           >
             新增段落
@@ -196,6 +241,12 @@ export default function Review(props: ReviewProps) {
           </button>
         </div>
       </div>
+
+      <Show when={!canAdd()}>
+        <p id="draft-limit-note" class="field-error">
+          草稿最多 50 個段落、200 KB；已達新增上限，請先刪除、縮短或合併段落。
+        </p>
+      </Show>
 
       <Show when={imageUrl()}>
         {(url) => (
@@ -260,7 +311,10 @@ export default function Review(props: ReviewProps) {
                         ? `segment-text-error-${segment.id}`
                         : undefined
                     }
-                    onInput={(event) => edit(index(), "text", event.currentTarget.value)}
+                    onInput={(event) => {
+                      if (!edit(index(), "text", event.currentTarget.value))
+                        event.currentTarget.value = segment.text;
+                    }}
                   />
                   <p class="text-budget">
                     {textBudget(segment.text).graphemes} / 400 字 · {textBudget(segment.text).bytes}{" "}
@@ -275,12 +329,12 @@ export default function Review(props: ReviewProps) {
                   <input
                     id={`segment-tone-${segment.id}`}
                     type="text"
-                    maxlength="120"
                     value={segment.suggestedToneHint}
                     placeholder="例如：低沉、急促、帶有期待感"
-                    onInput={(event) =>
-                      edit(index(), "suggestedToneHint", event.currentTarget.value)
-                    }
+                    onInput={(event) => {
+                      if (!edit(index(), "suggestedToneHint", event.currentTarget.value))
+                        event.currentTarget.value = segment.suggestedToneHint;
+                    }}
                   />
                   <Show
                     when={segment.spokenText !== undefined}
@@ -303,7 +357,10 @@ export default function Review(props: ReviewProps) {
                         classList={{ invalid: !textBudget(speechText(segment)).valid }}
                         aria-invalid={!textBudget(speechText(segment)).valid}
                         aria-describedby={`segment-spoken-help-${segment.id}`}
-                        onInput={(event) => editSpokenText(index(), event.currentTarget.value)}
+                        onInput={(event) => {
+                          if (!editSpokenText(index(), event.currentTarget.value))
+                            event.currentTarget.value = segment.spokenText ?? "";
+                        }}
                       />
                       <p class="text-budget" id={`segment-spoken-help-${segment.id}`}>
                         <Show
@@ -331,7 +388,8 @@ export default function Review(props: ReviewProps) {
                     <button
                       type="button"
                       class="small secondary"
-                      disabled={!segment.text.trim()}
+                      disabled={!segment.text.trim() || !canAdd()}
+                      aria-describedby={!canAdd() ? "draft-limit-note" : undefined}
                       onClick={() => autoSplit(index())}
                     >
                       按句自動分段
@@ -339,6 +397,8 @@ export default function Review(props: ReviewProps) {
                     <button
                       type="button"
                       class="small secondary"
+                      disabled={!canAdd()}
+                      aria-describedby={!canAdd() ? "draft-limit-note" : undefined}
                       onClick={() => split(index(), editor)}
                     >
                       從游標分割
@@ -346,8 +406,10 @@ export default function Review(props: ReviewProps) {
                     <button
                       type="button"
                       class="small secondary"
+                      disabled={!canAdd()}
+                      aria-describedby={!canAdd() ? "draft-limit-note" : undefined}
                       onClick={() => {
-                        replaceSegments(insertAfter(props.segments, index()));
+                        if (!replaceSegments(insertAfter(props.segments, index()))) return;
                         props.onStatus("已新增空白段落", "success");
                       }}
                     >
@@ -358,7 +420,7 @@ export default function Review(props: ReviewProps) {
                         type="button"
                         class="small secondary"
                         onClick={() => {
-                          replaceSegments(mergeWithNext(props.segments, index()));
+                          if (!replaceSegments(mergeWithNext(props.segments, index()))) return;
                           props.onStatus("已與下一段合併", "success");
                         }}
                       >

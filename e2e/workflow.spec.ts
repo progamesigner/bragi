@@ -567,3 +567,36 @@ test("reading presets increase actual narration and editor font sizes", async ({
   expect(scriptSizes[2]).toBeGreaterThan(scriptSizes[1] ?? 0);
 });
 
+
+test("50-segment drafts disable insertion and splitting and reject oversized edits", async ({
+  page,
+}) => {
+  await mockApi(page, true);
+  await page.goto("/");
+  const draft = {
+    format: "bragi-draft",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    detectedLanguage: "zh",
+    segments: Array.from({ length: 50 }, (_, i) => ({
+      id: `s${i}`,
+      text: "故事開始。",
+      suggestedToneHint: "",
+    })),
+  };
+  await page.getByLabel("匯入草稿 JSON").setInputFiles({
+    name: "50.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(draft)),
+  });
+  await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(50);
+  for (const name of ["新增段落", "從游標分割", "在下方新增", "按句自動分段"])
+    await expect(page.getByRole("button", { name, exact: true }).first()).toBeDisabled();
+  await expect(page.locator("#draft-limit-note")).toContainText("50 個段落");
+  await page.getByLabel("口白文字", { exact: true }).first().fill("😀".repeat(10_001));
+  await expect(page.getByRole("alert")).toContainText("欄位限制");
+  await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue("故事開始。");
+  await page.getByRole("button", { name: "刪除段落 50", exact: true }).click();
+  await expect(page.getByRole("button", { name: "新增段落", exact: true })).toBeEnabled();
+});
+

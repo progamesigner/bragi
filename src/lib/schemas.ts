@@ -1,10 +1,14 @@
 import { z } from "zod";
+import {
+  graphemeCount,
+  MAX_DRAFT_GENRE,
+  MAX_DRAFT_ID,
+  MAX_DRAFT_LANGUAGE,
+  MAX_DRAFT_SEGMENTS,
+  MAX_DRAFT_TONE,
+} from "./draft-limits";
 
 const encoder = new TextEncoder();
-const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-function graphemeCount(value: string): number {
-  return [...graphemes.segment(value)].length;
-}
 
 function hasForbiddenControlCharacters(value: string): boolean {
   return [...value].some((character) => {
@@ -35,15 +39,21 @@ export const uploadSessionRequestSchema = z.object({
 export const ocrRequestSchema = z.object({
   uploadId: z.string().min(1).max(4096),
   receipt: z.unknown().optional(),
-  genreHint: optionalHint(80),
+  genreHint: optionalHint(MAX_DRAFT_GENRE),
 });
 
 export const ocrResponseSchema = z.object({
-  detectedLanguage: z.string().min(1).max(35),
+  detectedLanguage: z
+    .string()
+    .min(1)
+    .refine((value) => graphemeCount(value) <= MAX_DRAFT_LANGUAGE),
   segments: z
     .array(
       z.object({
-        id: z.string().min(1).max(64),
+        id: z
+          .string()
+          .min(1)
+          .refine((value) => graphemeCount(value) <= MAX_DRAFT_ID),
         text: z
           .string()
           .trim()
@@ -52,11 +62,11 @@ export const ocrResponseSchema = z.object({
         suggestedToneHint: z
           .string()
           .trim()
-          .refine((value) => graphemeCount(value) <= 120),
+          .refine((value) => graphemeCount(value) <= MAX_DRAFT_TONE),
       }),
     )
     .min(1)
-    .max(50),
+    .max(MAX_DRAFT_SEGMENTS),
 });
 
 export const ttsRequestSchema = z.object({
@@ -68,8 +78,8 @@ export const ttsRequestSchema = z.object({
     .refine((value) => graphemeCount(value) <= 400)
     .refine((value) => encoder.encode(value).byteLength <= 2000)
     .refine((value) => !hasForbiddenControlCharacters(value)),
-  toneHint: optionalHint(120),
-  genreHint: optionalHint(80),
+  toneHint: optionalHint(MAX_DRAFT_TONE),
+  genreHint: optionalHint(MAX_DRAFT_GENRE),
 });
 
 export function isTtsTextTooLong(value: unknown): boolean {

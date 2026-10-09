@@ -31,6 +31,16 @@ describe("review segment operations", () => {
     expect(() => splitAtCursor(segments, 0, 0, "split")).toThrow("游標");
   });
 
+  it("keeps emoji and combining characters intact when splitting", () => {
+    const unicode = [{ ...first, text: "👨‍👩‍👧e\u0301故事" }];
+    expect(() => splitAtCursor(unicode, 0, 1, "new")).toThrow("完整字元");
+    expect(() => splitAtCursor(unicode, 0, "👨‍👩‍👧e".length, "new")).toThrow("完整字元");
+    expect(splitAtCursor(unicode, 0, "👨‍👩‍👧".length, "new").map(({ text }) => text)).toEqual([
+      "👨‍👩‍👧",
+      "e\u0301故事",
+    ]);
+  });
+
   it("inserts and removes editable segments", () => {
     const inserted = insertAfter(segments, 1, "new");
     expect(inserted[2]).toEqual({ id: "new", text: "", suggestedToneHint: "" });
