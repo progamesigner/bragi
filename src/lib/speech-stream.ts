@@ -63,18 +63,61 @@ export class Pcm16Decoder {
   }
 }
 
+export type PcmSchedule = {
+  startTime: number;
+  sampleOffset: number;
+  duration: number;
+};
+
+export type PcmPlayerEvents = {
+  scheduled?: (schedule: PcmSchedule) => void;
+  started?: (schedule: PcmSchedule) => void;
+};
+
 export class PcmStreamPlayer {
   readonly #decoder = new Pcm16Decoder();
   readonly #sources = new Set<AudioBufferSourceNode>();
+  readonly #timeline: PcmSchedule[] = [];
+  readonly #timers = new Set<ReturnType<typeof setTimeout>>();
+  readonly #settle = new Set<() => void>();
   #nextStart = 0;
+  #samples = 0;
+  #stopped = false;
   #tail: Promise<void> = Promise.resolve();
 
   constructor(
     readonly context: AudioContext,
     readonly sampleRate = 24_000,
+    readonly events: PcmPlayerEvents = {},
   ) {}
 
-  append(chunk: Uint8Array): void {
+  /** Media position excludes scheduling gaps, including stream underflow. */
+  get position(): number {
+    let position = 0;
+    for (const entry of this.#timeline) {
+      if (this.context.currentTime < entry.startTime) break;
+      position =
+        entry.sampleOffset / this.sampleRate +
+        Math.min(entry.duration, this.context.currentTime - entry.startTime);
+    }
+    return position;
+  }
+
+  get bufferDuration(): number {
+    return this.#samples / this.sampleRate;
+  }
+
+  get underflow(): boolean {
+    return (
+      !this.#stopped &&
+      this.#timeline.length > 0 &&
+      this.context.state === "running" &&
+      this.context.currentTime >= this.#nextStart
+    );
+  }
+
+  append(chunk: Uint8Array): PcmSchedule | undefined {
+    if (this.#stopped) return;
     const samples = this.#decoder.decode(chunk);
     if (samples.length === 0) return;
     const buffer = this.context.createBuffer(1, samples.length, this.sampleRate);
@@ -83,19 +126,44 @@ export class PcmStreamPlayer {
     source.buffer = buffer;
     source.connect(this.context.destination);
     const start = Math.max(this.#nextStart, this.context.currentTime + 0.08);
+    const schedule = { startTime: start, sampleOffset: this.#samples, duration: buffer.duration };
+    this.#samples += samples.length;
     this.#nextStart = start + buffer.duration;
+    this.#timeline.push(schedule);
     this.#sources.add(source);
     this.#tail = new Promise((resolve) => {
-      source.addEventListener(
-        "ended",
-        () => {
-          this.#sources.delete(source);
-          resolve();
-        },
-        { once: true },
-      );
+      const settle = () => {
+        source.disconnect?.();
+        this.#sources.delete(source);
+        this.#settle.delete(settle);
+        resolve();
+      };
+      this.#settle.add(settle);
+      source.addEventListener("ended", settle, { once: true });
     });
     source.start(start);
+    this.events.scheduled?.(schedule);
+    if (this.events.started) this.#watchStart(schedule);
+    return schedule;
+  }
+
+  #watchStart(schedule: PcmSchedule): void {
+    const check = () => {
+      if (this.#stopped) return;
+      if (this.context.state === "running" && this.context.currentTime >= schedule.startTime) {
+        this.events.started?.(schedule);
+        return;
+      }
+      const timer = setTimeout(
+        () => {
+          this.#timers.delete(timer);
+          check();
+        },
+        Math.max(10, (schedule.startTime - this.context.currentTime) * 1000),
+      );
+      this.#timers.add(timer);
+    };
+    check();
   }
 
   async finish(): Promise<void> {
@@ -112,7 +180,14 @@ export class PcmStreamPlayer {
   }
 
   stop(): void {
-    for (const source of this.#sources) source.stop();
+    this.#stopped = true;
+    for (const timer of this.#timers) clearTimeout(timer);
+    this.#timers.clear();
+    for (const source of this.#sources) {
+      source.stop();
+      source.disconnect?.();
+    }
     this.#sources.clear();
+    for (const settle of this.#settle) settle();
   }
 }

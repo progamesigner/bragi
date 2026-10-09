@@ -97,17 +97,23 @@ export function voice(): string | undefined {
 }
 
 export function setVoice(next: string | undefined): void {
+  const before = voice();
   setSavedVoice(next);
+  if (before !== voice()) notifyPlaybackSettings();
   writeString(STORAGE_KEYS.voice, next ?? "");
 }
 
 /** The session decides which voices exist; the first one is the server default. */
 export function offerVoices(voices: string[]): void {
+  const before = voice();
   setAvailableVoices(voices);
+  if (before !== voice()) notifyPlaybackSettings();
 }
 
 export function setPlaybackRate(next: PlaybackRate): void {
+  const before = playbackRate();
   setPlaybackRateSignal(next);
+  if (before !== next) notifyPlaybackSettings();
   writeString(STORAGE_KEYS.playbackRate, String(next));
 }
 
@@ -132,4 +138,16 @@ export function syncDocument(): void {
   createEffect(() => {
     document.documentElement.lang = locale();
   });
+}
+
+// A non-reactive subscription also works for the app-lifetime audio controller.
+const playbackSettingsListeners = new Set<() => void>();
+export function subscribePlaybackSettings(listener: () => void): () => void {
+  playbackSettingsListeners.add(listener);
+  return () => {
+    playbackSettingsListeners.delete(listener);
+  };
+}
+function notifyPlaybackSettings(): void {
+  for (const listener of playbackSettingsListeners) listener();
 }

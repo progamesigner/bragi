@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src", "audio-tests", "playwright.audio-core.config.ts", "vite.audio-core.config.ts"]
+}

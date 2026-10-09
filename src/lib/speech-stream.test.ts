@@ -76,3 +76,36 @@ describe("PCM stream decoding", () => {
     expect(() => decoder.finish()).toThrow("mid-sample");
   });
 });
+
+it("reports sample scheduling and excludes underflow gaps from media position", () => {
+  let clock = 0;
+  const context = {
+    state: "running",
+    get currentTime() {
+      return clock;
+    },
+    destination: {},
+    createBuffer: (_channels: number, samples: number, rate: number) => ({
+      duration: samples / rate,
+      copyToChannel() {},
+    }),
+    createBufferSource: () => ({ connect() {}, addEventListener() {}, start() {}, stop() {} }),
+  } as unknown as AudioContext;
+  const scheduled = vi.fn();
+  const player = new PcmStreamPlayer(context, 24_000, { scheduled });
+  player.append(new Uint8Array(48_000));
+  expect(scheduled).toHaveBeenCalledWith({ startTime: 0.08, sampleOffset: 0, duration: 1 });
+  clock = 3;
+  expect(player.position).toBe(1);
+  expect(player.underflow).toBe(true);
+  player.append(new Uint8Array(24_000));
+  expect(scheduled).toHaveBeenLastCalledWith({
+    startTime: 3.08,
+    sampleOffset: 24_000,
+    duration: 0.5,
+  });
+  clock = 3.33;
+  expect(player.position).toBeCloseTo(1.25);
+  expect(player.bufferDuration).toBe(1.5);
+  player.stop();
+});
