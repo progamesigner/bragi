@@ -49,6 +49,7 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
   const [history, setHistory] = createSignal(new History<Segment[]>([]), { equals: false });
   const [savedSnapshot, setSavedSnapshot] = createSignal(EMPTY);
   const [historyRevision, setHistoryRevision] = createSignal(0);
+  const [pendingInput, setPendingInput] = createSignal(false);
   const [currentSegment, setCurrentSegmentSignal] = createSignal(0);
   const [playbackRecords, setPlaybackRecords] = createSignal<
     (PlaybackSegment & { seconds: number })[]
@@ -69,6 +70,17 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
 
   function clampSegment(index: number) {
     return Math.min(Math.max(0, Math.trunc(index)), Math.max(0, segments.length - 1));
+  }
+
+  function commitInput() {
+    if (!pendingInput()) return;
+    const next = [...segments];
+    if (JSON.stringify(next) !== JSON.stringify(history().value)) {
+      history().commit(next);
+      setHistory(history());
+    }
+    history().endGroup();
+    setPendingInput(false);
   }
 
   return {
@@ -98,8 +110,8 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
       segments.every(
         (segment) => textBudget(segment.text).valid && textBudget(speechText(segment)).valid,
       ),
-    canUndo: () => history().canUndo,
-    canRedo: () => history().canRedo,
+    canUndo: () => pendingInput() || history().canUndo,
+    canRedo: () => !pendingInput() && history().canRedo,
     /** Content differs from the last recognised, imported or exported version. */
     dirty: () => snapshot(content()) !== savedSnapshot(),
 
@@ -113,9 +125,10 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
      */
     load(next: WorkspaceContent, { saved = true }: { saved?: boolean } = {}) {
       batch(() => {
+        setPendingInput(false);
         setDetectedLanguage(next.detectedLanguage);
         setGenreHint(next.genreHint ?? "");
-        setSegments(reconcile(next.segments));
+        setSegments(reconcile(history().clone(next.segments)));
         setHistory(new History<Segment[]>(next.segments));
         setHistoryRevision((value) => value + 1);
         setCurrentSegmentSignal(0);
@@ -127,6 +140,7 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
     /** Drops the draft but keeps the picture, e.g. when a new recognition starts. */
     discardDraft() {
       batch(() => {
+        setPendingInput(false);
         setDetectedLanguage(undefined);
         setSegments(reconcile([]));
         setHistory(new History<Segment[]>([]));
@@ -142,6 +156,7 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
       batch(() => {
         setImage(undefined);
         setGenreHint("");
+        setPendingInput(false);
         setDetectedLanguage(undefined);
         setSegments(reconcile([]));
         setHistory(new History<Segment[]>([]));
@@ -152,23 +167,33 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
       });
     },
 
-    /**
-     * An edit; edits sharing a `group` within a short time undo together (typing). Throws, changing
-     * nothing, when the result fails validation.
-     */
+    /** Live, validated input; native undo owns the focused field until commitInput/blur. */
+    stageInput(next: Segment[]) {
+      validate({ ...content(), segments: next });
+      if (JSON.stringify(next) === JSON.stringify(segments)) return;
+      batch(() => {
+        setPendingInput(true);
+        setHistoryRevision((value) => value + 1);
+        setSegments(reconcile(history().clone(next)));
+      });
+    },
+    commitInput,
+    /** An edit; matching groups coalesce within 750ms. Validate before changing any history. */
     edit(next: Segment[], group?: string) {
       validate({ ...content(), segments: next });
+      commitInput();
       history().commit(next, group);
       batch(() => {
         setHistory(history());
         setHistoryRevision((value) => value + 1);
-        setSegments(reconcile(next));
+        setSegments(reconcile(history().clone(next)));
         setCurrentSegmentSignal((index) => clampSegment(index));
       });
     },
 
     /** Steps back; throws, changing nothing, when that version fails validation. */
     undo() {
+      commitInput();
       if (!history().canUndo) return;
       const previous = history().undo();
       try {
@@ -187,6 +212,7 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
 
     /** Steps forward; throws, changing nothing, when that version fails validation. */
     redo() {
+      commitInput();
       if (!history().canRedo) return;
       const next = history().redo();
       try {
@@ -198,13 +224,14 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
       batch(() => {
         setHistory(history());
         setHistoryRevision((value) => value + 1);
-        setSegments(reconcile(next));
+        setSegments(reconcile(history().clone(next)));
         setCurrentSegmentSignal((index) => clampSegment(index));
       });
     },
 
     /** Call after exporting so the current content counts as saved. */
     markSaved() {
+      commitInput();
       history().endGroup();
       setSavedSnapshot(snapshot(content()));
     },

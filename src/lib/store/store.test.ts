@@ -187,3 +187,51 @@ describe("workspace validation", () => {
     expect(workspace.canRedo()).toBe(false);
   });
 });
+
+describe("focused input transactions", () => {
+  it("keeps live input exportable and dirty, then commits a single field checkpoint", () => {
+    const workspace = createWorkspace(draftLimits);
+    workspace.load(draft);
+    const update = (text: string) =>
+      workspace.stageInput(draft.segments.map((s, i) => (i ? s : { ...s, text })));
+    const revision = workspace.historyRevision();
+    update("a");
+    update("ab");
+    update("abc");
+    expect(workspace.segments[0]?.text).toBe("abc");
+    expect(workspace.historyRevision()).toBeGreaterThan(revision);
+    expect(workspace.dirty()).toBe(true);
+    workspace.commitInput();
+    workspace.undo();
+    expect(workspace.segments[0]?.text).toBe(draft.segments[0]?.text);
+    workspace.redo();
+    expect(workspace.segments[0]?.text).toBe("abc");
+    expect(() => update("😀".repeat(10_001))).toThrow();
+    expect(workspace.segments[0]?.text).toBe("abc");
+  });
+  it("native undo back to the field baseline creates no workspace checkpoint", () => {
+    const workspace = createWorkspace(draftLimits);
+    workspace.load(draft);
+    workspace.stageInput(draft.segments.map((s, i) => (i ? s : { ...s, text: "new" })));
+    workspace.stageInput(draft.segments);
+    workspace.commitInput();
+    expect(workspace.dirty()).toBe(false);
+    expect(workspace.canUndo()).toBe(false);
+  });
+  it("separates a structural action from uncommitted input and export", () => {
+    const workspace = createWorkspace(draftLimits);
+    workspace.load(draft);
+    const edited = draft.segments.map((s, i) => (i ? s : { ...s, text: "changed" }));
+    workspace.stageInput(edited);
+    workspace.edit(edited.slice(0, 1));
+    workspace.undo();
+    expect(workspace.segments).toHaveLength(2);
+    expect(workspace.segments[0]?.text).toBe("changed");
+    workspace.markSaved();
+    workspace.stageInput(edited.map((s, i) => (i ? s : { ...s, text: "later" })));
+    workspace.undo();
+    expect(workspace.dirty()).toBe(false);
+    workspace.load(draft);
+    expect(workspace.canUndo()).toBe(false);
+  });
+});
