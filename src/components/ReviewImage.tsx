@@ -39,16 +39,16 @@ export default function ReviewImage(props: { url: string }) {
     <div class="review-image">
       <div class="comparison-tools">
         <Button
-          variant="ghost"
+          variant="secondary"
           size="compact"
           disabled={zoom() <= 1}
           onClick={() => scale(zoom() - 0.5)}
         >
           {t("review.zoomOut")}
         </Button>
-        <label for="comparison-zoom">{t("review.zoom")}</label>
         <Select
           id="comparison-zoom"
+          aria-label={t("review.zoom")}
           value={String(zoom())}
           onChange={(event) => scale(Number(event.currentTarget.value))}
         >
@@ -62,7 +62,7 @@ export default function ReviewImage(props: { url: string }) {
           <option value="4">{t("review.zoomTimes", { n: 4 })}</option>
         </Select>
         <Button
-          variant="ghost"
+          variant="secondary"
           size="compact"
           disabled={zoom() >= 4}
           onClick={() => scale(zoom() + 0.5)}

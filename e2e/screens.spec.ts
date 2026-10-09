@@ -62,9 +62,9 @@ test("capture entry points fit the first phone screen and preview can collapse",
   await expect(page.getByLabel("重拍", { exact: true })).toBeAttached();
   await expect(page.getByRole("button", { name: "辨識文字", exact: true })).toBeEnabled();
   await expect(page.getByAltText("準備上傳的圖片預覽")).toBeVisible();
-  await page.getByText("已選圖片", { exact: true }).click();
+  await page.locator(".capture-preview-details summary").click();
   await expect(page.getByAltText("準備上傳的圖片預覽")).toBeHidden();
-  await page.getByText("已選圖片", { exact: true }).click();
+  await page.locator(".capture-preview-details summary").click();
   await expect(page.getByAltText("準備上傳的圖片預覽")).toBeVisible();
   await expect(
     page.getByText("照片將傳送至 Google Gemini，最多保存 48 小時", { exact: true }),

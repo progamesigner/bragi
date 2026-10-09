@@ -244,7 +244,8 @@ test("seek is disabled until PCM EOF, then preserves pause and reuses the WAV", 
   await primary(page).click();
   await phase(page, "playing");
   expect(requests.length).toBe(before);
-  await expect(page.getByRole("progressbar")).toBeVisible();
+  await expect(page.getByRole("progressbar")).toHaveCount(0);
+  await expect(slider).toBeEnabled();
   expect(await page.evaluate(() => window.audioTest.outputCount())).toBe(1);
 });
 

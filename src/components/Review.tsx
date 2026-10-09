@@ -4,7 +4,7 @@ import { serializeDraft } from "~/lib/draft";
 import { exportDraft as downloadDraft } from "~/lib/draft-export";
 import { MAX_DRAFT_SEGMENTS } from "~/lib/draft-limits";
 import { splitNarration, textBudget } from "~/lib/editing";
-import { t } from "~/lib/i18n";
+import { languageName, t } from "~/lib/i18n";
 import { useWideLayout } from "~/lib/layout";
 import { reviewShortcut, reviewTarget } from "~/lib/review-editing";
 import {
@@ -464,13 +464,21 @@ export default function Review(props: ReviewProps) {
           </h1>
           <p>
             {t("review.summary", {
-              language: props.detectedLanguage,
+              language: languageName(props.detectedLanguage),
               n: workspace.segments.length,
             })}
           </p>
           <Show when={workspace.dirty()}>
-            <p class="draft-dirty">{t("review.dirty")}</p>
-            <p class="settings-note">{t("review.savedLocally")}</p>
+            <p
+              class="draft-dirty"
+              title={t("review.savedLocally")}
+              aria-describedby="draft-save-detail"
+            >
+              {t("review.dirty")}
+            </p>
+            <span id="draft-save-detail" class="visually-hidden">
+              {t("review.savedLocally")}
+            </span>
           </Show>
         </div>
         <div class="review-heading-actions">

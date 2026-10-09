@@ -377,13 +377,6 @@ export default function Playback(props: PlaybackProps) {
                 when={status()}
                 fallback={
                   <div class="playback-meter">
-                    <Show when={snapshot().duration}>
-                      <progress
-                        value={snapshot().position}
-                        max={snapshot().duration}
-                        aria-label={t("playback.progress")}
-                      />
-                    </Show>
                     <span class="playback-clock">
                       {audioTime(snapshot().position)}
                       <Show
@@ -399,6 +392,9 @@ export default function Playback(props: PlaybackProps) {
             <input
               class="playback-seek"
               type="range"
+              style={{
+                "--position": `${snapshot().duration ? Math.min(100, (snapshot().position / (snapshot().duration ?? 1)) * 100) : 0}%`,
+              }}
               aria-label={t("playback.seek")}
               min="0"
               max={snapshot().duration ?? 0}
@@ -420,7 +416,7 @@ export default function Playback(props: PlaybackProps) {
             </Button>
             <div class="playback-secondary">
               <Button
-                variant="ghost"
+                variant="secondary"
                 class="playback-secondary-button"
                 size="compact"
                 disabled={state().index === 0}
@@ -429,7 +425,7 @@ export default function Playback(props: PlaybackProps) {
                 {t("playback.previous")}
               </Button>
               <Button
-                variant="ghost"
+                variant="secondary"
                 class="playback-secondary-button"
                 size="compact"
                 disabled={phase() === "idle"}
@@ -438,7 +434,7 @@ export default function Playback(props: PlaybackProps) {
                 {t(phase() === "loading" ? "playback.cancel" : "playback.replay")}
               </Button>
               <Button
-                variant="ghost"
+                variant="secondary"
                 class="playback-secondary-button"
                 size="compact"
                 disabled={state().index >= props.segments.length - 1}

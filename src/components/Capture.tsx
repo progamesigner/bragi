@@ -125,23 +125,26 @@ export default function Capture(props: CaptureProps) {
 
       <div class="candidate-panel">
         <Show when={sourceFile()}>
-          <Button
-            variant="secondary"
-            size="compact"
-            class="capture-secondary"
-            onClick={() => {
-              operations.invalidate();
-              setPreparing(false);
-              props.onPreparing(false);
-              setSourceFile(undefined);
-              setPreparationFailed(false);
-              setImage(undefined);
-              replacePreview();
-              props.onCancel();
-            }}
-          >
-            {t("capture.cancelCandidate")}
-          </Button>
+          <div class="candidate-heading">
+            <span>{sourceFile() ? t("capture.selected") : ""}</span>
+            <Button
+              variant="secondary"
+              size="compact"
+              class="capture-secondary"
+              onClick={() => {
+                operations.invalidate();
+                setPreparing(false);
+                props.onPreparing(false);
+                setSourceFile(undefined);
+                setPreparationFailed(false);
+                setImage(undefined);
+                replacePreview();
+                props.onCancel();
+              }}
+            >
+              {t("capture.cancelCandidate")}
+            </Button>
+          </div>
         </Show>
 
         <Show when={preparationFailed()}>
@@ -158,7 +161,7 @@ export default function Capture(props: CaptureProps) {
         <Show when={selectedImage()}>
           {(selected) => (
             <details class="capture-preview-details" open>
-              <summary>{t("capture.selected")}</summary>
+              <summary>{t("capture.previewAlt")}</summary>
               <div class="capture-preview">
                 <Show when={previewUrl() && !previewFailed()}>
                   <img
