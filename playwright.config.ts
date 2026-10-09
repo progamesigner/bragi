@@ -11,6 +11,7 @@ export default defineConfig({
   reporter: "list",
   use: {
     baseURL,
+    locale: "zh-TW",
     serviceWorkers: "block",
     trace: "retain-on-failure",
   },

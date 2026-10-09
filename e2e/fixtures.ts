@@ -64,14 +64,14 @@ export async function mockSignedInApi(page: Page, { authenticated = true } = {})
 
 export async function selectImage(page: Page) {
   await page
-    .getByLabel("從相簿選擇")
+    .getByLabel("選擇圖片")
     .setInputFiles({ name: "card.png", mimeType: "image/png", buffer: image });
-  await expect(page.getByRole("button", { name: "上傳並辨識文字", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ })).toBeEnabled();
 }
 
 export async function recognize(page: Page) {
   await selectImage(page);
-  await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+  await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
   await expect(page).toHaveURL(/\/review$/);
   await expect(page.getByRole("heading", { name: "校對辨識草稿" })).toBeFocused();
 }

@@ -135,7 +135,7 @@ for (const api of ["ocr", "tts-stream"]) {
     if (api === "ocr") {
       await goToStep(page, "取圖");
       await selectImage(page);
-      await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+      await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
     } else {
       await goToStep(page, "朗讀");
       await page.getByRole("button", { name: "串流播放第一段" }).click();
@@ -153,7 +153,7 @@ for (const api of ["ocr", "tts-stream"]) {
     expect(attempts).toBe(1);
     if (api === "ocr") {
       page.once("dialog", (dialog) => dialog.dismiss());
-      await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+      await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
       await expect(page.getByText("已保留目前稿件；候選圖片可重新辨識")).toBeVisible();
     } else {
       await page.getByRole("button", { name: "重試本段" }).click();
@@ -183,7 +183,7 @@ for (const action of ["清除目前內容", "登出"] as const) {
       .click();
     await expect(sheet).toBeHidden();
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByLabel(action === "登出" ? "驗證碼" : "從相簿選擇")).toBeAttached();
+    await expect(page.getByLabel(action === "登出" ? "驗證碼" : "選擇圖片")).toBeAttached();
     expect(await page.evaluate(() => localStorage.getItem("bragi:autosave:v1"))).toBeNull();
   });
 }
@@ -269,7 +269,7 @@ test("capture controls fit in the first phone screen and settings change placeme
   await mockSignedInApi(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  for (const label of ["拍照", "從相簿選擇"]) {
+  for (const label of ["拍照", "選擇圖片"]) {
     // File pickers are visually hidden; measure their visible label instead.
     const target = await page
       .locator(`label[for="${await page.getByLabel(label).getAttribute("id")}"]`)

@@ -71,9 +71,7 @@ test("theme follows the system until a choice is saved", async ({ page }) => {
   await expect(html).toHaveAttribute("data-theme", "light");
 });
 
-test("interface language is remembered, sets lang and falls back to Traditional Chinese", async ({
-  page,
-}) => {
+test("interface language is translated, remembered and sets lang", async ({ page }) => {
   await mockSignedInApi(page);
   await page.goto("/");
   await expect(page.locator("html")).toHaveAttribute("lang", "zh-Hant");
@@ -82,8 +80,7 @@ test("interface language is remembered, sets lang and falls back to Traditional 
   await expect(page.locator("html")).toHaveAttribute("lang", "ja");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("lang", "ja");
-  // Japanese has no translations yet, so every string falls back instead of showing a key.
-  await expect(page.getByRole("button", { name: "上傳並辨識文字", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "次の場面を準備" })).toBeVisible();
 });
 
 test("preferences still work when storage is blocked", async ({ page }) => {
@@ -106,7 +103,7 @@ test("controls meet touch target sizes and icon buttons have names", async ({ pa
   await mockSignedInApi(page);
   await page.goto("/");
   await recognize(page);
-  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByRole("button", { name: /^進入朗讀/ }).click();
   await page.getByRole("button", { name: "返回校對" }).click();
 
   const measure = () =>
@@ -150,7 +147,7 @@ test("API failures explain the cause first and keep the request ID in details", 
   );
   await page.goto("/");
   await selectImage(page);
-  await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+  await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
   const alert = page.getByRole("alert");
   await expect(alert.locator("p")).toHaveText(
     "請求太頻繁，Gemini 暫時拒絕。請稍候再試。（約 20 秒後可重試）",
@@ -173,9 +170,9 @@ for (const width of [320, 1280]) {
       );
     expect(await overflow()).toBe(0);
     await recognize(page);
-    await page.getByText("查看圖片對照", { exact: true }).click();
+    if (width < 900) await page.getByText("查看圖片對照", { exact: true }).click();
     expect(await overflow()).toBe(0);
-    await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+    await page.getByRole("button", { name: /^進入朗讀/ }).click();
     expect(await overflow()).toBe(0);
     await settingsButton(page).click();
     expect(await overflow()).toBe(0);
@@ -187,12 +184,12 @@ test("leaving playback keeps the draft, its history and the current segment", as
   await page.goto("/");
   await recognize(page);
   await page.getByLabel("朗讀語氣").first().fill("急促");
-  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByRole("button", { name: /^進入朗讀/ }).click();
   await page.getByRole("button", { name: "下一段", exact: true }).click();
   await expect(page.getByRole("heading", { name: "第 2 段，共 2 段" })).toBeVisible();
   await page.getByRole("button", { name: "返回校對" }).click();
   await expect(page.getByLabel("朗讀語氣").first()).toHaveValue("急促");
   await expect(page.getByRole("button", { name: "復原", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByRole("button", { name: /^進入朗讀/ }).click();
   await expect(page.getByRole("heading", { name: "第 2 段，共 2 段" })).toBeVisible();
 });

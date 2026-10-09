@@ -12,8 +12,10 @@ async function settle(page: Page) {
 
 async function snap(page: Page, name: string) {
   await settle(page);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await expect(page).toHaveScreenshot(`${name}.png`, {
-    fullPage: true,
+    // Keep the fixed review action in its real viewport position.
+    fullPage: !name.startsWith("review"),
     animations: "disabled",
     stylePath: fileURLToPath(new URL("./visual.css", import.meta.url)),
   });
@@ -61,12 +63,119 @@ for (const colorScheme of ["light", "dark"] as const) {
       await mockSignedInApi(page);
       await page.goto("/");
       await recognize(page);
-      await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+      await page.getByRole("button", { name: /^進入朗讀/ }).click();
       await expect(page.getByRole("heading", { name: "第 1 段，共 2 段" })).toBeFocused();
       await page.locator(".toast").evaluate((element) => {
         element.style.visibility = "hidden";
       });
       await snap(page, `playback-${colorScheme}`);
     });
+  });
+}
+
+for (const colorScheme of ["light", "dark"] as const) {
+  test.describe(`${colorScheme} C2 screens`, () => {
+    test.use({ colorScheme });
+
+    test("capture first screen", async ({ page }) => {
+      await mockSignedInApi(page);
+      await page.goto("/");
+      await expect(page.locator("#capture-heading")).toHaveText("準備下一段故事");
+      await snap(page, `capture-entry-${colorScheme}`);
+    });
+
+    test("recognizing", async ({ page }) => {
+      await mockSignedInApi(page);
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await page.route("**/api/ocr", async (route) => {
+        await held;
+        await route.fallback();
+      });
+      await page.goto("/");
+      await selectImage(page);
+      await page.getByRole("button", { name: "辨識文字", exact: true }).click();
+      await expect(page.locator(".recognition-stages [aria-current=step]")).toHaveText(
+        "辨識與分段",
+      );
+      try {
+        await snap(page, `recognizing-${colorScheme}`);
+      } finally {
+        await page.getByRole("button", { name: "取消辨識" }).click();
+        release();
+      }
+    });
+
+    test("empty imported draft", async ({ page }) => {
+      await mockSignedInApi(page);
+      await page.goto("/");
+      await page.locator("#draft-import").setInputFiles({
+        name: "empty.json",
+        mimeType: "application/json",
+        buffer: Buffer.from(
+          JSON.stringify({
+            format: "bragi-draft",
+            version: 1,
+            exportedAt: "2026-10-09T00:00:00Z",
+            detectedLanguage: "繁體中文",
+            segments: [],
+          }),
+        ),
+      });
+      await expect(page.getByRole("button", { name: "新增文字段落" })).toBeVisible();
+      await page.locator(".toast").evaluate((element) => {
+        element.style.visibility = "hidden";
+      });
+      await snap(page, `empty-draft-${colorScheme}`);
+    });
+
+    test("review issue", async ({ page }) => {
+      await mockSignedInApi(page);
+      await page.goto("/");
+      await recognize(page);
+      await page.getByLabel("口白文字", { exact: true }).first().fill("");
+      await expect(page.getByRole("button", { name: "第 1 段需處理 →" })).toBeVisible();
+      await page.locator(".toast").evaluate((element) => {
+        element.style.visibility = "hidden";
+      });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await snap(page, `review-issue-${colorScheme}`);
+    });
+  });
+}
+
+for (const locale of ["ja", "de"] as const) {
+  test(`${locale} capture and text-only review`, async ({ page }) => {
+    await page.addInitScript((value) => localStorage.setItem("bragi-locale", value), locale);
+    await mockSignedInApi(page);
+    await page.goto("/");
+    await expect(page.locator("html")).toHaveAttribute("lang", locale);
+    await snap(page, `capture-${locale}`);
+    await page.locator("#draft-import").setInputFiles({
+      name: "text.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(
+        JSON.stringify({
+          format: "bragi-draft",
+          version: 1,
+          exportedAt: "2026-10-09T00:00:00Z",
+          detectedLanguage: "繁體中文",
+          segments: [
+            {
+              id: "one",
+              text: "館員不在櫃檯。桌上攤著一本翻到一半的日記，墨跡還沒乾。",
+              suggestedToneHint: "疑惑、壓低聲音",
+            },
+          ],
+        }),
+      ),
+    });
+    await expect(page).toHaveURL(/\/review$/);
+    await page.locator(".toast").evaluate((element) => {
+      element.style.visibility = "hidden";
+    });
+    await snap(page, `review-${locale}`);
   });
 }

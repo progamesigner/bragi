@@ -78,9 +78,9 @@ async function mockApi(page: Page, authenticated = false) {
 
 async function recognize(page: Page) {
   await page
-    .getByLabel("從相簿選擇")
+    .getByLabel("選擇圖片")
     .setInputFiles({ name: "card.png", mimeType: "image/png", buffer: image });
-  await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+  await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
   await expect(page).toHaveURL(/\/review$/);
   await expect(page.getByRole("heading", { name: "校對辨識草稿" })).toBeFocused();
 }
@@ -96,7 +96,7 @@ test("font preference persists and selected voice follows both speech paths", as
   await settings.getByLabel("朗讀聲音").selectOption("Puck");
   await closeSettings(page);
   await recognize(page);
-  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByRole("button", { name: /^進入朗讀/ }).click();
   await page.getByRole("button", { name: "串流播放第一段" }).click();
   await expect(page.getByRole("button", { name: "重播本段" })).toBeVisible();
   settings = await openSettings(page);
@@ -123,18 +123,18 @@ test("offline requests wait for a manual retry after reconnecting", async ({ pag
   const calls = await mockApi(page, true);
   await page.goto("/");
   await page
-    .getByLabel("從相簿選擇")
+    .getByLabel("選擇圖片")
     .setInputFiles({ name: "card.png", mimeType: "image/png", buffer: image });
-  await expect(page.getByRole("button", { name: "上傳並辨識文字", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ })).toBeEnabled();
   await context.setOffline(true);
   await expect(page.getByText("目前離線。", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+  await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
   await expect(page.getByRole("alert")).toContainText("請連線後手動重試");
   expect(calls.filter((call) => call.path === "/api/uploads")).toHaveLength(0);
   await context.setOffline(false);
   await expect(page.getByText("目前離線。", { exact: false })).toHaveCount(0);
   expect(calls.filter((call) => call.path === "/api/uploads")).toHaveLength(0);
-  await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+  await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
   await expect(page.getByRole("heading", { name: "校對辨識草稿" })).toBeVisible();
 });
 
@@ -151,13 +151,13 @@ test("workspace clear confirms, stops playback and preserves login", async ({ pa
     .click();
   await closeSettings(page);
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(2);
-  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByRole("button", { name: /^進入朗讀/ }).click();
   await page.getByRole("button", { name: "串流播放第一段" }).click();
   await expect(page.getByRole("button", { name: "重播本段" })).toBeVisible();
   await clearContent(page, "proceed");
   await expect(toast(page)).toContainText("已清除目前內容");
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("button", { name: "上傳並辨識文字", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ })).toHaveCount(0);
   await expect(page.locator("audio")).toHaveCount(0);
   await expect(page.getByAltText("準備上傳的圖片預覽")).toHaveCount(0);
   await recognize(page);
@@ -180,10 +180,10 @@ test("clearing an in-flight OCR aborts it without restoring the old draft", asyn
   });
   await page.goto("/");
   await page
-    .getByLabel("從相簿選擇")
+    .getByLabel("選擇圖片")
     .setInputFiles({ name: "card.png", mimeType: "image/png", buffer: image });
   const started = page.waitForRequest("**/api/ocr");
-  await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+  await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
   await started;
   const aborted = page.waitForEvent("requestfailed", (request) =>
     request.url().endsWith("/api/ocr"),
@@ -192,7 +192,7 @@ test("clearing an in-flight OCR aborts it without restoring the old draft", asyn
   await aborted;
   release();
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "上傳並辨識文字", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ })).toHaveCount(0);
   await expect(toast(page)).toContainText("已清除目前內容");
 });
 
@@ -203,7 +203,7 @@ test("login, upload, edit, stream, manually continue, return and sign out", asyn
   await page.getByLabel("題材提示（選填）").fill("奇幻");
   await recognize(page);
   await page.getByLabel("口白文字", { exact: true }).first().fill("修改後的故事。");
-  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByRole("button", { name: /^進入朗讀/ }).click();
   await page.getByRole("button", { name: "串流播放第一段" }).click();
   await expect(page.getByRole("button", { name: "重播本段" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "第 1 段，共 2 段" })).toBeVisible();
@@ -222,7 +222,7 @@ test("login, upload, edit, stream, manually continue, return and sign out", asyn
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(0);
   await signIn(page);
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("button", { name: "上傳並辨識文字", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ })).toHaveCount(0);
 });
 
 test("restores session and blocks playback until empty segments are fixed", async ({ page }) => {
@@ -230,7 +230,7 @@ test("restores session and blocks playback until empty segments are fixed", asyn
   await page.goto("/");
   await recognize(page);
   await page.getByLabel("口白文字", { exact: true }).first().fill("");
-  await expect(page.getByRole("button", { name: "開始逐段朗讀" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /需處理 →$/ })).toBeEnabled();
   // The step bar explains why reading is unavailable, and a direct visit is sent back.
   await expect(page.getByRole("link", { name: "朗讀", exact: true })).toHaveCount(0);
   await page.goto("/play");
@@ -245,7 +245,7 @@ test("restores session and blocks playback until empty segments are fixed", asyn
     "true",
   );
   await page.getByLabel("口白文字", { exact: true }).first().fill("已修正。");
-  await expect(page.getByRole("button", { name: "開始逐段朗讀" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /^進入朗讀/ })).toBeEnabled();
 });
 
 test("OCR failure keeps the image available for explicit retry", async ({ page }) => {
@@ -266,12 +266,12 @@ test("OCR failure keeps the image available for explicit retry", async ({ page }
   });
   await page.goto("/");
   await page
-    .getByLabel("從相簿選擇")
+    .getByLabel("選擇圖片")
     .setInputFiles({ name: "card.png", mimeType: "image/png", buffer: image });
-  await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+  await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
   await expect(page.getByRole("alert")).toContainText("ocr-test");
   expect(calls.filter((call) => call.path === "/api/uploads")).toHaveLength(1);
-  await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+  await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
   await expect(page.getByRole("heading", { name: "校對辨識草稿" })).toBeVisible();
 });
 
@@ -300,7 +300,7 @@ test("speech failure recovers only after manual retry", async ({ page }) => {
   });
   await page.goto("/");
   await recognize(page);
-  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByRole("button", { name: /^進入朗讀/ }).click();
   await page.getByRole("button", { name: "串流播放第一段" }).click();
   await expect(page.getByRole("button", { name: "重試本段" })).toBeVisible();
   expect(attempts).toBe(1);
@@ -322,16 +322,16 @@ test("overlong drafts split safely and editing history survives playback", async
   const long = "故事開始。".repeat(150);
   await original.fill(long);
   await expect(original).toHaveAttribute("aria-invalid", "true");
-  await expect(page.getByRole("button", { name: "開始逐段朗讀" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /需處理 →$/ })).toBeEnabled();
   await expect(page.getByRole("button", { name: "產生試聽" }).first()).toBeDisabled();
   expect(calls.filter((c) => c.path === "/api/tts")).toHaveLength(0);
   await page.getByRole("button", { name: "按句自動分段" }).first().click();
-  await expect(page.getByRole("button", { name: "開始逐段朗讀" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /^進入朗讀/ })).toBeEnabled();
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(3);
   await page.locator("#main").getByRole("button", { name: "復原", exact: true }).click();
   await expect(original).toHaveValue(long);
   await page.getByRole("button", { name: "重做", exact: true }).click();
-  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByRole("button", { name: /^進入朗讀/ }).click();
   await page.getByRole("button", { name: /返回校對/ }).click();
   await page.locator("#main").getByRole("button", { name: "復原", exact: true }).click();
   await expect(original).toHaveValue(long);
@@ -350,14 +350,14 @@ test("spoken corrections change synthesis without changing the transcript", asyn
   await expect(spoken).toHaveValue("故事開始。");
   await spoken.fill("");
   await expect(spoken).toHaveAttribute("aria-invalid", "true");
-  await expect(page.getByRole("button", { name: "開始逐段朗讀" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /需處理 →$/ })).toBeEnabled();
   await spoken.fill("故事，開始。");
   await page.getByRole("button", { name: "產生試聽" }).first().click();
   await expect(page.getByLabel("段落試聽")).toBeVisible();
   expect(calls.find((c) => c.path === "/api/tts")?.body).toMatchObject({ text: "故事，開始。" });
   await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue("故事開始。");
 
-  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByRole("button", { name: /^進入朗讀/ }).click();
   await expect(page.locator(".playback-script")).toContainText("故事開始。");
   await expect(page.locator(".playback-script")).toContainText("朗讀文字：故事，開始。");
   await page.getByRole("button", { name: "串流播放第一段" }).click();
@@ -368,7 +368,7 @@ test("spoken corrections change synthesis without changing the transcript", asyn
   await page.getByRole("button", { name: /返回校對/ }).click();
   await page.getByRole("button", { name: "改回朗讀口白文字" }).click();
   await expect(page.getByLabel("朗讀文字（只影響語音）")).toHaveCount(0);
-  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByRole("button", { name: /^進入朗讀/ }).click();
   await page.getByRole("button", { name: "串流播放第一段" }).click();
   await expect(page.getByRole("button", { name: "重播本段" })).toBeVisible();
   expect(calls.find((c) => c.path === "/api/tts-stream")?.body).toMatchObject({
@@ -405,7 +405,7 @@ test("drafts export text only and import without an image or provider call", asy
   // The text is exported, but the picture and history will still be discarded.
   await clearContent(page, "proceed");
   await expect(page.getByRole("heading", { name: "校對辨識草稿" })).toHaveCount(0);
-  await page.getByLabel("匯入草稿 JSON").setInputFiles({
+  await page.getByLabel("匯入草稿").setInputFiles({
     name: "broken.json",
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify({ ...exported, version: 2 })),
@@ -414,7 +414,7 @@ test("drafts export text only and import without an image or provider call", asy
   await expect(page.getByRole("alert")).toHaveCount(1);
 
   const before = calls.length;
-  await page.getByLabel("匯入草稿 JSON").setInputFiles({
+  await page.getByLabel("匯入草稿").setInputFiles({
     name: "draft.json",
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify(exported)),
@@ -454,7 +454,7 @@ test("streamed playback recovers after the system suspends audio", async ({ page
   );
   await page.goto("/");
   await recognize(page);
-  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByRole("button", { name: /^進入朗讀/ }).click();
   await page.getByRole("button", { name: "串流播放第一段" }).click();
   await expect(page.getByRole("button", { name: "暫停" })).toBeVisible();
 
@@ -512,7 +512,7 @@ test("keeps the screen awake during playback only when chosen", async ({ page })
   await closeSettings(page);
   expect(await wakeLog()).toEqual([]);
 
-  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByRole("button", { name: /^進入朗讀/ }).click();
   await expect.poll(wakeLog).toEqual(["request:screen"]);
   // Opening and closing settings on the playback screen keeps the lock.
   settings = await openSettings(page);
@@ -534,7 +534,7 @@ test("non-1× speeds skip streaming and keep the original pitch", async ({ page 
   const calls = await mockApi(page, true);
   await page.goto("/");
   await recognize(page);
-  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByRole("button", { name: /^進入朗讀/ }).click();
   const settings = await openSettings(page);
   await expect(settings.getByText("非 1 倍速會先產生整段音訊再播放")).toHaveCount(0);
   await settings.getByRole("radio", { name: "0.75 倍" }).check();
@@ -614,7 +614,7 @@ test("reading presets preserve the normal editor size and secondary spoken hiera
   expect(editorSizes[0]).toBe(16);
   expect(editorSizes[1]).toBeGreaterThan(editorSizes[0] ?? 0);
   expect(editorSizes[2]).toBeGreaterThan(editorSizes[1] ?? 0);
-  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByRole("button", { name: /^進入朗讀/ }).click();
   const scriptSizes: number[] = [];
   const spokenSizes: number[] = [];
   for (const preset of ["normal", "large", "largest"] as const) {
@@ -654,7 +654,7 @@ test("50-segment drafts disable insertion and splitting and reject oversized edi
       suggestedToneHint: "",
     })),
   };
-  await page.getByLabel("匯入草稿 JSON").setInputFiles({
+  await page.getByLabel("匯入草稿").setInputFiles({
     name: "50.json",
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify(draft)),
@@ -688,7 +688,7 @@ test("new photos preserve the draft, language, genre, comparison and undo until 
   await goToStep(page, "取圖");
   await page.getByLabel("題材提示（選填）").fill("舊題材");
   await page
-    .getByLabel("從相簿選擇")
+    .getByLabel("選擇圖片")
     .setInputFiles({ name: "candidate.png", mimeType: "image/png", buffer: image });
   await expect(page.getByAltText("準備上傳的圖片預覽")).toBeVisible();
   await page.getByLabel("題材提示（選填）").fill("候選題材");
@@ -708,7 +708,7 @@ test("new photos preserve the draft, language, genre, comparison and undo until 
   await expect(page.getByLabel("題材提示（選填）")).toHaveValue("舊題材");
 
   await page
-    .getByLabel("從相簿選擇")
+    .getByLabel("選擇圖片")
     .setInputFiles({ name: "broken.png", mimeType: "image/png", buffer: Buffer.from("broken") });
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(page.getByRole("button", { name: "重試圖片處理" })).toBeVisible();
@@ -717,12 +717,12 @@ test("new photos preserve the draft, language, genre, comparison and undo until 
   await expect(page.getByRole("alert")).toBeVisible();
 
   await page
-    .getByLabel("從相簿選擇")
+    .getByLabel("選擇圖片")
     .setInputFiles({ name: "candidate.png", mimeType: "image/png", buffer: image });
   await page.route("**/api/ocr", (route) =>
     route.fulfill({ status: 502, json: { error: "辨識暫時失敗" } }),
   );
-  await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+  await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(page.getByAltText("準備上傳的圖片預覽")).toBeVisible();
 
@@ -735,7 +735,7 @@ test("new photos preserve the draft, language, genre, comparison and undo until 
     }),
   );
   page.once("dialog", (dialog) => dialog.dismiss());
-  await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+  await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
   await expect(page.getByText("已保留目前稿件；候選圖片可重新辨識")).toBeVisible();
   await expect(page).toHaveURL(/\/$/);
   await goToStep(page, "校對");
@@ -745,7 +745,7 @@ test("new photos preserve the draft, language, genre, comparison and undo until 
   ).toBeEnabled();
   await goToStep(page, "取圖");
   page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+  await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
   await expect(page).toHaveURL(/\/review$/);
   await expect(toast(page)).toContainText("辨識完成 · 1 個段落");
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(1);
@@ -787,10 +787,10 @@ test("late OCR success and failure cannot restore a cleared workspace or overwri
   await page.goto("/");
   for (const fail of [false, true]) {
     await page
-      .getByLabel("從相簿選擇")
+      .getByLabel("選擇圖片")
       .setInputFiles({ name: "card.png", mimeType: "image/png", buffer: image });
-    await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
-    await expect(page.getByText("Gemini 正在辨識與分段…")).toBeVisible();
+    await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
+    await expect(page.getByText("辨識與分段…")).toBeVisible();
     await clearContent(page, "proceed");
     await page.evaluate(
       (fail) => (window as unknown as { finishOcr: (fail: boolean) => void }).finishOcr(fail),
@@ -822,7 +822,7 @@ test("late import cannot replace a newer image and invalid import preserves edit
   await page.getByLabel("口白文字", { exact: true }).first().fill("保留舊稿。");
   await goToStep(page, "取圖");
   await page
-    .getByLabel("匯入草稿 JSON")
+    .getByLabel("匯入草稿")
     .setInputFiles({ name: "late.json", mimeType: "application/json", buffer: Buffer.from("{}") });
   await expect
     .poll(() =>
@@ -830,7 +830,7 @@ test("late import cannot replace a newer image and invalid import preserves edit
     )
     .toBe("function");
   await page
-    .getByLabel("從相簿選擇")
+    .getByLabel("選擇圖片")
     .setInputFiles({ name: "new.png", mimeType: "image/png", buffer: image });
   await expect(page.getByAltText("準備上傳的圖片預覽")).toBeVisible();
   await page.evaluate(() =>
@@ -838,7 +838,7 @@ test("late import cannot replace a newer image and invalid import preserves edit
   );
   await expect(page.getByText("圖片已準備完成，可以開始辨識")).toBeVisible();
   await page
-    .getByLabel("匯入草稿 JSON")
+    .getByLabel("匯入草稿")
     .setInputFiles({ name: "bad.json", mimeType: "application/json", buffer: Buffer.from("{") });
   await expect(page.getByRole("alert")).toContainText("JSON");
   await goToStep(page, "校對");
@@ -871,7 +871,7 @@ test("late image preparation and successful import cannot write after clear", as
   await recognize(page);
   await goToStep(page, "取圖");
   await page
-    .getByLabel("從相簿選擇")
+    .getByLabel("選擇圖片")
     .setInputFiles({ name: "slow.png", mimeType: "image/png", buffer: image });
   await expect(page.getByText("正在調整方向與圖片大小…")).toBeVisible();
   await clearContent(page, "proceed");
@@ -882,10 +882,10 @@ test("late image preparation and successful import cannot write after clear", as
   );
   await expect(toast(page)).toContainText("已清除目前內容，登入狀態已保留");
   await expect(page.getByRole("alert")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "上傳並辨識文字", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ })).toHaveCount(0);
 
   await page
-    .getByLabel("匯入草稿 JSON")
+    .getByLabel("匯入草稿")
     .setInputFiles({ name: "slow.json", mimeType: "application/json", buffer: Buffer.from("{}") });
   await expect
     .poll(() =>
@@ -966,7 +966,7 @@ test("saved drafts require a choice and discard or malformed data removes the lo
   expect(await page.evaluate(() => localStorage.getItem("bragi:autosave:v1"))).toBeNull();
   await page.evaluate(() => localStorage.setItem("bragi:autosave:v1", "{"));
   await page.reload();
-  await expect(page.getByRole("heading", { name: "上傳並辨識" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "準備下一段故事" })).toBeVisible();
   await expect(page.getByRole("button", { name: "恢復上次的草稿" })).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem("bragi:autosave:v1"))).toBeNull();
 });
@@ -1066,9 +1066,9 @@ for (const mode of ["playback", "stream"] as const) {
       ocrPending = false;
       await goToStep(page, "取圖");
       await page
-        .getByLabel("從相簿選擇")
+        .getByLabel("選擇圖片")
         .setInputFiles({ name: "new.png", mimeType: "image/png", buffer: image });
-      await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+      await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
       await expect.poll(() => ocrPending).toBe(true);
       await goToStep(page, "朗讀");
       if (mode === "stream") {
