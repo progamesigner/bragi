@@ -424,13 +424,22 @@ export default function Home() {
       <Show when={!online()}>
         <p role="status">目前離線。已載入的文字與音訊仍可使用；連線恢復後請手動重試。</p>
       </Show>
-      <Show when={savedDraft() && !detectedLanguage()}>
+      <Show
+        when={
+          authenticated() &&
+          !sessionChecking() &&
+          !authBusy() &&
+          savedDraft() &&
+          !detectedLanguage()
+        }
+      >
         <section class="card" aria-label="本機暫存草稿">
           <p>此裝置有上次的文字草稿，可恢復繼續校對。</p>
           <button
             type="button"
             class="small"
             onClick={() => {
+              if (!authenticated() || sessionChecking() || authBusy() || detectedLanguage()) return;
               const draft = savedDraft();
               if (!draft) return;
               cancelOperation();

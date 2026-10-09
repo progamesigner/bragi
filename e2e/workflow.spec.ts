@@ -906,3 +906,46 @@ test("saved drafts require a choice and discard or malformed data removes the lo
   await expect(page.getByRole("button", { name: "登出", exact: true })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("bragi:autosave:v1"))).toBeNull();
 });
+
+test("draft recovery stays private until session checking and sign-in complete", async ({
+  page,
+}) => {
+  const calls = await mockApi(page);
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      "bragi:autosave:v1",
+      JSON.stringify({
+        format: "bragi-draft",
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        detectedLanguage: "zh",
+        segments: [{ id: "saved", text: "登入後才能恢復。", suggestedToneHint: "" }],
+      }),
+    ),
+  );
+  let finishSession!: () => void;
+  const checking = new Promise<void>((resolve) => {
+    finishSession = resolve;
+  });
+  await page.route("**/api/session", async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    await checking;
+    return route.fulfill({ json: { authenticated: false } });
+  });
+  await page.goto("/");
+  await expect(page.getByText("正在確認登入狀態…")).toBeVisible();
+  await expect(page.getByRole("region", { name: "本機暫存草稿" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "恢復上次的草稿" })).toHaveCount(0);
+  finishSession();
+  await expect(page.getByRole("button", { name: "登入", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "本機暫存草稿" })).toHaveCount(0);
+  await page.getByLabel("Authenticator 6 位驗證碼").fill("123456");
+  await page.getByRole("button", { name: "登入", exact: true }).click();
+  await expect(page.getByRole("button", { name: "恢復上次的草稿" })).toBeVisible();
+  await page.getByRole("button", { name: "恢復上次的草稿" }).click();
+  await expect(page.getByLabel("口白文字", { exact: true })).toHaveValue("登入後才能恢復。");
+  expect(calls.filter((call) => call.path !== "/api/session")).toHaveLength(0);
+  await page.getByRole("button", { name: "登出", exact: true }).click();
+  await expect(page.getByRole("button", { name: "登入", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("bragi:autosave:v1"))).toBeNull();
+});
