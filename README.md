@@ -1,61 +1,113 @@
 # Bragi
 
-Mobile-first tabletop narration assistant. Bragi uploads a tabletop script or card image to Gemini, extracts structured narration segments, and prepares them for reviewed, step-by-step playback.
+Bragi 是手機優先的桌遊口白助手。拍下劇本或卡牌，交給 Gemini 辨識，校對文字後逐段朗讀。每段播完都會停下，等主持人決定何時繼續。
 
-## Local setup
+正式站：[bragi.0x148.com](https://bragi.0x148.com)。登入需要管理者提供的 TOTP 驗證碼設定。
 
-1. Use Node.js 24 and run `npm install`.
-2. Copy `.env.example` to `.env` and fill in secrets. Generate `BRAGI_SESSION_SECRET` with at least 32 random bytes.
-3. Add the Base32 `BRAGI_TOTP_SECRET` to an authenticator app using an offline `otpauth://` QR-code workflow.
-4. Run `npm run dev`.
+## 功能概覽
 
-The home page signs in with TOTP, captures or selects an image, uploads it through Bragi to Gemini Files, and runs live OCR with `gemini-3.8-flash`. The browser normalizes EXIF orientation, limits the longest edge to 2,400 pixels, and compresses supported images below the 4 MB application limit before upload. Gemini may retain uploaded files for up to 48 hours.
+流程分成取圖、校對、朗讀三個畫面，播完最後一段後進入完成頁。
 
-OCR output opens as an editable review draft. Every segment supports text and tone edits, cursor-position splitting, merging with the next segment, insertion, and deletion. A segment can also carry separate spoken text for pronunciation fixes: the transcript stays unchanged on screen, while previews, prefetching, streaming, WAV replay and the audio cache all use the spoken text. Both must pass the speech length limits before playback. Splitting a corrected segment drops the correction, and merging combines the effective spoken text of both segments. Text drafts are saved after about one second of inactivity in localStorage on this device and browser only. After a reload, choose “恢復上次的草稿” or “捨棄”; restoration makes no Gemini request and never overwrites an active workspace. Clearing the workspace, signing out, or discarding the saved draft deletes this local copy. Storage failures silently leave editing available. Images, audio, voice selection and session data are never part of the autosaved draft. For a portable backup, use “匯出草稿” to download a versioned JSON file (`bragi-draft`, version 1) containing only the detected language, genre hint and segment text, tone and spoken text. It never includes images, audio, voice selection or session data. Importing a draft replaces the current workspace after confirmation when an existing draft would be lost and makes no Gemini request. Editing, export and import share a 200,000-byte UTF-8 file budget and a 50-segment limit. Text and spoken text allow 10,000 graphemes each, tone 120, genre 80 and language 35; IDs allow 64 graphemes. Changes that exceed these limits are rejected before changing the draft. Imports validate the complete payload and its canonical export size before replacement, reject unknown versions, duplicate IDs and extra fields, and may contain text that still needs splitting before playback.
+- 拍照或選擇圖片，也可以匯入先前匯出的 JSON 草稿。
+- 校對卡預設只顯示口白，可以直接修改。展開後能改語氣與發音修正，也能拆分、合併、新增或刪除段落。段落列表可快速跳到要改的位置，編輯可以復原與重做。
+- 設定面板可調字級、外觀（深色、淺色或跟隨系統）、介面語言、聲音、語速與朗讀時螢幕常亮。聲音選擇器列出 30 種聲音並可試聽，預設是 Kore。
+- 介面有繁體中文、簡體中文、日文、韓文、英文、德文與西班牙文。切換介面語言不會翻譯稿件。繁中以外的譯文還沒經母語者校對，用語見 [用語表](docs/i18n-glossary.md)。
 
-After review, the first uncached segment starts through progressive PCM streaming, so playback can begin before Gemini finishes the entire response. Completed streams are wrapped as WAV and enter the same bounded in-memory cache used by speech previews and later playback. Identical concurrent requests share one synthesis call; each preview, prefetch or playback caller can cancel independently, and the upstream request is aborted only after every caller has left. A cancelled request never writes into the cache, and a fresh request after full cancellation starts a new call. Bragi prepares at most one following segment in the background, retains no more than three entries or 9 MB, and clears them when the image changes or the user signs out. Playback still stops after every segment until the user explicitly replays it or continues. If the phone suspends Web Audio during streamed playback (a call, the lock screen or another app), Bragi marks the segment as paused and asks for a tap on “繼續播放” to resume from the interruption point; it does not promise background playback. Returning to review preserves the current draft, while leaving playback cancels active speech requests, stops Web Audio sources, and releases generated audio URLs.
+## 使用流程
 
-Progress, success, and error notices use distinct accessible live-region semantics, and API failures retain their request ID for troubleshooting. Keyboard focus follows the review and playback views, invalid empty segments include field guidance, and all controls expose a visible focus indicator. The upload screen explains which processing stays on-device, which data is sent to Gemini, and what Bragi does not persist.
+先登入，再取圖與辨識。每段文字確認後進入朗讀；回到校對時，稿件與編輯位置都會保留。
 
-JPEG, PNG, WebP, HEIC, and HEIF sources up to 25 MB are accepted. When a browser cannot decode HEIC or HEIF, an original file already below 4 MB can still be sent directly to Gemini; larger files require conversion or a new capture.
+1. 在 `/` 拍照或選圖，可填故事類型提示，再按辨識。辨識中可以取消。也可以直接匯入草稿，這不會呼叫 Gemini。
+2. 在 `/review` 對照原圖修正段落。發音修正只改實際朗讀的文字，畫面上的口白保留原文。每段都能試聽；空白或過長的段落要先修好，才能進入朗讀。
+3. 在 `/play` 點一次「播放此段」，音訊準備好就開始播放。每段結束都會停下；上一段與下一段只換位置，不會自動發聲。瀏覽器擋下播放時，點「點一下播放」會沿用已準備好的音訊。暫停或被系統中斷後，可以從原位置繼續。
+4. 整段音訊準備完成後，可以用進度滑桿跳到段內任一位置。串流還沒結束時不能拖動。主朗讀、校對試聽與聲音試聽共用同一個播放控制，同一時間只會有一個聲音。
+5. 最後一段播完後進入 `/finished`，顯示播了幾段與累計長度。可以在這裡匯出稿件、開始新故事、從頭再唸或回到校對。用瀏覽器上一頁回到朗讀時不會自動播放。
 
-## Verification
+停止編輯約 1 秒後，草稿會暫存在這台裝置的瀏覽器。重新載入並登入後，可以選「恢復上次的草稿」或捨棄。恢復的只有文字，不含圖片與音訊；要長期保存或換裝置，請匯出 JSON 草稿。
+
+換圖、重新辨識、匯入、清除、登出或套用更新時，如果內容會遺失，畫面會先要求確認，並提供「先匯出」。按了先匯出之後，要確認檔案已存好，再另外按繼續；取消則保留目前稿件。清除內容不會登出，但會刪除本機草稿暫存，登出和捨棄暫存也會刪除它。
+
+鍵盤操作如下。設定或對話框開著、或輸入法正在選字時，這些快捷鍵不會作用。
+
+- 校對：Ctrl／Cmd + Z 復原，Ctrl／Cmd + Shift + Z 或 Ctrl + Y 重做。在輸入欄裡會先用瀏覽器本身的文字復原。
+- 朗讀：Space 播放或暫停，← 與 → 換段並停止聲音。焦點在按鈕或滑桿上時，按鍵照該控制的原本行為；長按不會連續觸發。
+- 進度滑桿：方向鍵、Home、End 調整段內位置，暫停時調整仍維持暫停。
+
+新的聲音與語速從下一次播放或重播開始使用；繼續播放暫停中的音訊時沿用原本的設定。設定裡的聲音試聽固定以 1× 播放。語速有 0.75×、1×、1.25×、1.5×：1× 可以邊生成邊播放，其他語速要等整段音訊生成完，播放時保持原本音高。
+
+## 本機開發
+
+需要 Node.js 24。金鑰只放在伺服器環境變數，不寫進原始碼。
+
+```sh
+npm ci
+cp .env.example .env
+npm run dev
+```
+
+啟動前先填好 `.env`：
+
+- `GEMINI_API_KEY`：圖片辨識與語音生成使用。
+- `BRAGI_TOTP_SECRET`：Base32 格式的 TOTP 秘密，用離線產生的 `otpauth://` QR code 加入驗證器。
+- `BRAGI_SESSION_SECRET`：至少 32 bytes 的隨機值，用來簽署登入與上傳憑證。
+- `BRAGI_SESSION_VERSION`：預設 `1`，改變它會讓既有登入全部失效。
+- `GEMINI_OCR_MODEL`、`GEMINI_TTS_MODEL`：預設值見 `.env.example`。
+
+打開開發伺服器顯示的網址，用 6 位數 TOTP 登入。專案使用 SolidStart、SolidJS 與 Nitro。程式分工見 [架構與資料生命週期](docs/architecture.md)，端點規格見 [API 文件](docs/api.md)。
+
+## 測試與驗證
+
+下面的檢查和 `.github/workflows/verify.yml` 相同。在 Ubuntu 上跑視覺測試需要 Noto CJK 字型。
 
 ```sh
 npm run check
 npm run typecheck
 npm test
 npx playwright install --with-deps chromium
-npm run test:e2e
-npm run preview
+sudo apt-get install -y fonts-noto-cjk
+BRAGI_E2E_PORT=4194 npx playwright test --workers=4
+NITRO_PRESET=vercel VERCEL=1 VERCEL_ENV=production npm run build
+test -s .vercel/output/static/sw.js
 ```
 
-`test:e2e` builds and runs the production server, then checks the mobile flow with synthetic API responses and a separate real-service-worker test. It requires no Gemini credentials or quota. GitHub Actions runs the same checks. For a deployment check without generating content, run `BRAGI_SMOKE_URL=https://your-deployment npm run test:smoke`.
+CI 用 `npm run test:e2e` 跑同一份 Playwright 設定，預設 port 是 4173；本機有 port 衝突時用 `BRAGI_E2E_PORT` 換一個。測試會自己 build 並以正式模式啟動伺服器，API 全部是模擬回應，不耗用 Gemini 額度。另外還有啟用真實 service worker 的 PWA 測試，以及手機與平板的截圖比對。
 
-## App settings and installation
+音訊核心另有一組 Chromium 播放限制與 WebKit 的測試，目前不在 CI 裡：
 
-Bragi can be installed using the browser's app installation controls. Its versioned service worker caches only public static assets, with a separate offline landing page. API responses, images, drafts and generated audio are never stored in Cache Storage. A waiting update requires confirmation before reloading and clearing the workspace; close other Bragi tabs before applying it.
+```sh
+npx playwright install --with-deps chromium webkit
+npx playwright test --config playwright.audio-core.config.ts
+```
 
-The app icons, Apple touch icon and favicons in `public/` are generated from `assets/icon/icon.svg` and `assets/icon/icon-maskable.svg` (keep the maskable artwork inside the central 80% circle). After replacing either SVG, run `node scripts/build-icons.mjs`; it renders the PNGs with the Chromium that Playwright installs, and `scripts/pwa-assets.mjs` lists the files the service worker precaches.
+這組測試固定使用 port 4188。瀏覽器測試取代不了真機：iOS Safari、Android Chrome 與安裝版 PWA 要驗的項目列在 [朗讀真機清單](docs/reading-device-checklist.md)。
 
-The app reports offline status and requires manual retry after reconnecting. “Clear current content” confirms before cancelling work and removing the image, draft and audio, while preserving login.
+## 部署與 PWA
 
-Reading font presets are saved locally. When the browser supports the Screen Wake Lock API, the playback screen offers an opt-in “朗讀時保持螢幕常亮” setting. The choice is saved locally, the lock is reacquired when the page becomes visible again, and it is released when leaving playback. All 30 Gemini prebuilt voices are available in the voice picker, labelled with their official character (default Kore). The choice applies to the whole story, is remembered on this device, and can be auditioned with a fixed sample sentence that stays out of the narration audio cache. The server rejects voices outside the catalog. Previous/next controls select a segment without starting generation. Playback supports 0.75×, 1×, 1.25× and 1.5× speed; choose the speed before playing. At 1× the first uncached segment streams progressively. Other speeds skip streaming and play complete WAV audio with the browser's native `preservesPitch`, so the original pitch is kept at the cost of waiting for the whole segment before playback starts.
+部署到 Vercel 時，設定和本機相同的伺服器環境變數，並使用上面的 Vercel build。登入 cookie 有 Secure 屬性，所以正式站必須是 HTTPS。部署後可以跑一次不生成內容的 smoke test：
 
-## Operational logs
+```sh
+BRAGI_SMOKE_URL=https://bragi.0x148.com npm run test:smoke
+```
 
-Server JSON logs record endpoint, request ID, model, status, latency, input size bucket and speech duration, with completion, cancellation and interruption outcomes. Browser cache logs record only hit/miss/pending and request purpose. Logs exclude images, transcripts, credentials, upload capabilities and provider error details.
+可以用瀏覽器的安裝功能把 Bragi 加到主畫面。PWA 只快取公開的靜態檔案，離線時顯示說明頁；辨識與生成新語音仍然需要網路。有新版本時要先確認才會重新載入，套用前請關閉其他 Bragi 分頁。
 
-Pipe exported JSON log lines to `npm run metrics` for request counts, errors, 429s, p95 latency, audio duration and peak global request volume. These are operational measurements, not a billing estimate. WAF recalibration and external billing/quota alert setup are cancelled; existing protection remains unchanged.
+圖示來源是 `assets/icon/icon.svg` 與 `assets/icon/icon-maskable.svg`。換圖後執行 `node scripts/build-icons.mjs`，它會用 Playwright 安裝的 Chromium 在 `public/` 產生 PNG、Apple touch icon 與 favicon。maskable 版的圖案要放在中央 80% 的圓內。部署檢查、快取與日誌的細節見 [維運文件](docs/operations.md)。
 
-`POST /api/uploads`, `/api/ocr`, `/api/tts`, and `/api/tts-stream` require the signed `__Host-bragi-session` cookie and an exact same-origin `Origin` header. The JWT and persistent cookie expire together after 90 days. `GET /api/session` restores the signed-in interface without exposing the token, while `DELETE /api/session` expires it and clears the active browser workspace.
+## 資料與隱私
 
-Upload session creation, the upload proxy, OCR and both speech routes pass the client's disconnect signal to Gemini alongside their provider timeouts. A request cancelled by the client ends with `499 REQUEST_CANCELLED` and is logged with the `cancelled` outcome. Cancelling stops Bragi from waiting, but cannot undo work Gemini has already started or billed.
+圖片會先在裝置上轉正、縮小與壓縮，再經 Bragi 傳給 Gemini。朗讀時送出的是該段文字、語氣與故事類型提示。
 
-`/api/ocr` verifies the untrusted upload receipt against Gemini Files metadata before sending the file URI to the Interactions API. It uses structured output, high image resolution, and stateless processing.
+- 本機暫存只有文字草稿：辨識出的語言、故事類型，以及每段的口白、語氣與發音修正。圖片、音訊、聲音選擇與登入資料都不在草稿裡，匯出的檔案也一樣。
+- 字級、聲音等偏好另外存在這台裝置。登入狀態存在 HttpOnly cookie。Bragi 的伺服器不保存稿件，音訊只快取在瀏覽器記憶體。
+- 草稿暫存在 localStorage。service worker 的 Cache Storage 不放 API 回應、圖片、草稿或生成的音訊。
+- 上傳到 Gemini Files 的檔案會保存 48 小時，見 [Google 官方說明](https://ai.google.dev/gemini-api/docs/files)。在 Bragi 清除內容或登出，不會刪除 Gemini 那邊的檔案。
+- 日誌不記錄圖片、稿件、登入憑證、上傳憑證或供應商的錯誤內文。取消請求只能讓 Bragi 停止等待，撤回不了 Gemini 已經開始的處理或計費。
 
-`/api/tts` uses `gemini-3.8-flash-tts` (override with `GEMINI_TTS_MODEL`) with the selected voice. The segment text is sent strictly as a verbatim transcript, while tone and genre hints travel separately as `speech_metadata` style, so directions are never read aloud. Both speech routes explicitly request raw 24 kHz `audio/l16`. It validates the returned 24 kHz mono PCM and limits it to 60 seconds, wraps it in WAV, and retries one transient or missing-audio response. Review segments expose manual previews through native audio controls; generated object URLs are revoked when the text changes or the component is removed.
+## 限制與已知事項
 
-`/api/tts-stream` uses Gemini Interactions SSE and forwards only validated audio deltas as bounded 24 kHz, 16-bit mono PCM. The browser schedules these chunks through Web Audio, preserves split samples across transport boundaries, and reconstructs a complete WAV for replay and in-memory reuse. The non-streaming `/api/tts` path remains available for previews, prefetching, cache misses on browsers without Web Audio, and explicit fallback.
+辨識結果與發音都需要人工校對。遇到網路或供應商錯誤時要手動重試。
 
-JSON errors use `{ error: { code, message, requestId, retryable } }`; the same request ID is exposed through `X-Request-Id` on every API response.
+- 支援 JPEG、PNG、WebP、HEIC、HEIF。原始檔最大 25 MB，上傳上限 4 MB。瀏覽器無法解碼 HEIC 或 HEIF 時，4 MB 內的原檔可以直接上傳，更大的要先轉檔或重拍。
+- 草稿最多 50 段、200,000 bytes，存得下比單段朗讀上限更長的文字。要朗讀的段落，口白與發音修正都不能超過 400 個字（以字素計）、2,000 UTF-8 bytes，生成的音訊最長 60 秒；太長請拆段。
+- 鎖屏、來電或切到其他 App 可能中斷音訊，Bragi 不保證能在背景播放。螢幕常亮需要瀏覽器支援 Wake Lock，離開朗讀畫面就會釋放。
+- 本機儲存會受隱私模式、容量與瀏覽器清理影響。存不進去時仍可繼續編輯，但下次不一定能恢復，重要的稿件請匯出。
