@@ -34,6 +34,15 @@ async function snap(page: Page, name: string) {
   });
 }
 
+async function snapReviewCard(page: Page, name: string) {
+  await settle(page);
+  await expect(page.locator(".review-segment").first()).toHaveScreenshot(`${name}.png`, {
+    animations: "disabled",
+    // Capture all editing tools even when the card exceeds the phone's viewport.
+    stylePath: fileURLToPath(new URL("./review-card.visual.css", import.meta.url)),
+  });
+}
+
 for (const colorScheme of ["light", "dark"] as const) {
   test.describe(`${colorScheme} theme`, () => {
     test.use({ colorScheme });
@@ -332,5 +341,98 @@ for (const colorScheme of ["light", "dark"] as const) {
         await snap(page, `finished-${variant}-${colorScheme}`);
       });
     }
+  });
+}
+
+for (const colorScheme of ["light", "dark"] as const) {
+  test.describe(`${colorScheme} progressive review`, () => {
+    test.use({ colorScheme });
+    test("compact and expanded card", async ({ page }) => {
+      await mockSignedInApi(page);
+      await page.goto("/");
+      await recognize(page);
+      await page.locator(".toast").evaluate((element) => {
+        element.style.visibility = "hidden";
+      });
+      await snapReviewCard(page, `review-compact-${colorScheme}`);
+      await page
+        .locator(".review-segment")
+        .first()
+        .getByRole("button", { name: "更多編輯" })
+        .click();
+      await page.getByRole("button", { name: "另設朗讀文字" }).click();
+      await snapReviewCard(page, `review-expanded-${colorScheme}`);
+    });
+    test("paragraph navigation", async ({ page }) => {
+      await mockSignedInApi(page);
+      await page.goto("/");
+      await page.locator("#draft-import").setInputFiles({
+        ...draftFile("unused"),
+        buffer: Buffer.from(
+          JSON.stringify({
+            format: "bragi-draft",
+            version: 1,
+            exportedAt: "2026-10-09T00:00:00Z",
+            detectedLanguage: "繁體中文",
+            segments: Array.from({ length: 20 }, (_, i) => ({
+              id: `s${i}`,
+              text: i === 3 ? "" : `第 ${i + 1} 段的故事，等待逐段校對。`,
+              suggestedToneHint: "平靜",
+            })),
+          }),
+        ),
+      });
+      await expect(page).toHaveURL(/\/review$/);
+      await page.locator(".toast").evaluate((element) => {
+        element.style.visibility = "hidden";
+      });
+      if ((page.viewportSize()?.width ?? 0) < 900)
+        await page.getByRole("button", { name: "段落列表", exact: true }).click();
+      await snap(page, `review-list-${colorScheme}`);
+    });
+    test("prepared image comparison", async ({ page }) => {
+      await mockSignedInApi(page);
+      await page.goto("/");
+      const buffer = await page.evaluate(() => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 640;
+        canvas.height = 900;
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Canvas unavailable");
+        context.fillStyle = "#f6f1e7";
+        context.fillRect(0, 0, 640, 900);
+        context.fillStyle = "#2a2119";
+        context.font = "bold 36px serif";
+        context.fillText("The library at midnight", 42, 80);
+        context.font = "24px serif";
+        for (const [i, line] of [
+          "The streetlights fade, one by one.",
+          "You open the side door of the library.",
+          "The scent of old paper fills the air.",
+          "An unfinished diary lies on the desk.",
+          "Its ink has not yet dried.",
+        ].entries())
+          context.fillText(line, 42, 150 + i * 46);
+        return canvas.toDataURL("image/png").split(",")[1] ?? "";
+      });
+      await page.getByLabel("選擇圖片").setInputFiles({
+        name: "library.png",
+        mimeType: "image/png",
+        buffer: Buffer.from(buffer, "base64"),
+      });
+      await page.getByRole("button", { name: "辨識文字", exact: true }).click();
+      await expect(page).toHaveURL(/\/review$/);
+      await page.locator(".toast").evaluate((element) => {
+        element.style.visibility = "hidden";
+      });
+      if ((page.viewportSize()?.width ?? 0) < 900)
+        await page.getByRole("button", { name: "查看圖片對照", exact: true }).click();
+      await page.getByLabel("圖片放大").selectOption("1.5");
+      await page.locator(".comparison-scroller").evaluate((element) => {
+        element.scrollTop = 0;
+        element.scrollLeft = 0;
+      });
+      await snap(page, `review-image-${colorScheme}`);
+    });
   });
 }
