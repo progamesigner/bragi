@@ -1,9 +1,127 @@
-:root {
+/* Design tokens: palette from the v4 design (.th-dark / .th-light). `<html data-theme>` picks
+   the set; without it (before scripts run) the OS colour scheme decides. */
+:root,
+:root[data-theme="dark"] {
   color-scheme: dark;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  color: #f3ead8;
-  background: #171512;
+  --bg: #171512;
+  --bg-deep: #12100e;
+  --bg-glow: #4a2d22;
+  --surface: #221e1a;
+  --surface-2: var(--surface-2);
+  --line: #2e2822;
+  --line-2: var(--line-2);
+  --line-strong: var(--line-strong);
+  --text: var(--text);
+  --text-2: var(--text-2);
+  --text-3: #a89a87;
+  --text-faint: #8a7c69;
+  --reading: #f7efe1;
+  --accent: #e7a85c;
+  --on-accent: #22170d;
+  --accent-text: #e7a85c;
+  --accent-soft: #2a2219;
+  --accent-soft-text: #efbd76;
+  --danger: var(--danger);
+  --danger-line: var(--danger-line);
+  --danger-soft: #3a1f1b;
+  --ok: var(--ok);
+  --muted-btn: #2e2822;
+  --disabled: #5e5246;
+  --scrim: rgb(8 6 5 / 0.72);
+  --toast-bg: var(--text);
+  --toast-text: #22170d;
+  --toast-action: #7a4a12;
+  --shadow: rgb(0 0 0 / 0.4);
+  --focus: #f7c47f;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --bg: #f6f1e7;
+    --bg-deep: #fbf8f2;
+    --bg-glow: #f7e6cc;
+    --surface: #fffcf6;
+    --surface-2: #efe7d9;
+    --line: #e6dccb;
+    --line-2: #dacdb9;
+    --line-strong: #c2b29a;
+    --text: #2a2119;
+    --text-2: #54483b;
+    --text-3: #6b5d4d;
+    --text-faint: #76685a;
+    --reading: #1f1812;
+    --accent: #e09a4a;
+    --on-accent: #22170d;
+    --accent-text: #8a4f0e;
+    --accent-soft: #f7e6cc;
+    --accent-soft-text: #7a440a;
+    --danger: #a8281f;
+    --danger-line: #c4473d;
+    --danger-soft: #fbe6e2;
+    --ok: #3f7a3a;
+    --muted-btn: #e9e0d1;
+    --disabled: #b3a690;
+    --scrim: rgb(42 33 25 / 0.42);
+    --toast-bg: #2a2119;
+    --toast-text: #f6f1e7;
+    --toast-action: #f2b66d;
+    --shadow: rgb(60 40 20 / 0.18);
+    --focus: #8a4f0e;
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f1e7;
+  --bg-deep: #fbf8f2;
+  --bg-glow: #f7e6cc;
+  --surface: #fffcf6;
+  --surface-2: #efe7d9;
+  --line: #e6dccb;
+  --line-2: #dacdb9;
+  --line-strong: #c2b29a;
+  --text: #2a2119;
+  --text-2: #54483b;
+  --text-3: #6b5d4d;
+  --text-faint: #76685a;
+  --reading: #1f1812;
+  --accent: #e09a4a;
+  --on-accent: #22170d;
+  --accent-text: #8a4f0e;
+  --accent-soft: #f7e6cc;
+  --accent-soft-text: #7a440a;
+  --danger: #a8281f;
+  --danger-line: #c4473d;
+  --danger-soft: #fbe6e2;
+  --ok: #3f7a3a;
+  --muted-btn: #e9e0d1;
+  --disabled: #b3a690;
+  --scrim: rgb(42 33 25 / 0.42);
+  --toast-bg: #2a2119;
+  --toast-text: #f6f1e7;
+  --toast-action: #f2b66d;
+  --shadow: rgb(60 40 20 / 0.18);
+  --focus: #8a4f0e;
+}
+:root {
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --radius: 12px;
+  --font-sans: "Noto Sans TC", "Noto Sans CJK TC", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Noto Serif TC", "Noto Serif CJK TC", Georgia, serif;
+  font-family: var(--font-sans);
+  color: var(--text);
+  background: var(--bg);
   font-synthesis: none;
+}
+:root:lang(zh-Hans) {
+  --font-sans: "Noto Sans SC", "Noto Sans CJK SC", ui-sans-serif, system-ui, sans-serif;
+}
+:root:lang(ja) {
+  --font-sans: "Noto Sans JP", "Noto Sans CJK JP", ui-sans-serif, system-ui, sans-serif;
+}
+:root:lang(ko) {
+  --font-sans: "Noto Sans KR", "Noto Sans CJK KR", ui-sans-serif, system-ui, sans-serif;
 }
 * {
   box-sizing: border-box;
@@ -12,12 +130,12 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: radial-gradient(circle at 20% 0%, #4a2d22 0, transparent 42%), #171512;
+  background: radial-gradient(circle at 20% 0%, var(--bg-glow) 0, transparent 42%), var(--bg);
   -webkit-font-smoothing: antialiased;
 }
 ::selection {
-  color: #22170d;
-  background: #f7c47f;
+  color: var(--on-accent);
+  background: var(--accent);
 }
 main {
   --reading-font-size: clamp(1.35rem, 5vw, 2rem);
@@ -29,14 +147,14 @@ header {
   margin-bottom: 40px;
 }
 .eyebrow {
-  color: #e7a85c;
+  color: var(--accent-text);
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.18em;
 }
 h1 {
   margin: 12px 0 18px;
-  font-family: Georgia, serif;
+  font-family: var(--font-serif);
   font-size: clamp(2.6rem, 10vw, 5rem);
   font-weight: 500;
   line-height: 0.98;
@@ -44,16 +162,16 @@ h1 {
 }
 .lede {
   max-width: 52ch;
-  color: #c8bbaa;
+  color: var(--text-2);
   line-height: 1.65;
 }
 .card {
   margin: 16px 0;
   padding: 24px;
-  border: 1px solid #4c4136;
+  border: 1px solid var(--line-strong);
   border-radius: 20px;
-  background: rgb(39 34 29 / 0.88);
-  box-shadow: 0 18px 50px rgb(0 0 0 / 0.22);
+  background: var(--surface);
+  box-shadow: 0 18px 50px var(--shadow);
 }
 h2 {
   margin-top: 0;
@@ -62,7 +180,7 @@ h2 {
 }
 label,
 .card p {
-  color: #c8bbaa;
+  color: var(--text-2);
   font-size: 0.9rem;
   line-height: 1.5;
 }
@@ -84,10 +202,10 @@ input {
   min-width: 0;
   width: 100%;
   padding: 13px 14px;
-  border: 1px solid #625446;
+  border: 1px solid var(--line-strong);
   border-radius: 12px;
   color: inherit;
-  background: #1d1a17;
+  background: var(--surface-2);
   font: inherit;
 }
 textarea {
@@ -95,24 +213,24 @@ textarea {
   width: 100%;
   resize: vertical;
   padding: 13px 14px;
-  border: 1px solid #625446;
+  border: 1px solid var(--line-strong);
   border-radius: 12px;
   color: inherit;
-  background: #1d1a17;
+  background: var(--surface-2);
   font: inherit;
   line-height: 1.55;
 }
 input:hover,
 textarea:hover {
-  border-color: #8a735e;
+  border-color: var(--text-faint);
 }
 textarea.invalid {
-  border-color: #d86f64;
+  border-color: var(--danger-line);
 }
 .field-error {
   display: block;
   margin-top: 6px;
-  color: #ef9a91;
+  color: var(--danger);
   font-size: 0.8rem;
 }
 .spoken-toggle {
@@ -121,7 +239,7 @@ textarea.invalid {
 .spoken-correction {
   margin-top: 14px;
   padding: 12px 14px;
-  border-left: 3px solid #8a735e;
+  border-left: 3px solid var(--text-faint);
 }
 label + input {
   margin-top: 8px;
@@ -138,14 +256,14 @@ label.checkbox input {
   flex: none;
   margin: 0;
   padding: 0;
-  accent-color: #e7a85c;
+  accent-color: var(--accent);
 }
 button {
   padding: 13px 20px;
   border: 0;
   border-radius: 12px;
-  background: #e7a85c;
-  color: #22170d;
+  background: var(--accent);
+  color: var(--on-accent);
   font: inherit;
   font-weight: 800;
   cursor: pointer;
@@ -172,7 +290,7 @@ textarea:focus-visible,
 audio:focus-visible,
 [tabindex="-1"]:focus-visible,
 .file-button:has(+ input:focus-visible) {
-  outline: 3px solid #f7c47f;
+  outline: 3px solid var(--focus);
   outline-offset: 3px;
 }
 .small {
@@ -180,14 +298,14 @@ audio:focus-visible,
   font-size: 0.82rem;
 }
 button.secondary {
-  border: 1px solid #625446;
-  background: #1d1a17;
-  color: #f3ead8;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--text);
 }
 button.danger {
-  border: 1px solid #75433e;
+  border: 1px solid var(--danger-line);
   background: transparent;
-  color: #ef9a91;
+  color: var(--danger);
 }
 .wide {
   width: 100%;
@@ -204,25 +322,25 @@ button.danger {
 .privacy-note {
   margin: 16px 0 20px;
   padding: 16px;
-  border: 1px solid #625446;
+  border: 1px solid var(--line-strong);
   border-radius: 14px;
-  background: #1d1a17;
+  background: var(--surface-2);
 }
 .privacy-note h3 {
   margin: 0 0 8px;
-  color: #f3ead8;
+  color: var(--text);
   font-size: 0.9rem;
 }
 .privacy-note ul {
   margin: 0;
   padding-left: 20px;
-  color: #c8bbaa;
+  color: var(--text-2);
   font-size: 0.84rem;
   line-height: 1.6;
 }
 .privacy-note p {
   margin: 8px 0 0;
-  color: #efbd76;
+  color: var(--accent-soft-text);
 }
 .capture-actions {
   display: grid;
@@ -236,15 +354,15 @@ button.danger {
   min-height: 48px;
   padding: 12px 16px;
   border-radius: 12px;
-  background: #e7a85c;
-  color: #22170d;
+  background: var(--accent);
+  color: var(--on-accent);
   font-weight: 800;
   cursor: pointer;
 }
 .file-button.secondary {
-  border: 1px solid #625446;
-  background: #1d1a17;
-  color: #f3ead8;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--text);
 }
 .file-button[aria-disabled="true"] {
   cursor: not-allowed;
@@ -253,7 +371,7 @@ button.danger {
 .draft-import {
   margin-top: 18px;
   padding-top: 16px;
-  border-top: 1px solid #3a322a;
+  border-top: 1px solid var(--line-2);
 }
 .draft-import p {
   margin: 8px 0 0;
@@ -272,16 +390,16 @@ button.danger {
 .capture-preview {
   margin-top: 14px;
   overflow: hidden;
-  border: 1px solid #4c4136;
+  border: 1px solid var(--line-strong);
   border-radius: 14px;
-  background: #1d1a17;
+  background: var(--surface-2);
 }
 .capture-preview img {
   display: block;
   width: 100%;
   max-height: 420px;
   object-fit: contain;
-  background: #0f0e0c;
+  background: var(--bg-deep);
 }
 .capture-preview .file,
 .capture-preview .image-note,
@@ -289,17 +407,17 @@ button.danger {
   margin: 10px 14px;
 }
 .capture-preview .image-note {
-  color: #9fc29b;
+  color: var(--ok);
 }
 .capture-preview .image-warning {
-  color: #efbd76;
+  color: var(--accent-soft-text);
 }
 .preview-placeholder {
   display: grid;
   min-height: 180px;
   place-items: center;
   padding: 24px;
-  color: #c8bbaa;
+  color: var(--text-2);
   text-align: center;
 }
 .status {
@@ -309,19 +427,19 @@ button.danger {
   min-height: 1.5em;
   margin: 24px auto 0;
   padding: 12px 16px;
-  border: 1px solid #625446;
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
-  color: #e7a85c;
-  background: rgb(29 26 23 / 0.94);
-  box-shadow: 0 10px 30px rgb(0 0 0 / 0.32);
+  color: var(--text);
+  background: var(--surface-2);
+  box-shadow: 0 10px 30px var(--shadow);
   text-align: center;
   backdrop-filter: blur(12px);
 }
 .status.success {
-  color: #9fc29b;
+  color: var(--ok);
 }
 .status.error {
-  color: #ef9a91;
+  color: var(--danger);
 }
 .review-heading {
   display: flex;
@@ -347,16 +465,16 @@ button.danger {
 }
 .review-segment {
   padding: 18px;
-  border: 1px solid #4c4136;
+  border: 1px solid var(--line-strong);
   border-radius: 14px;
-  background: #201c18;
+  background: var(--surface-2);
 }
 .review-segment label {
   display: block;
   margin: 12px 0 6px;
 }
 .segment-number {
-  color: #e7a85c;
+  color: var(--text-3);
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -370,7 +488,7 @@ button.danger {
 .speech-preview {
   margin-top: 14px;
   padding-top: 14px;
-  border-top: 1px solid #4c4136;
+  border-top: 1px solid var(--line-strong);
 }
 .preview-button {
   width: 100%;
@@ -387,17 +505,17 @@ button.danger {
 }
 .audio-result span {
   flex: 0 0 auto;
-  color: #c8bbaa;
+  color: var(--text-2);
   font-size: 0.78rem;
 }
 .empty-state {
   padding: 22px;
-  border: 1px dashed #625446;
+  border: 1px dashed var(--line-strong);
   border-radius: 12px;
   text-align: center;
 }
 .playback {
-  border-color: #9d6e3c;
+  border-color: var(--line-strong);
 }
 .playback-heading {
   display: flex;
@@ -412,28 +530,28 @@ button.danger {
   min-height: 180px;
   margin: 20px 0;
   padding: 24px;
-  border: 1px solid #4c4136;
+  border: 1px solid var(--line-strong);
   border-radius: 16px;
-  background: #1d1a17;
+  background: var(--surface-2);
 }
 .playback-script p {
   margin: 0;
-  color: #f3ead8;
-  font-family: Georgia, serif;
+  color: var(--text);
+  font-family: var(--font-serif);
   font-size: var(--reading-font-size);
   line-height: 1.55;
   white-space: pre-wrap;
 }
 .playback-script p.spoken-text {
   margin-top: 16px;
-  color: #c8bbaa;
+  color: var(--text-2);
   font-family: inherit;
   font-size: calc(var(--reading-font-size) * 2 / 3);
 }
 .playback-script span {
   display: block;
   margin-top: 20px;
-  color: #c8bbaa;
+  color: var(--text-2);
   font-size: 0.82rem;
 }
 .playback-audio {
@@ -448,7 +566,7 @@ button.danger {
 }
 .playback-audio span {
   flex: 0 0 auto;
-  color: #c8bbaa;
+  color: var(--text-2);
   font-size: 0.78rem;
 }
 .playback-actions {
@@ -464,7 +582,7 @@ button.danger {
   margin: 0;
 }
 .playback-actions .prefetch-status {
-  color: #9fc29b;
+  color: var(--ok);
   font-size: 0.82rem;
 }
 @media (max-width: 480px) {
