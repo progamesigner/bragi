@@ -44,9 +44,12 @@ test("theme follows the system until a choice is saved", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/");
   const html = page.locator("html");
+  const themeColor = page.locator('meta[name="theme-color"]');
   await expect(html).toHaveAttribute("data-theme", "dark");
+  await expect(themeColor).toHaveAttribute("content", "#171512");
   await page.emulateMedia({ colorScheme: "light" });
   await expect(html).toHaveAttribute("data-theme", "light");
+  await expect(themeColor).toHaveAttribute("content", "#f6f1e7");
 
   await settingsButton(page).click();
   await page.getByRole("group", { name: "外觀" }).getByRole("radio", { name: "深色" }).check();
@@ -61,12 +64,14 @@ test("theme follows the system until a choice is saved", async ({ page }) => {
 
   await page.reload();
   await expect(html).toHaveAttribute("data-theme", "dark");
+  await expect(themeColor).toHaveAttribute("content", "#171512");
   await settingsButton(page).click();
   await expect(
     page.getByRole("group", { name: "外觀" }).getByRole("radio", { name: "深色" }),
   ).toBeChecked();
   await page.getByRole("group", { name: "外觀" }).getByRole("radio", { name: "淺色" }).check();
   expect(await background()).toBe("#f6f1e7");
+  await expect(themeColor).toHaveAttribute("content", "#f6f1e7");
   await page.getByRole("group", { name: "外觀" }).getByRole("radio", { name: "跟隨系統" }).check();
   await expect(html).toHaveAttribute("data-theme", "light");
 });

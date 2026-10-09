@@ -43,6 +43,12 @@ for (const colorScheme of ["light", "dark"] as const) {
       await snap(page, `sign-in-${colorScheme}`);
     });
 
+    test("offline page", async ({ page }) => {
+      await page.goto("/offline.html");
+      await expect(page.getByRole("heading", { name: "Bragi 目前離線" })).toBeVisible();
+      await snap(page, `offline-${colorScheme}`);
+    });
+
     test("settings", async ({ page }) => {
       await mockSignedInApi(page);
       await page.goto("/");

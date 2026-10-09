@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img">
+  <title>Bragi</title>
+  <!-- Placeholder traced from the original icon-512.png; replace this file and run `node scripts/build-icons.mjs`. -->
+  <rect width="512" height="512" fill="#171512"/>
+  <path fill="#e8c790" fill-rule="evenodd" d="M154 113H333V154H359V236H333V277H359V359H333V400H154ZM200 154V236H318V154ZM200 277V359H318V277Z"/>
+</svg>

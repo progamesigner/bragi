@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { PRECACHED_PUBLIC_ASSETS } from "./pwa-assets.mjs";
 
 export default function pwaBuild() {
   return {
@@ -12,7 +13,7 @@ export default function pwaBuild() {
     async writeBundle(options) {
       if (!options.dir) throw new Error("PWA build requires a directory output");
       const root = pathToFileURL(`${resolve(options.dir)}/`);
-      const assets = ["/offline.html", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
+      const assets = [...PRECACHED_PUBLIC_ASSETS];
       async function walk(path) {
         for (const entry of await readdir(new URL(path, root), { withFileTypes: true })) {
           const child = `${path}${entry.name}`;

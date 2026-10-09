@@ -1,12 +1,176 @@
 <!doctype html>
 <html lang="zh-Hant">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#171512">
 <title>Bragi · 離線</title>
-<body style="background:#171512;color:#e8c790;font:1.2rem system-ui;padding:3rem">
-<h1>Bragi 目前離線</h1>
-<p>請連線後重新開啟。圖片與校閱內容不會跨重新載入保存。</p>
-<a href="/" style="color:inherit">重新開啟</a>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  /* Mirrors the dark and light tokens in src/styles.css; this page must work without the app bundle. */
+  :root, :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #171512;
+    --bg-glow: #4a2d22;
+    --surface: #221e1a;
+    --line: #2e2822;
+    --text: #f3ead8;
+    --text-2: #c8bbaa;
+    --accent: #e7a85c;
+    --on-accent: #22170d;
+    --accent-text: #e7a85c;
+    --focus: #f7c47f;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme]) {
+      color-scheme: light;
+      --bg: #f6f1e7;
+      --bg-glow: #f7e6cc;
+      --surface: #fffcf6;
+      --line: #e6dccb;
+      --text: #2a2119;
+      --text-2: #54483b;
+      --accent: #e09a4a;
+      --on-accent: #22170d;
+      --accent-text: #8a4f0e;
+      --focus: #8a4f0e;
+    }
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f6f1e7;
+    --bg-glow: #f7e6cc;
+    --surface: #fffcf6;
+    --line: #e6dccb;
+    --text: #2a2119;
+    --text-2: #54483b;
+    --accent: #e09a4a;
+    --on-accent: #22170d;
+    --accent-text: #8a4f0e;
+    --focus: #8a4f0e;
+  }
+  :root {
+    --font-sans: "Noto Sans TC", "Noto Sans CJK TC", ui-sans-serif, system-ui, sans-serif;
+    --font-serif: "Noto Serif TC", "Noto Serif CJK TC", Georgia, serif;
+    font-family: var(--font-sans);
+    color: var(--text);
+    background: var(--bg);
+  }
+  :root:lang(zh-Hans) {
+    --font-sans: "Noto Sans SC", "Noto Sans CJK SC", ui-sans-serif, system-ui, sans-serif;
+    --font-serif: "Noto Serif SC", "Noto Serif CJK SC", Georgia, serif;
+  }
+  :root:lang(ja) {
+    --font-sans: "Noto Sans JP", "Noto Sans CJK JP", ui-sans-serif, system-ui, sans-serif;
+    --font-serif: "Noto Serif JP", "Noto Serif CJK JP", Georgia, serif;
+  }
+  :root:lang(ko) {
+    --font-sans: "Noto Sans KR", "Noto Sans CJK KR", ui-sans-serif, system-ui, sans-serif;
+    --font-serif: "Noto Serif KR", "Noto Serif CJK KR", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+    background: radial-gradient(circle at 20% 0%, var(--bg-glow) 0, transparent 42%), var(--bg);
+    -webkit-font-smoothing: antialiased;
+  }
+  main {
+    max-width: 34rem;
+    margin: 0 auto;
+    padding: max(72px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) 48px
+      max(24px, env(safe-area-inset-left));
+  }
+  .wordmark {
+    margin: 0 0 40px;
+    color: var(--accent-text);
+    font-family: var(--font-serif);
+    font-size: 1.625rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  h1 {
+    margin: 0 0 16px;
+    font-family: var(--font-serif);
+    font-size: 1.75rem;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+  p {
+    margin: 0 0 32px;
+    color: var(--text-2);
+    font-size: 1.0625rem;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+  }
+  a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: 0 24px;
+    border-radius: 12px;
+    color: var(--on-accent);
+    background: var(--accent);
+    font-weight: 700;
+    text-decoration: none;
+  }
+  a:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 3px;
+  }
+</style>
+<script>
+  // Follows the app's saved theme and language; each language is used only when it is supported.
+  (() => {
+    const root = document.documentElement;
+    const text = {
+      "zh-Hant": ["Bragi 目前離線", "請連線後重新開啟。這台裝置暫存的文字草稿仍會保留，登入後可以恢復；圖片與音訊不會保存。", "重新開啟", "Bragi · 離線"],
+      "zh-Hans": ["Bragi 目前离线", "请联网后重新打开。这台设备暂存的文字草稿仍会保留，登录后可以恢复；图片和音频不会保存。", "重新打开", "Bragi · 离线"],
+      ja: ["Bragi はオフラインです", "接続してから開き直してください。この端末に一時保存した下書きは残り、ログイン後に復元できます。画像と音声は保存されません。", "開き直す", "Bragi · オフライン"],
+      ko: ["Bragi가 오프라인 상태예요", "인터넷에 연결한 뒤 다시 열어 주세요. 이 기기에 임시 저장된 텍스트 초안은 남아 있어 로그인 후 복원할 수 있어요. 이미지와 오디오는 저장되지 않아요.", "다시 열기", "Bragi · 오프라인"],
+      en: ["Bragi is offline", "Reconnect, then open Bragi again. Text drafts saved on this device are kept and can be restored after you sign in; images and audio are not saved.", "Open again", "Bragi · Offline"],
+      de: ["Bragi ist offline", "Stell eine Verbindung her und öffne Bragi erneut. Auf diesem Gerät gespeicherte Textentwürfe bleiben erhalten und lassen sich nach der Anmeldung wiederherstellen; Bilder und Audio werden nicht gespeichert.", "Erneut öffnen", "Bragi · Offline"],
+      es: ["Bragi está sin conexión", "Conéctate y vuelve a abrir Bragi. Los borradores de texto guardados en este dispositivo se conservan y puedes recuperarlos al iniciar sesión; las imágenes y el audio no se guardan.", "Volver a abrir", "Bragi · Sin conexión"],
+    };
+    let theme = null;
+    let locale = null;
+    try {
+      theme = localStorage.getItem("bragi-theme");
+      locale = localStorage.getItem("bragi-locale");
+    } catch {}
+    if (theme === "light" || theme === "dark") root.dataset.theme = theme;
+    const dark =
+      theme === "dark" || (theme !== "light" && !matchMedia("(prefers-color-scheme: light)").matches);
+    document.querySelector('meta[name="theme-color"]').content = dark ? "#171512" : "#f6f1e7";
+    if (!text[locale]) {
+      const tag = (navigator.language || "").toLowerCase();
+      locale = tag.startsWith("zh")
+        ? /hant|tw|hk|mo/.test(tag)
+          ? "zh-Hant"
+          : "zh-Hans"
+        : Object.keys(text).find(
+            (key) => tag === key.toLowerCase() || tag.startsWith(`${key.toLowerCase()}-`),
+          ) || "zh-Hant";
+    }
+    root.lang = locale;
+    document.addEventListener("DOMContentLoaded", () => {
+      const [heading, body, action, title] = text[locale];
+      document.querySelector("h1").textContent = heading;
+      document.querySelector("main p:not(.wordmark)").textContent = body;
+      document.querySelector("main a").textContent = action;
+      document.title = title;
+    });
+  })();
+</script>
+</head>
+<body>
+<main>
+  <p class="wordmark">Bragi</p>
+  <h1>Bragi 目前離線</h1>
+  <p>請連線後重新開啟。這台裝置暫存的文字草稿仍會保留，登入後可以恢復；圖片與音訊不會保存。</p>
+  <a href="/">重新開啟</a>
+</main>
 </body>
 </html>
