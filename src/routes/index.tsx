@@ -10,18 +10,18 @@ import Select from "~/components/ui/Select";
 import Sheet from "~/components/ui/Sheet";
 import Toast from "~/components/ui/Toast";
 import VoiceSample from "~/components/VoiceSample";
-import { apiErrorMessage } from "~/lib/api";
+import { readApiError } from "~/lib/api";
 import { DraftAutosave } from "~/lib/autosave";
 import { type Draft, MAX_DRAFT_BYTES, parseDraft, serializeDraft } from "~/lib/draft";
 import { graphemeCount, MAX_DRAFT_GENRE } from "~/lib/draft-limits";
 import { History } from "~/lib/editing";
 import { LOCALE_NAMES, LOCALES, type Locale, t } from "~/lib/i18n";
 import type { PreparedImage } from "~/lib/image";
-import { networkErrorMessage, requireOnline } from "~/lib/network";
+import { requireOnline } from "~/lib/network";
 import { ocrResponseSchema } from "~/lib/schemas";
 import { speechCache } from "~/lib/speech-cache";
 import type { Segment } from "~/lib/state";
-import type { StatusMessage, StatusTone } from "~/lib/status";
+import { reportError, type StatusMessage, type StatusReporter } from "~/lib/status";
 import { locale, setLocale, setThemePreference, themePreference } from "~/lib/store/preferences";
 import { THEME_PREFERENCES, type ThemePreference } from "~/lib/theme";
 import { voiceLabel } from "~/lib/voices";
@@ -84,9 +84,9 @@ export default function Home() {
     } catch {}
   }
 
-  function reportStatus(message: string, tone: StatusTone = "info") {
-    setStatus({ message, tone });
-  }
+  const reportStatus: StatusReporter = (message, tone = "info", details) => {
+    setStatus({ message, tone, details });
+  };
 
   function cancelOperation() {
     operations.invalidate();
@@ -160,7 +160,7 @@ export default function Home() {
     const operation = authOperations.begin();
     try {
       const response = await fetch("/api/session", { cache: "no-store", signal: operation.signal });
-      if (!response.ok) throw new Error(await apiErrorMessage(response, t("auth.checkFailed")));
+      if (!response.ok) throw await readApiError(response, t("auth.checkFailed"));
       const session = (await response.json()) as { authenticated: boolean; voices?: string[] };
       if (!operation.current()) return;
       setAuthenticated(session.authenticated);
@@ -170,8 +170,7 @@ export default function Home() {
         session.authenticated ? "success" : "info",
       );
     } catch (error) {
-      if (operation.current())
-        reportStatus(error instanceof Error ? error.message : t("auth.checkFailed"), "error");
+      if (operation.current()) reportError(reportStatus, error, t("auth.checkFailed"));
     } finally {
       if (operation.current()) setSessionChecking(false);
     }
@@ -189,7 +188,7 @@ export default function Home() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ otp: otp() }),
       });
-      if (!response.ok) throw new Error(await apiErrorMessage(response, t("auth.failed")));
+      if (!response.ok) throw await readApiError(response, t("auth.failed"));
       const session = await response.json();
       if (!operation.current()) return;
       restoreVoice(session.voices ?? []);
@@ -197,7 +196,7 @@ export default function Home() {
       setOtp("");
       reportStatus(t("auth.success"), "success");
     } catch (error) {
-      if (operation.current()) reportStatus(networkErrorMessage(error, t("auth.failed")), "error");
+      if (operation.current()) reportError(reportStatus, error, t("auth.failed"));
     } finally {
       if (operation.current()) setAuthBusy(false);
     }
@@ -215,14 +214,13 @@ export default function Home() {
     try {
       requireOnline();
       const response = await fetch("/api/session", { method: "DELETE", signal: operation.signal });
-      if (!response.ok) throw new Error(await apiErrorMessage(response, t("auth.signOutFailed")));
+      if (!response.ok) throw await readApiError(response, t("auth.signOutFailed"));
       if (!operation.current()) return;
       setAuthenticated(false);
       clearWorkspace();
       reportStatus(t("auth.signedOut"), "success");
     } catch (error) {
-      if (operation.current())
-        reportStatus(networkErrorMessage(error, t("auth.signOutFailed")), "error");
+      if (operation.current()) reportError(reportStatus, error, t("auth.signOutFailed"));
     } finally {
       if (operation.current()) setAuthBusy(false);
     }
@@ -276,7 +274,7 @@ export default function Home() {
         body: JSON.stringify({ mimeType: selected.type, sizeBytes: selected.size }),
       });
       if (!sessionResponse.ok)
-        throw new Error(await apiErrorMessage(sessionResponse, t("recognize.sessionFailed")));
+        throw await readApiError(sessionResponse, t("recognize.sessionFailed"));
       const upload = (await sessionResponse.json()) as UploadTarget;
       if (!operation.current()) return;
       reportStatus(t("recognize.uploading"));
@@ -286,8 +284,7 @@ export default function Home() {
         headers: upload.target.headers,
         body: selected,
       });
-      if (!response.ok)
-        throw new Error(await apiErrorMessage(response, t("recognize.uploadFailed")));
+      if (!response.ok) throw await readApiError(response, t("recognize.uploadFailed"));
       const receipt = await response.json();
       if (!operation.current()) return;
       reportStatus(t("recognize.analyzing"));
@@ -301,8 +298,7 @@ export default function Home() {
           genreHint: genre.trim() || undefined,
         }),
       });
-      if (!ocrResponse.ok)
-        throw new Error(await apiErrorMessage(ocrResponse, t("recognize.ocrFailed")));
+      if (!ocrResponse.ok) throw await readApiError(ocrResponse, t("recognize.ocrFailed"));
       const value: unknown = await ocrResponse.json();
       if (!operation.current()) return;
       const parsed = ocrResponseSchema.safeParse(value);
@@ -322,8 +318,7 @@ export default function Home() {
       }
       reportStatus(t("recognize.done", { n: draft.segments.length }), "success");
     } catch (error) {
-      if (operation.current())
-        reportStatus(networkErrorMessage(error, t("recognize.failed")), "error");
+      if (operation.current()) reportError(reportStatus, error, t("recognize.failed"));
     } finally {
       if (operation.current()) setRecognitionBusy(false);
     }
@@ -643,9 +638,7 @@ export default function Home() {
         </Show>
       </Show>
 
-      <Toast tone={status().tone}>
-        <p>{status().message}</p>
-      </Toast>
+      <Toast tone={status().tone} message={status().message} details={status().details} />
     </main>
   );
 }

@@ -1,4 +1,5 @@
-import { apiErrorMessage } from "./api";
+import { readApiError } from "./api";
+import { t } from "./i18n";
 import { requireOnline } from "./network";
 import type { SpeechRequest } from "./speech";
 
@@ -20,13 +21,12 @@ export async function openSpeechStream(
     body: JSON.stringify(input),
     signal,
   });
-  if (!response.ok)
-    throw new Error(await apiErrorMessage(response, "Speech stream could not start"));
+  if (!response.ok) throw await readApiError(response, t("apiError.streamFailed"));
 
   const mediaType = response.headers.get("content-type")?.split(";", 1)[0]?.toLowerCase();
   const sampleRate = Number(response.headers.get("x-audio-sample-rate"));
   if (mediaType !== "audio/l16" || sampleRate !== 24_000 || !response.body)
-    throw new Error("Speech service returned an invalid stream");
+    throw new Error(t("apiError.invalidStream"));
   return {
     reader: response.body.getReader(),
     requestId: response.headers.get("x-request-id") ?? undefined,

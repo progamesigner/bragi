@@ -57,7 +57,7 @@ describe("speech stream client", () => {
       .mockResolvedValue(new Response("text", { headers: { "content-type": "text/plain" } }));
 
     await expect(openSpeechStream({ text: "第一段" }, undefined, fetcher)).rejects.toThrow(
-      "invalid stream",
+      "串流格式不正確",
     );
   });
 });

@@ -748,6 +748,29 @@ label:has(+ input:focus-visible) {
 .toast p {
   margin: 0;
 }
+.toast-details {
+  margin-top: var(--space-1);
+  color: var(--text-2);
+  font-size: 0.82rem;
+  text-align: left;
+}
+.toast-details summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.toast-details dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px var(--space-1);
+  margin: 0;
+}
+.toast-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 .playback-actions .button {
   flex: 1 1 180px;
 }
@@ -806,4 +829,7 @@ main[data-font-size="largest"] {
 main[data-font-size="large"] .review-segment textarea,
 main[data-font-size="largest"] .review-segment textarea {
   font-size: var(--reading-font-size);
+}
+.toast:has(.toast-details) {
+  border-radius: 16px;
 }

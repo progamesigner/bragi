@@ -1,4 +1,5 @@
-import { apiErrorMessage } from "./api";
+import { readApiError } from "./api";
+import { t } from "./i18n";
 import { requireOnline } from "./network";
 
 export type SpeechRequest = {
@@ -28,10 +29,10 @@ export async function requestSpeech(
     body: JSON.stringify(input),
     signal,
   });
-  if (!response.ok) throw new Error(await apiErrorMessage(response, "Speech request failed"));
+  if (!response.ok) throw await readApiError(response, t("apiError.speechFailed"));
 
   const blob = await response.blob();
-  if (blob.type !== "audio/wav") throw new Error("Speech service returned invalid audio");
+  if (blob.type !== "audio/wav") throw new Error(t("apiError.invalidAudio"));
 
   const durationMs = Number(response.headers.get("x-audio-duration-ms"));
   return {

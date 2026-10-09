@@ -1,8 +1,7 @@
 import { createEffect, createSignal, on, onCleanup, Show } from "solid-js";
 import { t } from "~/lib/i18n";
-import { networkErrorMessage } from "~/lib/network";
 import { requestSpeech } from "~/lib/speech";
-import type { StatusReporter } from "~/lib/status";
+import { reportError, type StatusReporter } from "~/lib/status";
 import { VOICE_SAMPLE_TEXT, voiceLabel } from "~/lib/voices";
 import Button from "./ui/Button";
 
@@ -61,7 +60,7 @@ export default function VoiceSample(props: VoiceSampleProps) {
       props.onStatus(t("voiceSample.ready"), "success");
     } catch (error) {
       if (controller.signal.aborted) return;
-      props.onStatus(networkErrorMessage(error, t("voiceSample.failed")), "error");
+      reportError(props.onStatus, error, t("voiceSample.failed"));
     } finally {
       if (request === controller) setBusy(false);
     }

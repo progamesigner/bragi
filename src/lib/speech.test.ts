@@ -22,7 +22,7 @@ describe("speech client", () => {
     );
   });
 
-  it("surfaces the API message and request ID", async () => {
+  it("keeps the request ID and status of a failed request", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValue(
@@ -32,9 +32,12 @@ describe("speech client", () => {
         ),
       );
 
-    await expect(requestSpeech({ text: "第一段" }, undefined, fetcher)).rejects.toThrow(
-      "Speech service is unavailable (request-1)",
-    );
+    await expect(requestSpeech({ text: "第一段" }, undefined, fetcher)).rejects.toMatchObject({
+      name: "ApiError",
+      message: "無法產生語音。請稍後再試。",
+      serverMessage: "Speech service is unavailable",
+      details: { status: 503, requestId: "request-1", retryable: true },
+    });
   });
 
   it("rejects a successful non-WAV response", async () => {
@@ -43,7 +46,7 @@ describe("speech client", () => {
       .mockResolvedValue(new Response(new Blob(["text"], { type: "text/plain" })));
 
     await expect(requestSpeech({ text: "第一段" }, undefined, fetcher)).rejects.toThrow(
-      "invalid audio",
+      "音訊格式不正確",
     );
   });
 });

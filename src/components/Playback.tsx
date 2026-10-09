@@ -11,13 +11,12 @@ import {
   untrack,
 } from "solid-js";
 import { t } from "~/lib/i18n";
-import { networkErrorMessage } from "~/lib/network";
 import { initialPlaybackState, type PlaybackEvent, transitionPlayback } from "~/lib/playback";
 import type { SpeechRequest } from "~/lib/speech";
 import { requestCachedSpeech, speechCache } from "~/lib/speech-cache";
 import { openSpeechStream, PcmStreamPlayer } from "~/lib/speech-stream";
 import { type Segment, speechText } from "~/lib/state";
-import type { StatusReporter } from "~/lib/status";
+import { reportError, type StatusReporter } from "~/lib/status";
 import { ScreenWakeLock } from "~/lib/wake-lock";
 import { pcmDurationMs, pcmToWav } from "~/lib/wav";
 import Button from "./ui/Button";
@@ -136,9 +135,8 @@ export default function Playback(props: PlaybackProps) {
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       if (controller.signal.aborted) return;
-      const message = networkErrorMessage(error, t("playback.failed"));
+      const message = reportError(props.onStatus, error, t("playback.failed"));
       dispatch({ type: "fail", message });
-      props.onStatus(message, "error");
     }
   }
 
@@ -258,9 +256,8 @@ export default function Playback(props: PlaybackProps) {
       streamPlayer = undefined;
       streamContext = undefined;
       setStreaming(false);
-      const message = networkErrorMessage(error, t("playback.streamFailed"));
+      const message = reportError(props.onStatus, error, t("playback.streamFailed"));
       dispatch({ type: "fail", message });
-      props.onStatus(message, "error");
     }
   }
 

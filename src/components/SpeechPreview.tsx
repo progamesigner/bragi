@@ -1,9 +1,8 @@
 import { createEffect, createSignal, on, onCleanup, Show, untrack } from "solid-js";
 import { textBudget } from "~/lib/editing";
 import { t } from "~/lib/i18n";
-import { networkErrorMessage } from "~/lib/network";
 import { requestCachedSpeech } from "~/lib/speech-cache";
-import type { StatusReporter } from "~/lib/status";
+import { reportError, type StatusReporter } from "~/lib/status";
 import Button from "./ui/Button";
 
 type SpeechPreviewProps = {
@@ -82,7 +81,7 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
       props.onStatus(t("preview.ready"), "success");
     } catch (error) {
       if (request !== controller || controller.signal.aborted) return;
-      props.onStatus(networkErrorMessage(error, t("preview.failed")), "error");
+      reportError(props.onStatus, error, t("preview.failed"));
     } finally {
       if (request === controller && !controller.signal.aborted) setBusy(false);
     }
