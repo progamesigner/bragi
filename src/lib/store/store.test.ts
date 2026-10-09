@@ -83,6 +83,25 @@ describe("workspace store", () => {
     expect(workspace.currentSegment()).toBe(0);
   });
 
+  it("can undo rapid typing after export back to the exported snapshot", () => {
+    const workspace = createWorkspace();
+    workspace.load(draft);
+    const exported = [{ id: "one", text: "匯出版本。", suggestedToneHint: "平靜" }];
+    workspace.edit(exported, "one:text");
+    workspace.markSaved();
+    workspace.edit(
+      exported.map((segment) => ({ ...segment, text: "新的修改。" })),
+      "one:text",
+    );
+    expect(workspace.dirty()).toBe(true);
+    workspace.undo();
+    expect(workspace.segments[0]?.text).toBe("匯出版本。");
+    expect(workspace.dirty()).toBe(false);
+    workspace.redo();
+    expect(workspace.segments[0]?.text).toBe("新的修改。");
+    expect(workspace.dirty()).toBe(true);
+  });
+
   it("outlives the screen that used it", () => {
     const workspace = createWorkspace();
     createRoot((dispose) => {

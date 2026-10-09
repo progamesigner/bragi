@@ -180,6 +180,7 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
 
     /** Call after exporting so the current content counts as saved. */
     markSaved() {
+      history().endGroup();
       setSavedSnapshot(snapshot(content()));
     },
 

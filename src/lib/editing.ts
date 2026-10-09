@@ -59,6 +59,10 @@ export class History<T> {
   get value() {
     return this.clone(this.#current);
   }
+  /** Keep subsequent typing separate from a version the person just exported. */
+  endGroup() {
+    this.#group = undefined;
+  }
   commit(value: T, group?: string, time = performance.now()) {
     if (!group || group !== this.#group || time - this.#time > 750) {
       this.#past.push(this.clone(this.#current));
