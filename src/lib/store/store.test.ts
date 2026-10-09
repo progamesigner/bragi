@@ -31,6 +31,27 @@ describe("workspace store", () => {
     expect(workspace.currentSegment()).toBe(0);
   });
 
+  it("counts a draft with no copy elsewhere as unexported until it is exported", () => {
+    const workspace = createWorkspace();
+    workspace.load(draft, { saved: false });
+    expect(workspace.dirty()).toBe(true);
+    workspace.markSaved();
+    expect(workspace.dirty()).toBe(false);
+  });
+
+  it("is playable only when every segment can be spoken", () => {
+    const workspace = createWorkspace();
+    expect(workspace.playable()).toBe(false);
+    workspace.load(structuredClone(draft));
+    expect(workspace.playable()).toBe(true);
+    workspace.edit([{ ...draft.segments[0], text: "" } as Segment, ...draft.segments.slice(1)]);
+    expect(workspace.playable()).toBe(false);
+    workspace.edit([{ ...draft.segments[0], text: "字".repeat(401) } as Segment]);
+    expect(workspace.playable()).toBe(false);
+    workspace.edit([{ ...draft.segments[0], spokenText: "" } as Segment]);
+    expect(workspace.playable()).toBe(false);
+  });
+
   it("tracks edits against the saved snapshot through undo and redo", () => {
     const workspace = createWorkspace();
     workspace.load(draft);

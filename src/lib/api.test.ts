@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ApiError, parseRetryAfter, readApiError } from "./api";
+import { ApiError, onUnauthorized, parseRetryAfter, readApiError } from "./api";
 import { describeError } from "./network";
 
 describe("API errors", () => {
@@ -66,5 +66,22 @@ describe("API errors", () => {
     );
     expect(describeError(error, "x")).toEqual({ message: error.message, details: error.details });
     expect(describeError(new TypeError("fetch failed"), "x").details).toBeUndefined();
+  });
+
+  it("reports expired sessions, but not wrong one-time codes, as needing sign-in", async () => {
+    let calls = 0;
+    onUnauthorized(() => {
+      calls += 1;
+    });
+    const reply = (code: string) =>
+      Response.json(
+        { error: { code, message: "", requestId: "r", retryable: false } },
+        { status: 401 },
+      );
+    await readApiError(reply("INVALID_OTP"), "驗證失敗");
+    expect(calls).toBe(0);
+    await readApiError(reply("UNAUTHORIZED"), "無法辨識");
+    expect(calls).toBe(1);
+    onUnauthorized(undefined);
   });
 });

@@ -1,9 +1,9 @@
 import { batch, createSignal } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { serializeDraft } from "../draft";
-import { History } from "../editing";
+import { History, textBudget } from "../editing";
 import type { PreparedImage } from "../image";
-import type { Segment } from "../state";
+import { type Segment, speechText } from "../state";
 
 /** The text content a draft carries; the image never leaves the device's memory. */
 export type WorkspaceContent = {
@@ -68,6 +68,12 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
     content,
     /** True once there is recognised or imported text to review. */
     hasDraft: () => detectedLanguage() !== undefined,
+    /** Every segment has speakable text within the limits, so playback may start. */
+    playable: () =>
+      segments.length > 0 &&
+      segments.every(
+        (segment) => textBudget(segment.text).valid && textBudget(speechText(segment)).valid,
+      ),
     canUndo: () => history().canUndo,
     canRedo: () => history().canRedo,
     /** Content differs from the last recognised, imported or exported version. */
@@ -76,15 +82,19 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
     setImage,
     setGenreHint,
 
-    /** Replaces the draft (new recognition or import): fresh history, first segment, saved. */
-    load(next: WorkspaceContent) {
+    /**
+     * Replaces the draft (new recognition or import): fresh history, first segment. Pass
+     * `saved: false` when no copy exists outside this tab (recognition, local recovery), so the
+     * draft counts as unexported until it is exported.
+     */
+    load(next: WorkspaceContent, { saved = true }: { saved?: boolean } = {}) {
       batch(() => {
         setDetectedLanguage(next.detectedLanguage);
         setGenreHint(next.genreHint ?? "");
         setSegments(reconcile(next.segments));
         setHistory(new History<Segment[]>(next.segments));
         setCurrentSegmentSignal(0);
-        setSavedSnapshot(snapshot(next));
+        setSavedSnapshot(saved ? snapshot(next) : EMPTY);
       });
     },
 
