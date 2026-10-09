@@ -4,6 +4,7 @@ import {
   closeComparison,
   closeSettings,
   draftFile,
+  expectTouchSize,
   goToStep,
   mockSignedInApi,
   moreEditing,
@@ -384,8 +385,7 @@ for (const width of [320, 1280]) {
             primary: b.classList.contains("button-primary"),
           })),
         );
-      for (const control of controls)
-        expect(control.height).toBeGreaterThanOrEqual(control.primary ? 48 : 44);
+      for (const control of controls) expectTouchSize(control.height, control.primary ? 48 : 44);
     };
     await check();
     await moreEditing(page);

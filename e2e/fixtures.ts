@@ -21,6 +21,14 @@ export const segments = [
   },
 ];
 
+/**
+ * Touch targets are measured in CSS pixels, but layout snaps edges to device pixels, so a 44px
+ * control at a fractional offset on a 2.625× screen can measure 43.99997px.
+ */
+export function expectTouchSize(size: number, minimum: number, label?: string) {
+  expect(size, label).toBeGreaterThanOrEqual(minimum - 0.01);
+}
+
 /** A deterministic API, signed in unless asked otherwise; nothing reaches a real provider. */
 export async function mockSignedInApi(page: Page, { authenticated = true } = {}) {
   await observeAudio(page);

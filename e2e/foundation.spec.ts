@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import {
   closeComparison,
+  expectTouchSize,
   mockSignedInApi,
   moreEditing,
   openComparison,
@@ -134,8 +135,8 @@ test("controls meet touch target sizes and icon buttons have names", async ({ pa
   expect(controls.length).toBeGreaterThan(10);
   for (const control of controls) {
     expect(control.name, JSON.stringify(control)).not.toBe("");
-    expect(control.height, control.name).toBeGreaterThanOrEqual(control.compact ? 44 : 48);
-    if (control.icon) expect(control.width, control.name).toBeGreaterThanOrEqual(44);
+    expectTouchSize(control.height, control.compact ? 44 : 48, control.name);
+    if (control.icon) expectTouchSize(control.width, 44, control.name);
   }
 });
 
