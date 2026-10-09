@@ -21,14 +21,16 @@ export const segments = [
   },
 ];
 
-/** A signed-in API with deterministic responses; nothing reaches a real provider. */
-export async function mockSignedInApi(page: Page) {
+/** A deterministic API, signed in unless asked otherwise; nothing reaches a real provider. */
+export async function mockSignedInApi(page: Page, { authenticated = true } = {}) {
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     switch (path) {
       case "/api/session":
-        return route.fulfill({ json: { authenticated: true, voices: ["Kore", "Puck"] } });
+        return route.fulfill({
+          json: { authenticated, voices: authenticated ? ["Kore", "Puck"] : [] },
+        });
       case "/api/uploads":
         return route.fulfill({
           json: {

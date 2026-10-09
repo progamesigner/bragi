@@ -1,0 +1,4 @@
+/* A full-page capture would freeze the sticky status line over whatever is mid-page. */
+html body .toast {
+  position: static;
+}
