@@ -15,7 +15,9 @@ import {
 async function settle(page: Page) {
   // A hidden toast still occupies its original screenshot slot. Hold its dismissal timer
   // so a second export-confirmation picture cannot change height midway through capture.
-  await page.locator(".toast").dispatchEvent("pointerenter");
+  // The standalone offline page has no toast.
+  if (await page.locator(".toast").count())
+    await page.locator(".toast").dispatchEvent("pointerenter");
   await page.evaluate(() => document.fonts.ready);
   // Keep the caret and focus rings out of the pictures.
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
