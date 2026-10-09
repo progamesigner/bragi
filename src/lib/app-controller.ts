@@ -8,7 +8,7 @@ import {
   onCleanup,
   useContext,
 } from "solid-js";
-import { type ErrorDetails, onUnauthorized, readApiError } from "./api";
+import { type ErrorDetails, needsSignIn, onUnauthorized, readApiError } from "./api";
 import { DraftAutosave } from "./autosave";
 import { type Draft, MAX_DRAFT_BYTES, parseDraft, serializeDraft } from "./draft";
 import { exportDraft } from "./draft-export";
@@ -40,7 +40,7 @@ export type AuthState = "checking" | "signed-out" | "signed-in" | "expired";
 
 export type SignInResult = { ok: true } | { ok: false; message: string; details?: ErrorDetails };
 
-export type ToastAction = { label: string; run: () => void };
+export type ToastAction = { label: string; run: () => void; valid?: () => boolean };
 export type ToastMessage = { id: number; message: string; action?: ToastAction };
 
 /** Actions that drop the workspace and so may need the "export first" confirmation. */
@@ -89,7 +89,10 @@ export function createAppController(navigate: Navigator, location: Location) {
   createEffect(
     on(
       () => location.pathname,
-      () => setNavigated(true),
+      () => {
+        setNavigated(true);
+        setSettingsOpen(false);
+      },
       { defer: true },
     ),
   );
@@ -128,6 +131,7 @@ export function createAppController(navigate: Navigator, location: Location) {
   }
 
   const report: StatusReporter = (message, tone = "info", details) => {
+    if (needsSignIn(details)) return;
     if (tone === "error") setError({ message, tone, details });
     else showToast(message);
   };
@@ -136,7 +140,12 @@ export function createAppController(navigate: Navigator, location: Location) {
     setCaptureStatus({ message, tone, details });
   };
 
-  /** In-app navigation that steps back through history when the target is where we came from. */
+  /**
+   * Steps push URL history; returning to the step we came from uses Back rather than adding a
+   * loop. Browser Back/Forward preserve the workspace and History. Each route owns its audio
+   * and wake lock; leaving it releases them. Reload starts an empty workspace and offers local
+   * text recovery on capture after authentication. Guards replace unavailable routes.
+   */
   function goTo(path: AppPath) {
     if (location.pathname === path) return;
     const state = location.state as NavigationState;
@@ -257,8 +266,6 @@ export function createAppController(navigate: Navigator, location: Location) {
     setRequestRevision({});
     // Unmount pending image/audio operations while the logout request is in flight.
     setView({});
-    setCandidate(undefined);
-    autosave.clear();
     setAuthBusy(true);
     try {
       requireOnline();
@@ -276,8 +283,13 @@ export function createAppController(navigate: Navigator, location: Location) {
     }
   }
 
-  /** True when dropping the workspace would lose text that has no copy outside this tab. */
-  const contentAtRisk = () => workspace.hasDraft() && workspace.dirty();
+  /** Images, history and candidate content are lost even after the text has been exported. */
+  const contentAtRisk = () =>
+    workspace.hasDraft() ||
+    !!workspace.image() ||
+    candidateActive() ||
+    !!workspace.genreHint().trim() ||
+    !!savedDraft();
 
   function perform(action: LossAction) {
     setPendingLoss(undefined);
@@ -287,8 +299,10 @@ export function createAppController(navigate: Navigator, location: Location) {
       // Replace, so Back cannot return to a screen whose draft is gone.
       if (location.pathname !== "/") navigate("/", { replace: true });
       showToast(t("workspace.cleared"));
-    } else if (action === "signOut") void signOut();
-    else updateActivator()?.();
+    } else if (action === "signOut") {
+      setSettingsOpen(false);
+      void signOut();
+    } else updateActivator()?.();
   }
 
   /** Runs the action now, or first asks (offering an export) when content would be lost. */
@@ -435,6 +449,7 @@ export function createAppController(navigate: Navigator, location: Location) {
     signIn,
     signOut,
     contentAtRisk,
+    canExport: workspace.hasDraft,
     requestLoss,
     perform,
     cancelLoss: () => setPendingLoss(undefined),

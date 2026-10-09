@@ -1,4 +1,5 @@
 import { Show } from "solid-js";
+import { needsSignIn } from "~/lib/api";
 import type { StatusMessage } from "~/lib/status";
 import StatusDetails from "./StatusDetails";
 
@@ -14,11 +15,13 @@ type InlineStatusProps = {
  * message is announced once, in one place.
  */
 export default function InlineStatus(props: InlineStatusProps) {
-  const error = () => (props.status?.tone === "error" ? props.status : undefined);
+  // Expired sessions have one shared banner, regardless of which control made the request.
+  const status = () => (needsSignIn(props.status?.details) ? undefined : props.status);
+  const error = () => (status()?.tone === "error" ? status() : undefined);
   return (
     <div class={`inline-status${props.class ? ` ${props.class}` : ""}`} id={props.id}>
-      <p role="status" classList={{ "inline-status-success": props.status?.tone === "success" }}>
-        {error() ? "" : props.status?.message}
+      <p role="status" classList={{ "inline-status-success": status()?.tone === "success" }}>
+        {error() ? "" : status()?.message}
       </p>
       <Show when={error()}>
         {(status) => (

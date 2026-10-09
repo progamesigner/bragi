@@ -59,11 +59,11 @@ const zhHant = {
   "notice.dismiss": "關閉訊息",
 
   "loss.clearTitle": "清除目前內容？",
-  "loss.clearBody": "目前的文字還沒匯出，清除後無法復原。登入狀態會保留。",
+  "loss.clearBody": "清除會移除圖片、草稿、編輯紀錄與本機暫存。匯出只保存文字；登入狀態會保留。",
   "loss.clearProceed": "不匯出，直接清除",
   "loss.clearContinue": "繼續清除",
   "loss.signOutTitle": "登出？",
-  "loss.signOutBody": "目前的文字還沒匯出，登出會清除這台裝置上的草稿與本機暫存。",
+  "loss.signOutBody": "登出會移除圖片、草稿、編輯紀錄與本機暫存。需要保存文字時，請先匯出。",
   "loss.signOutProceed": "不匯出，直接登出",
   "loss.signOutContinue": "繼續登出",
   "loss.updateTitle": "更新 Bragi？",

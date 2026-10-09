@@ -29,7 +29,7 @@ const TEXT: Record<
 };
 
 /**
- * Asked only when clearing, signing out or updating would lose unexported text. "Export first"
+ * Asked when clearing, signing out or updating would discard workspace content. "Export first"
  * downloads the draft but never continues by itself: a download can fail silently, so the person
  * confirms they have the file and then continues with a separate button.
  */
@@ -52,16 +52,18 @@ export default function ConfirmLoss() {
         when={exported()}
         fallback={
           <div class="loss-actions">
-            <Button
-              wide
-              onClick={() => {
-                if (!app.exportForLoss()) return;
-                setExported(true);
-                queueMicrotask(() => continueButton?.focus());
-              }}
-            >
-              {t("loss.exportFirst")}
-            </Button>
+            <Show when={app.canExport()}>
+              <Button
+                wide
+                onClick={() => {
+                  if (!app.exportForLoss()) return;
+                  setExported(true);
+                  queueMicrotask(() => continueButton?.focus());
+                }}
+              >
+                {t("loss.exportFirst")}
+              </Button>
+            </Show>
             <Button
               variant="danger"
               wide

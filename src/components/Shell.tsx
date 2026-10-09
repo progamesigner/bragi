@@ -70,7 +70,6 @@ export default function Shell(props: RouteSectionProps) {
         <Show when={inApp()} fallback={<SignIn />}>
           <main id="main">{props.children}</main>
           <SettingsPanel open={app.settingsOpen()} onClose={app.closeSettings} />
-          <ConfirmLoss />
           <Sheet
             open={reauthOpen()}
             title={t("reauth.title")}
@@ -81,6 +80,7 @@ export default function Shell(props: RouteSectionProps) {
             <OtpForm onSubmit={app.signIn} onSuccess={() => setReauthOpen(false)} />
           </Sheet>
         </Show>
+        <ConfirmLoss />
         <Toast toast={app.toast()} onDismiss={app.dismissToast} />
       </div>
     </AppContext.Provider>

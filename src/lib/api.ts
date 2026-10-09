@@ -61,6 +61,11 @@ const CODE_MESSAGES: Record<string, MessageKey> = {
 
 let unauthorized: (() => void) | undefined;
 
+/** Expired sessions need reauthentication; an incorrect one-time code stays with the form. */
+export function needsSignIn(details?: ErrorDetails): boolean {
+  return details?.status === 401 && details.code !== "INVALID_OTP";
+}
+
 /**
  * Called whenever an API answers 401 for an expired or missing session (not a wrong one-time
  * code), so the app can ask for sign-in again without losing the draft or the screen.
@@ -98,7 +103,7 @@ export async function readApiError(response: Response, fallback: string): Promis
         : response.status === 429 || response.status >= 500,
     retryAfter,
   };
-  if (response.status === 401 && code !== "INVALID_OTP") unauthorized?.();
+  if (needsSignIn(details)) unauthorized?.();
   const known = code ? CODE_MESSAGES[code] : undefined;
   let message = known
     ? t(known)
