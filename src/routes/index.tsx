@@ -77,7 +77,6 @@ export default function Home() {
 
   function cancelOperation() {
     operations.invalidate();
-    setRequestRevision({});
     setRecognitionBusy(false);
   }
 
@@ -85,6 +84,7 @@ export default function Home() {
     cancelOperation();
     autosave.clear();
     batch(() => {
+      setRequestRevision({});
       speechCache.clear();
       setImage(undefined);
       setCandidate(undefined);
@@ -102,6 +102,7 @@ export default function Home() {
 
   function applyDraft(draft: Draft, prepared?: PreparedImage) {
     batch(() => {
+      setRequestRevision({});
       speechCache.clear();
       setImage(prepared);
       setCandidate(undefined);
@@ -192,6 +193,7 @@ export default function Home() {
   async function signOut() {
     const operation = authOperations.begin();
     cancelOperation();
+    setRequestRevision({});
     // Unmount pending image/audio operations while the logout request is in flight.
     setWorkspace({});
     setCandidate(undefined);
@@ -250,7 +252,6 @@ export default function Home() {
     const genre = candidateGenre();
     const operation = operations.begin();
     setRecognitionBusy(true);
-    setRequestRevision({});
     reportStatus("建立 Gemini upload session…");
     try {
       requireOnline();

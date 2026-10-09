@@ -16,6 +16,7 @@ export default function VoiceSample(props: VoiceSampleProps) {
   const [busy, setBusy] = createSignal(false);
   const [current, setCurrent] = createSignal<{ voice: string; url: string }>();
   let request: AbortController | undefined;
+  let audioElement: HTMLAudioElement | undefined;
 
   createEffect(
     on(
@@ -32,6 +33,7 @@ export default function VoiceSample(props: VoiceSampleProps) {
   onCleanup(() => {
     request?.abort();
     request = undefined;
+    audioElement?.pause();
     for (const url of samples.values()) URL.revokeObjectURL(url);
   });
 
@@ -75,7 +77,13 @@ export default function VoiceSample(props: VoiceSampleProps) {
       </button>
       <Show when={current()?.voice === props.voice ? current() : undefined}>
         {(sample) => (
-          <audio controls preload="metadata" src={sample().url} aria-label="聲音試聽">
+          <audio
+            ref={audioElement}
+            controls
+            preload="metadata"
+            src={sample().url}
+            aria-label="聲音試聽"
+          >
             <track
               kind="captions"
               src={`data:text/vtt;charset=utf-8,${encodeURIComponent(`WEBVTT\n\n00:00.000 --> 01:00.000\n${VOICE_SAMPLE_TEXT}`)}`}

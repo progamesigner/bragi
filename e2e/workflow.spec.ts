@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import { pcmToWav } from "../src/lib/wav";
 
 const pcm = Buffer.alloc(12_000);
@@ -835,37 +835,6 @@ test("late image preparation and successful import cannot write after clear", as
   expect(await page.evaluate(() => localStorage.getItem("bragi:autosave:v1"))).toBeNull();
 });
 
-test("new photos invalidate pending voice and segment preview errors", async ({ page }) => {
-  await mockApi(page, true);
-  await page.addInitScript(() => {
-    const originalFetch = window.fetch;
-    window.fetch = (input, init) => {
-      if (input === "/api/tts")
-        return new Promise<Response>((_resolve, reject) => {
-          Object.assign(window, { rejectSpeech: () => reject(new Error("late speech failure")) });
-        });
-      return originalFetch(input, init);
-    };
-  });
-  await page.goto("/");
-  await recognize(page);
-  for (const name of ["試聽這個聲音", "產生試聽"]) {
-    await page.getByRole("button", { name, exact: true }).first().click();
-    await expect
-      .poll(() =>
-        page.evaluate(() => typeof (window as unknown as { rejectSpeech: unknown }).rejectSpeech),
-      )
-      .toBe("function");
-    await page
-      .getByLabel("從相簿選擇")
-      .setInputFiles({ name: "new.png", mimeType: "image/png", buffer: image });
-    await expect(page.getByText("圖片已準備完成，可以開始辨識")).toBeVisible();
-    await page.evaluate(() => (window as unknown as { rejectSpeech: () => void }).rejectSpeech());
-    await expect(page.getByText("圖片已準備完成，可以開始辨識")).toBeVisible();
-    await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(2);
-  }
-});
-
 test("autosave restores only text after reload, and clear or logout removes it", async ({
   page,
 }) => {
@@ -968,3 +937,198 @@ test("draft recovery stays private until session checking and sign-in complete",
   await expect(page.getByRole("button", { name: "登入", exact: true })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("bragi:autosave:v1"))).toBeNull();
 });
+
+for (const mode of ["voice", "preview", "playback", "stream"] as const) {
+  test(`${mode} audio keeps playing through candidate failure and cancellation until replacement`, async ({
+    page,
+  }) => {
+    await mockApi(page, true);
+    await page.route("**/api/tts", (route) =>
+      route.fulfill({
+        contentType: "audio/wav",
+        body: Buffer.from(pcmToWav(Buffer.alloc(24_000 * 2 * 60))),
+      }),
+    );
+    if (mode === "stream") {
+      await page.addInitScript(() => {
+        const Original = window.AudioContext;
+        window.AudioContext = class extends Original {
+          constructor(options?: AudioContextOptions) {
+            super(options);
+            Object.assign(window, { originalStream: this });
+          }
+        };
+      });
+      await page.route("**/api/tts-stream", (route) =>
+        route.fulfill({
+          contentType: "audio/l16",
+          headers: { "x-audio-sample-rate": "24000" },
+          body: Buffer.alloc(24_000 * 2 * 60),
+        }),
+      );
+    }
+    await page.goto("/");
+    await recognize(page);
+    let audio: Locator | undefined;
+    if (mode === "stream") {
+      await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+      await page.getByRole("button", { name: "串流播放第一段" }).click();
+      await expect(page.getByRole("button", { name: "暫停", exact: true })).toBeVisible();
+    } else if (mode === "playback") {
+      await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+      await page.getByLabel("播放速度").selectOption("1.25");
+      await page.getByRole("button", { name: "播放第一段" }).click();
+      await expect(page.getByRole("button", { name: "播放第 1 段", exact: true })).toBeVisible();
+      audio = page.getByLabel("第 1 段朗讀", { exact: true });
+    } else {
+      await page
+        .getByRole("button", { name: mode === "voice" ? "試聽這個聲音" : "產生試聽", exact: true })
+        .first()
+        .click();
+      audio = page.getByLabel(mode === "voice" ? "聲音試聽" : "段落試聽", { exact: true }).first();
+      await expect(audio).toBeVisible();
+    }
+    await audio?.evaluate(async (element: HTMLAudioElement) => {
+      Object.assign(window, { originalAudio: element });
+      await element.play();
+    });
+    const paused = () =>
+      mode === "stream"
+        ? page.evaluate(
+            () =>
+              (window as unknown as { originalStream: AudioContext }).originalStream.state !==
+              "running",
+          )
+        : page.evaluate(
+            () => (window as unknown as { originalAudio: HTMLAudioElement }).originalAudio.paused,
+          );
+    await expect.poll(paused).toBe(false);
+    await page
+      .getByLabel("從相簿選擇")
+      .setInputFiles({ name: "broken.png", mimeType: "image/png", buffer: Buffer.from("broken") });
+    await expect(page.getByRole("button", { name: "重試圖片處理" })).toBeVisible();
+    expect(await paused()).toBe(false);
+    await page.getByRole("button", { name: "取消候選圖片" }).click();
+    expect(await paused()).toBe(false);
+    await page
+      .getByLabel("從相簿選擇")
+      .setInputFiles({ name: "new.png", mimeType: "image/png", buffer: image });
+    let finishOcr!: () => void;
+    let ocrPending = false;
+    let failure = true;
+    await page.route("**/api/ocr", async (route) => {
+      await new Promise<void>((resolve) => {
+        finishOcr = resolve;
+        ocrPending = true;
+      });
+      if (failure) return route.fulfill({ status: 502, json: { error: "OCR failed" } });
+      return route.fulfill({
+        json: {
+          detectedLanguage: "en",
+          segments: [{ id: "replacement", text: "Replacement.", suggestedToneHint: "" }],
+        },
+      });
+    });
+    const startOcr = async () => {
+      ocrPending = false;
+      await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+      await expect.poll(() => ocrPending).toBe(true);
+      expect(await paused()).toBe(false);
+      finishOcr();
+    };
+    await startOcr();
+    await expect(page.getByRole("alert")).toBeVisible();
+    expect(await paused()).toBe(false);
+    failure = false;
+    page.once("dialog", (dialog) => dialog.dismiss());
+    await startOcr();
+    await expect(page.getByText("已保留目前稿件；候選圖片可重新辨識")).toBeVisible();
+    expect(await paused()).toBe(false);
+    await page.getByRole("button", { name: "取消候選圖片" }).click();
+    expect(await paused()).toBe(false);
+    await page
+      .getByLabel("從相簿選擇")
+      .setInputFiles({ name: "new.png", mimeType: "image/png", buffer: image });
+    page.once("dialog", (dialog) => dialog.accept());
+    await startOcr();
+    await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(1);
+    await expect(page.getByLabel("口白文字", { exact: true })).toHaveValue("Replacement.");
+    await expect.poll(paused).toBe(true);
+  });
+}
+
+for (const mode of ["voice", "preview"] as const) {
+  test(`pending ${mode} synthesis stays valid during OCR and is cancelled only on replacement`, async ({
+    page,
+  }) => {
+    await mockApi(page, true);
+    await page.addInitScript((encodedWav) => {
+      const originalFetch = window.fetch;
+      const aborts: string[] = [];
+      Object.assign(window, { speechAborts: aborts });
+      window.fetch = (input, init) => {
+        if (input === "/api/tts")
+          return new Promise<Response>((resolve) => {
+            init?.signal?.addEventListener("abort", () => aborts.push("abort"));
+            Object.assign(window, {
+              finishSpeech: () =>
+                resolve(
+                  new Response(
+                    Uint8Array.from(atob(encodedWav), (character) => character.charCodeAt(0)),
+                    { headers: { "content-type": "audio/wav" } },
+                  ),
+                ),
+            });
+          });
+        return originalFetch(input, init);
+      };
+    }, wav.toString("base64"));
+    await page.goto("/");
+    await recognize(page);
+    await page
+      .getByRole("button", { name: mode === "voice" ? "試聽這個聲音" : "產生試聽", exact: true })
+      .first()
+      .click();
+    await expect
+      .poll(() =>
+        page.evaluate(() => typeof (window as unknown as { finishSpeech: unknown }).finishSpeech),
+      )
+      .toBe("function");
+    const aborted = () =>
+      page.evaluate(() => (window as unknown as { speechAborts: string[] }).speechAborts.length);
+    await page
+      .getByLabel("從相簿選擇")
+      .setInputFiles({ name: "new.png", mimeType: "image/png", buffer: image });
+    await expect(page.getByRole("button", { name: "上傳並辨識文字", exact: true })).toBeEnabled();
+    expect(await aborted()).toBe(0);
+    await page.route("**/api/ocr", (route) =>
+      route.fulfill({ status: 502, json: { error: "OCR failed" } }),
+    );
+    await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+    await expect(page.getByRole("alert")).toBeVisible();
+    expect(await aborted()).toBe(0);
+    await page.getByRole("button", { name: "取消候選圖片" }).click();
+    expect(await aborted()).toBe(0);
+    await page
+      .getByLabel("從相簿選擇")
+      .setInputFiles({ name: "new.png", mimeType: "image/png", buffer: image });
+    await page.route("**/api/ocr", (route) =>
+      route.fulfill({
+        json: {
+          detectedLanguage: "en",
+          segments: [{ id: "new", text: "Replacement.", suggestedToneHint: "" }],
+        },
+      }),
+    );
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+    await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(1);
+    await expect(page.getByLabel("口白文字", { exact: true })).toHaveValue("Replacement.");
+    await expect.poll(aborted).toBe(1);
+    await page.evaluate(() => (window as unknown as { finishSpeech: () => void }).finishSpeech());
+    await expect(page.getByText("辨識完成 · 1 個段落")).toBeVisible();
+    await expect(
+      page.getByLabel(mode === "voice" ? "聲音試聽" : "段落試聽", { exact: true }),
+    ).toHaveCount(0);
+  });
+}
