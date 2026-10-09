@@ -16,6 +16,7 @@ import type { StatusReporter } from "~/lib/status";
 import SpeechPreview from "./SpeechPreview";
 
 type ReviewProps = {
+  requestRevision?: object;
   detectedLanguage: string;
   image?: File;
   genreHint?: string;
@@ -440,6 +441,7 @@ export default function Review(props: ReviewProps) {
                     </button>
                   </div>
                   <SpeechPreview
+                    requestRevision={props.requestRevision}
                     text={speechText(segment)}
                     toneHint={segment.suggestedToneHint}
                     genreHint={props.genreHint}

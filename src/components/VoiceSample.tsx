@@ -1,10 +1,11 @@
-import { createSignal, onCleanup, Show } from "solid-js";
+import { createEffect, createSignal, on, onCleanup, Show } from "solid-js";
 import { networkErrorMessage } from "~/lib/network";
 import { requestSpeech } from "~/lib/speech";
 import type { StatusReporter } from "~/lib/status";
 import { VOICE_SAMPLE_TEXT, voiceLabel } from "~/lib/voices";
 
 type VoiceSampleProps = {
+  requestRevision?: object;
   voice?: string;
   onStatus: StatusReporter;
 };
@@ -16,8 +17,21 @@ export default function VoiceSample(props: VoiceSampleProps) {
   const [current, setCurrent] = createSignal<{ voice: string; url: string }>();
   let request: AbortController | undefined;
 
+  createEffect(
+    on(
+      () => [props.voice, props.requestRevision],
+      () => {
+        request?.abort();
+        request = undefined;
+        setBusy(false);
+      },
+      { defer: true },
+    ),
+  );
+
   onCleanup(() => {
     request?.abort();
+    request = undefined;
     for (const url of samples.values()) URL.revokeObjectURL(url);
   });
 
@@ -36,6 +50,7 @@ export default function VoiceSample(props: VoiceSampleProps) {
     props.onStatus(`正在產生 ${voiceLabel(voice)} 的試聽…`);
     try {
       const audio = await requestSpeech({ text: VOICE_SAMPLE_TEXT, voice }, controller.signal);
+      if (request !== controller || controller.signal.aborted) return;
       const url = URL.createObjectURL(audio.blob);
       samples.set(voice, url);
       if (props.voice === voice) setCurrent({ voice, url });

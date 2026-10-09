@@ -1,4 +1,14 @@
-import { createSignal, Match, onCleanup, onMount, Show, Switch, untrack } from "solid-js";
+import {
+  createEffect,
+  createSignal,
+  Match,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+  Switch,
+  untrack,
+} from "solid-js";
 import { networkErrorMessage } from "~/lib/network";
 import { initialPlaybackState, type PlaybackEvent, transitionPlayback } from "~/lib/playback";
 import type { SpeechRequest } from "~/lib/speech";
@@ -10,6 +20,7 @@ import { ScreenWakeLock } from "~/lib/wake-lock";
 import { pcmDurationMs, pcmToWav } from "~/lib/wav";
 
 type PlaybackProps = {
+  requestRevision?: object;
   segments: Segment[];
   genreHint?: string;
   voice?: string;
@@ -35,6 +46,7 @@ export default function Playback(props: PlaybackProps) {
   let prefetchRequest: AbortController | undefined;
   let streamPlayer: PcmStreamPlayer | undefined;
   let streamContext: AudioContext | undefined;
+  let disposed = false;
 
   const segment = () => props.segments[state().index];
 
@@ -71,6 +83,20 @@ export default function Playback(props: PlaybackProps) {
     setAudioUrl(undefined);
     setDuration(undefined);
   }
+
+  createEffect(
+    on(
+      () => props.requestRevision,
+      () => {
+        request?.abort();
+        prefetchRequest?.abort();
+        clearAudio();
+        setPrefetch(undefined);
+        setState({ index: state().index, phase: "idle" });
+      },
+      { defer: true },
+    ),
+  );
 
   function completePcm(chunks: Uint8Array[], byteLength: number): Uint8Array<ArrayBuffer> {
     const pcm = new Uint8Array(new ArrayBuffer(byteLength));
@@ -126,8 +152,10 @@ export default function Playback(props: PlaybackProps) {
     setPrefetch({ index, phase: "loading" });
     try {
       await requestCachedSpeech(input, controller.signal, fetch, "prefetch");
-      if (prefetchRequest === controller) setPrefetch({ index, phase: "ready" });
+      if (prefetchRequest === controller && !controller.signal.aborted)
+        setPrefetch({ index, phase: "ready" });
     } catch (error) {
+      if (prefetchRequest !== controller || controller.signal.aborted) return;
       if (!(error instanceof DOMException && error.name === "AbortError")) setPrefetch(undefined);
     }
   }
@@ -172,12 +200,14 @@ export default function Playback(props: PlaybackProps) {
 
     try {
       await player.resume();
+      controller.signal.throwIfAborted();
       const stream = await openSpeechStream(input, controller.signal);
       const chunks: Uint8Array[] = [];
       let byteLength = 0;
       let started = false;
       while (true) {
         const result = await stream.reader.read();
+        controller.signal.throwIfAborted();
         if (result.done) break;
         const chunk = result.value.slice();
         chunks.push(chunk);
@@ -201,20 +231,21 @@ export default function Playback(props: PlaybackProps) {
       };
       speechCache.set(input, audio);
       await player.finish();
-      if (request !== controller) return;
+      if (request !== controller || controller.signal.aborted) return;
 
       streamPlayer = undefined;
       streamContext = undefined;
       setStreaming(false);
       await context.close();
+      if (request !== controller || controller.signal.aborted) return;
       setAudioUrl(URL.createObjectURL(audio.blob));
       setDuration(audio.durationMs);
       dispatch({ type: "ended" });
       props.onStatus(state().phase === "complete" ? "全部段落播放完成" : "本段播放完成", "success");
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
       player.stop();
       await context.close().catch(() => undefined);
+      if (request !== controller || controller.signal.aborted) return;
       streamPlayer = undefined;
       streamContext = undefined;
       setStreaming(false);
@@ -225,12 +256,15 @@ export default function Playback(props: PlaybackProps) {
   }
 
   async function play() {
+    const currentRequest = request;
     if (streaming()) {
       try {
         await streamPlayer?.resume();
+        if (disposed || request !== currentRequest || currentRequest?.signal.aborted) return;
         dispatch({ type: "play" });
         props.onStatus(`正在播放第 ${state().index + 1} 段`);
       } catch {
+        if (disposed || request !== currentRequest || currentRequest?.signal.aborted) return;
         props.onStatus("瀏覽器阻止播放，請再按一次播放按鈕", "error");
       }
       return;
@@ -241,6 +275,7 @@ export default function Playback(props: PlaybackProps) {
       audio.preservesPitch = true;
       await audio.play();
     } catch {
+      if (disposed || request !== currentRequest || currentRequest?.signal.aborted) return;
       props.onStatus("瀏覽器阻止播放，請再按一次播放按鈕", "error");
     }
   }
@@ -277,6 +312,7 @@ export default function Playback(props: PlaybackProps) {
   }
 
   onCleanup(() => {
+    disposed = true;
     request?.abort();
     prefetchRequest?.abort();
     clearAudio();
@@ -290,6 +326,7 @@ export default function Playback(props: PlaybackProps) {
       if (enabled) await wakeLock.enable();
       else await wakeLock.disable();
     } catch {
+      if (disposed || keepAwake() !== enabled) return;
       setKeepAwake(false);
       props.onStatus("此裝置目前無法保持螢幕常亮", "error");
     }
@@ -300,13 +337,17 @@ export default function Playback(props: PlaybackProps) {
     try {
       if (wakeLock.supported && localStorage.getItem("bragi-keep-awake") === "true") {
         setKeepAwake(true);
-        wakeLock.enable().catch(() => setKeepAwake(false));
+        wakeLock.enable().catch(() => {
+          if (!disposed) setKeepAwake(false);
+        });
       }
     } catch {}
     const visibilityChanged = () => {
       if (document.visibilityState !== "visible") return;
       if (streamContext) handleInterruption(streamContext);
-      wakeLock.reacquire().catch(() => setKeepAwake(false));
+      wakeLock.reacquire().catch(() => {
+        if (!disposed) setKeepAwake(false);
+      });
     };
     document.addEventListener("visibilitychange", visibilityChanged);
     onCleanup(() => {

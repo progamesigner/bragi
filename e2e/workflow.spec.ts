@@ -63,7 +63,7 @@ async function mockApi(page: Page, authenticated = false) {
     }
   });
   // No browser traffic may escape to an external provider.
-  await page.route(/^https?:\/\/(?!127\.0\.0\.1:4173(?:\/|$))/, (route) => route.abort());
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1(?::\d+)?(?:\/|$))/, (route) => route.abort());
   return calls;
 }
 
@@ -567,7 +567,6 @@ test("reading presets increase actual narration and editor font sizes", async ({
   expect(scriptSizes[2]).toBeGreaterThan(scriptSizes[1] ?? 0);
 });
 
-
 test("50-segment drafts disable insertion and splitting and reject oversized edits", async ({
   page,
 }) => {
@@ -600,3 +599,244 @@ test("50-segment drafts disable insertion and splitting and reject oversized edi
   await expect(page.getByRole("button", { name: "新增段落", exact: true })).toBeEnabled();
 });
 
+test("new photos preserve the draft, language, genre, comparison and undo until confirmed", async ({
+  page,
+}) => {
+  await mockApi(page, true);
+  await page.goto("/");
+  await recognize(page);
+  await page.getByLabel("口白文字", { exact: true }).first().fill("保留這段修改。");
+  await page.getByLabel("題材提示（選填）").fill("舊題材");
+  await page.getByText("查看圖片對照").click();
+  const oldImage = await page.getByAltText("校對用圖片").getAttribute("src");
+  await page
+    .getByLabel("從相簿選擇")
+    .setInputFiles({ name: "candidate.png", mimeType: "image/png", buffer: image });
+  await expect(page.getByAltText("準備上傳的圖片預覽")).toBeVisible();
+  await page.getByLabel("題材提示（選填）").fill("候選題材");
+  await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(2);
+  await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue("保留這段修改。");
+  await expect(page.getByRole("button", { name: "復原", exact: true })).toBeEnabled();
+  expect(await page.getByAltText("校對用圖片").getAttribute("src")).toBe(oldImage);
+  await page.getByRole("button", { name: "取消候選圖片" }).click();
+  await expect(page.getByLabel("題材提示（選填）")).toHaveValue("舊題材");
+
+  await page
+    .getByLabel("從相簿選擇")
+    .setInputFiles({ name: "broken.png", mimeType: "image/png", buffer: Buffer.from("broken") });
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "復原", exact: true })).toBeEnabled();
+
+  await page
+    .getByLabel("從相簿選擇")
+    .setInputFiles({ name: "candidate.png", mimeType: "image/png", buffer: image });
+  await page.route("**/api/ocr", (route) =>
+    route.fulfill({ status: 502, json: { error: "辨識暫時失敗" } }),
+  );
+  await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(2);
+  await expect(page.getByAltText("準備上傳的圖片預覽")).toBeVisible();
+  await expect(page.getByRole("button", { name: "復原", exact: true })).toBeEnabled();
+
+  await page.route("**/api/ocr", (route) =>
+    route.fulfill({
+      json: {
+        detectedLanguage: "English",
+        segments: [{ id: "new", text: "A new story.", suggestedToneHint: "" }],
+      },
+    }),
+  );
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+  await expect(page.getByText("已保留目前稿件；候選圖片可重新辨識")).toBeVisible();
+  await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue("保留這段修改。");
+  await expect(page.getByRole("button", { name: "復原", exact: true })).toBeEnabled();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+  await expect(page.getByText("辨識完成 · 1 個段落")).toBeVisible();
+  await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(1);
+  await expect(page.getByLabel("口白文字", { exact: true })).toHaveValue("A new story.");
+  await expect(page.getByText("主要語言：English · 1 個段落")).toBeVisible();
+  await expect(page.getByRole("button", { name: "復原", exact: true })).toBeDisabled();
+});
+
+test("late OCR success and failure cannot restore a cleared workspace or overwrite status", async ({
+  page,
+}) => {
+  await mockApi(page, true);
+  await page.addInitScript(() => {
+    const originalFetch = window.fetch;
+    Object.assign(window, { finishOcr: undefined });
+    window.fetch = (input, init) => {
+      if (input === "/api/ocr")
+        return new Promise<Response>((resolve, reject) => {
+          Object.assign(window, {
+            finishOcr: (fail: boolean) =>
+              fail
+                ? reject(new Error("late failure"))
+                : resolve(
+                    new Response(
+                      JSON.stringify({
+                        detectedLanguage: "zh",
+                        segments: [{ id: "late", text: "遲到結果", suggestedToneHint: "" }],
+                      }),
+                      { headers: { "content-type": "application/json" } },
+                    ),
+                  ),
+          });
+        });
+      return originalFetch(input, init);
+    };
+  });
+  await page.goto("/");
+  for (const fail of [false, true]) {
+    await page
+      .getByLabel("從相簿選擇")
+      .setInputFiles({ name: "card.png", mimeType: "image/png", buffer: image });
+    await page.getByRole("button", { name: "上傳並辨識文字", exact: true }).click();
+    await expect(page.getByText("Gemini 正在辨識與分段…")).toBeVisible();
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "清除目前內容" }).click();
+    await page.evaluate(
+      (fail) => (window as unknown as { finishOcr: (fail: boolean) => void }).finishOcr(fail),
+      fail,
+    );
+    await expect(page.getByText("已清除目前內容，登入狀態已保留")).toBeVisible();
+    await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(0);
+    expect(await page.evaluate(() => localStorage.getItem("bragi:autosave:v1"))).toBeNull();
+  }
+});
+
+test("late import cannot replace a newer image and invalid import preserves edits", async ({
+  page,
+}) => {
+  await mockApi(page, true);
+  await page.addInitScript(() => {
+    const originalText = File.prototype.text;
+    File.prototype.text = function () {
+      if (this.name !== "late.json") return originalText.call(this);
+      return new Promise<string>((resolve) => {
+        Object.assign(window, { finishImport: resolve });
+      });
+    };
+  });
+  await page.goto("/");
+  await recognize(page);
+  await page.getByLabel("口白文字", { exact: true }).first().fill("保留舊稿。");
+  await page
+    .getByLabel("匯入草稿 JSON")
+    .setInputFiles({ name: "late.json", mimeType: "application/json", buffer: Buffer.from("{}") });
+  await expect
+    .poll(() =>
+      page.evaluate(() => typeof (window as unknown as { finishImport: unknown }).finishImport),
+    )
+    .toBe("function");
+  await page
+    .getByLabel("從相簿選擇")
+    .setInputFiles({ name: "new.png", mimeType: "image/png", buffer: image });
+  await expect(page.getByAltText("準備上傳的圖片預覽")).toBeVisible();
+  await page.evaluate(() =>
+    (window as unknown as { finishImport: (source: string) => void }).finishImport("{"),
+  );
+  await expect(page.getByText("圖片已準備完成，可以開始辨識")).toBeVisible();
+  await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue("保留舊稿。");
+  await page
+    .getByLabel("匯入草稿 JSON")
+    .setInputFiles({ name: "bad.json", mimeType: "application/json", buffer: Buffer.from("{") });
+  await expect(page.getByRole("alert")).toContainText("JSON");
+  await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "復原", exact: true })).toBeEnabled();
+});
+
+test("late image preparation and successful import cannot write after clear", async ({ page }) => {
+  await mockApi(page, true);
+  await page.addInitScript(() => {
+    const originalBitmap = window.createImageBitmap;
+    window.createImageBitmap = ((...args: Parameters<typeof createImageBitmap>) => {
+      if ((args[0] as File).name !== "slow.png") return originalBitmap(...args);
+      return new Promise<ImageBitmap>((_resolve, reject) => {
+        Object.assign(window, { failImage: reject });
+      });
+    }) as typeof createImageBitmap;
+    const originalText = File.prototype.text;
+    File.prototype.text = function () {
+      if (this.name !== "slow.json") return originalText.call(this);
+      return new Promise<string>((resolve) => {
+        Object.assign(window, { finishImport: resolve });
+      });
+    };
+  });
+  await page.goto("/");
+  await recognize(page);
+  await page
+    .getByLabel("從相簿選擇")
+    .setInputFiles({ name: "slow.png", mimeType: "image/png", buffer: image });
+  await expect(page.getByText("正在調整方向與圖片大小…")).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "清除目前內容" }).click();
+  await page.evaluate(() =>
+    (window as unknown as { failImage: (error: Error) => void }).failImage(
+      new Error("late image error"),
+    ),
+  );
+  await expect(page.getByText("已清除目前內容，登入狀態已保留")).toBeVisible();
+  await expect(page.getByRole("button", { name: "上傳並辨識文字", exact: true })).toBeDisabled();
+
+  await page
+    .getByLabel("匯入草稿 JSON")
+    .setInputFiles({ name: "slow.json", mimeType: "application/json", buffer: Buffer.from("{}") });
+  await expect
+    .poll(() =>
+      page.evaluate(() => typeof (window as unknown as { finishImport: unknown }).finishImport),
+    )
+    .toBe("function");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "清除目前內容" }).click();
+  await page.evaluate(() =>
+    (window as unknown as { finishImport: (source: string) => void }).finishImport(
+      JSON.stringify({
+        format: "bragi-draft",
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        detectedLanguage: "zh",
+        segments: [{ id: "late", text: "遲到匯入", suggestedToneHint: "" }],
+      }),
+    ),
+  );
+  await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("已清除目前內容，登入狀態已保留")).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("bragi:autosave:v1"))).toBeNull();
+});
+
+test("new photos invalidate pending voice and segment preview errors", async ({ page }) => {
+  await mockApi(page, true);
+  await page.addInitScript(() => {
+    const originalFetch = window.fetch;
+    window.fetch = (input, init) => {
+      if (input === "/api/tts")
+        return new Promise<Response>((_resolve, reject) => {
+          Object.assign(window, { rejectSpeech: () => reject(new Error("late speech failure")) });
+        });
+      return originalFetch(input, init);
+    };
+  });
+  await page.goto("/");
+  await recognize(page);
+  for (const name of ["試聽這個聲音", "產生試聽"]) {
+    await page.getByRole("button", { name, exact: true }).first().click();
+    await expect
+      .poll(() =>
+        page.evaluate(() => typeof (window as unknown as { rejectSpeech: unknown }).rejectSpeech),
+      )
+      .toBe("function");
+    await page
+      .getByLabel("從相簿選擇")
+      .setInputFiles({ name: "new.png", mimeType: "image/png", buffer: image });
+    await expect(page.getByText("圖片已準備完成，可以開始辨識")).toBeVisible();
+    await page.evaluate(() => (window as unknown as { rejectSpeech: () => void }).rejectSpeech());
+    await expect(page.getByText("圖片已準備完成，可以開始辨識")).toBeVisible();
+    await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(2);
+  }
+});

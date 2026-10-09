@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const port = process.env.BRAGI_E2E_PORT ?? "4173";
+const baseURL = `http://127.0.0.1:${port}`;
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
@@ -7,7 +10,7 @@ export default defineConfig({
   retries: 0,
   reporter: "list",
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    baseURL,
     serviceWorkers: "block",
     trace: "retain-on-failure",
   },
@@ -21,8 +24,8 @@ export default defineConfig({
   ],
   webServer: {
     command: "npm run build && node .output/server/index.mjs",
-    env: { HOST: "127.0.0.1", PORT: "4173" },
-    url: "http://127.0.0.1:4173",
+    env: { HOST: "127.0.0.1", PORT: port },
+    url: baseURL,
     reuseExistingServer: false,
   },
 });

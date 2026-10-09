@@ -1,28 +1,26 @@
-import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { batch, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import Capture from "~/components/Capture";
 import Playback from "~/components/Playback";
 import Review from "~/components/Review";
 import VoiceSample from "~/components/VoiceSample";
 import { apiErrorMessage } from "~/lib/api";
-import { MAX_DRAFT_BYTES, parseDraft } from "~/lib/draft";
+import { type Draft, MAX_DRAFT_BYTES, parseDraft, serializeDraft } from "~/lib/draft";
+import { graphemeCount, MAX_DRAFT_GENRE } from "~/lib/draft-limits";
 import { History } from "~/lib/editing";
 import type { PreparedImage } from "~/lib/image";
 import { networkErrorMessage, requireOnline } from "~/lib/network";
+import { ocrResponseSchema } from "~/lib/schemas";
 import { speechCache } from "~/lib/speech-cache";
 import type { Segment } from "~/lib/state";
 import type { StatusMessage, StatusTone } from "~/lib/status";
 import { voiceLabel } from "~/lib/voices";
+import { commitCandidate, WorkspaceRevision } from "~/lib/workspace";
 
 type UploadTarget = {
   uploadId: string;
   target: { url: string; method: "POST" | "PUT"; headers: Record<string, string> };
   expiresAt: string;
-};
-
-type OcrResult = {
-  detectedLanguage: string;
-  segments: Segment[];
 };
 
 export default function Home() {
@@ -31,22 +29,30 @@ export default function Home() {
   const [fontSize, setFontSize] = createSignal("normal");
   const [online, setOnline] = createSignal(true);
   const [workspace, setWorkspace] = createSignal({});
-  let recognitionRequest: AbortController | undefined;
+  const [requestRevision, setRequestRevision] = createSignal({});
+  const operations = new WorkspaceRevision();
+  const authOperations = new WorkspaceRevision();
   const [otp, setOtp] = createSignal("");
   const [image, setImage] = createSignal<PreparedImage>();
+  const [candidate, setCandidate] = createSignal<PreparedImage>();
+  const [candidateActive, setCandidateActive] = createSignal(false);
+  const [candidateGenre, setCandidateGenre] = createSignal("");
   const [genreHint, setGenreHint] = createSignal("");
   const [detectedLanguage, setDetectedLanguage] = createSignal<string>();
   const [editHistory, setEditHistory] = createSignal(new History<Segment[]>([]));
   const [segments, setSegments] = createStore<Segment[]>([]);
-  const [status, setStatus] = createSignal<StatusMessage>({
-    message: "尚未驗證",
-    tone: "info",
-  });
+  const [status, setStatus] = createSignal<StatusMessage>({ message: "尚未驗證", tone: "info" });
   const [authBusy, setAuthBusy] = createSignal(false);
   const [sessionChecking, setSessionChecking] = createSignal(true);
   const [authenticated, setAuthenticated] = createSignal(false);
   const [recognitionBusy, setRecognitionBusy] = createSignal(false);
   const [screen, setScreen] = createSignal<"review" | "playback">("review");
+
+  const currentDraft = (): Draft => ({
+    detectedLanguage: detectedLanguage() ?? "未指定",
+    genreHint: genreHint() || undefined,
+    segments: segments.map((segment) => ({ ...segment })),
+  });
 
   function restoreVoice(available: string[]) {
     setVoices(available);
@@ -60,18 +66,44 @@ export default function Home() {
     setStatus({ message, tone });
   }
 
-  function clearWorkspace() {
-    recognitionRequest?.abort();
-    recognitionRequest = undefined;
+  function cancelOperation() {
+    operations.invalidate();
+    setRequestRevision({});
     setRecognitionBusy(false);
-    speechCache.clear();
-    setImage(undefined);
-    setDetectedLanguage(undefined);
-    setSegments(reconcile([]));
-    setEditHistory(new History<Segment[]>([]));
-    setScreen("review");
-    setGenreHint("");
-    setWorkspace({});
+  }
+
+  function clearWorkspace() {
+    cancelOperation();
+    batch(() => {
+      speechCache.clear();
+      setImage(undefined);
+      setCandidate(undefined);
+      setCandidateActive(false);
+      setCandidateGenre("");
+      setDetectedLanguage(undefined);
+      setSegments(reconcile([]));
+      setEditHistory(new History<Segment[]>([]));
+      setScreen("review");
+      setGenreHint("");
+      setWorkspace({});
+    });
+  }
+
+  function applyDraft(draft: Draft, prepared?: PreparedImage) {
+    batch(() => {
+      speechCache.clear();
+      setImage(prepared);
+      setCandidate(undefined);
+      setCandidateActive(false);
+      setGenreHint(draft.genreHint ?? "");
+      setCandidateGenre(draft.genreHint ?? "");
+      setSegments(reconcile(draft.segments));
+      setEditHistory(new History<Segment[]>(draft.segments));
+      setDetectedLanguage(draft.detectedLanguage);
+      setScreen("review");
+      // Recreate the view even when the new draft has the same detected language.
+      setWorkspace({});
+    });
   }
 
   onMount(() => {
@@ -86,15 +118,21 @@ export default function Home() {
     onCleanup(() => {
       window.removeEventListener("online", update);
       window.removeEventListener("offline", update);
-      recognitionRequest?.abort();
     });
   });
 
+  onCleanup(() => {
+    operations.invalidate();
+    authOperations.invalidate();
+  });
+
   onMount(async () => {
+    const operation = authOperations.begin();
     try {
-      const response = await fetch("/api/session", { cache: "no-store" });
+      const response = await fetch("/api/session", { cache: "no-store", signal: operation.signal });
       if (!response.ok) throw new Error(await apiErrorMessage(response, "無法確認登入狀態"));
       const session = (await response.json()) as { authenticated: boolean; voices?: string[] };
+      if (!operation.current()) return;
       setAuthenticated(session.authenticated);
       restoreVoice(session.voices ?? []);
       reportStatus(
@@ -102,48 +140,58 @@ export default function Home() {
         session.authenticated ? "success" : "info",
       );
     } catch (error) {
-      reportStatus(error instanceof Error ? error.message : "無法確認登入狀態", "error");
+      if (operation.current())
+        reportStatus(error instanceof Error ? error.message : "無法確認登入狀態", "error");
     } finally {
-      setSessionChecking(false);
+      if (operation.current()) setSessionChecking(false);
     }
   });
 
   async function signIn(event: SubmitEvent) {
     event.preventDefault();
+    const operation = authOperations.begin();
     setAuthBusy(true);
     try {
       requireOnline();
       const response = await fetch("/api/session", {
+        signal: operation.signal,
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ otp: otp() }),
       });
       if (!response.ok) throw new Error(await apiErrorMessage(response, "驗證失敗"));
       const session = await response.json();
+      if (!operation.current()) return;
       restoreVoice(session.voices ?? []);
       setAuthenticated(true);
       setOtp("");
       reportStatus("驗證成功，可以上傳圖片", "success");
     } catch (error) {
-      reportStatus(networkErrorMessage(error, "驗證失敗"), "error");
+      if (operation.current()) reportStatus(networkErrorMessage(error, "驗證失敗"), "error");
     } finally {
-      setAuthBusy(false);
+      if (operation.current()) setAuthBusy(false);
     }
   }
 
   async function signOut() {
+    const operation = authOperations.begin();
+    cancelOperation();
+    // Unmount pending image/audio operations while the logout request is in flight.
+    setWorkspace({});
+    setCandidate(undefined);
     setAuthBusy(true);
     try {
       requireOnline();
-      const response = await fetch("/api/session", { method: "DELETE" });
+      const response = await fetch("/api/session", { method: "DELETE", signal: operation.signal });
       if (!response.ok) throw new Error(await apiErrorMessage(response, "登出失敗"));
+      if (!operation.current()) return;
       setAuthenticated(false);
       clearWorkspace();
       reportStatus("已安全登出", "success");
     } catch (error) {
-      reportStatus(networkErrorMessage(error, "登出失敗"), "error");
+      if (operation.current()) reportStatus(networkErrorMessage(error, "登出失敗"), "error");
     } finally {
-      setAuthBusy(false);
+      if (operation.current()) setAuthBusy(false);
     }
   }
 
@@ -151,40 +199,46 @@ export default function Home() {
     const file = input.files?.[0];
     input.value = "";
     if (!file) return;
+    cancelOperation();
+    const operation = operations.begin();
     try {
       if (file.size > MAX_DRAFT_BYTES) throw new Error("草稿檔案超過 200 KB，無法匯入");
-      const draft = parseDraft(await file.text());
+      const source = await file.text();
+      if (!operation.current()) return;
+      const draft = parseDraft(source);
       if (
-        (detectedLanguage() || image()) &&
-        !window.confirm("匯入草稿會取代目前的圖片、校閱文字與音訊，確定要繼續嗎？")
+        !commitCandidate(
+          operation,
+          draft,
+          !!detectedLanguage(),
+          () => window.confirm("匯入草稿會取代目前的圖片、校閱文字與音訊，確定要繼續嗎？"),
+          (next) => {
+            setCandidate(undefined);
+            applyDraft(next);
+          },
+        )
       )
         return;
-      clearWorkspace();
-      setGenreHint(draft.genreHint ?? "");
-      setSegments(reconcile(draft.segments));
-      setEditHistory(new History<Segment[]>(draft.segments));
-      setDetectedLanguage(draft.detectedLanguage);
       reportStatus(`已匯入草稿 · ${draft.segments.length} 個段落`, "success");
     } catch (error) {
-      reportStatus(error instanceof Error ? error.message : "無法匯入草稿", "error");
+      if (operation.current())
+        reportStatus(error instanceof Error ? error.message : "無法匯入草稿", "error");
     }
   }
 
   async function recognizeUpload() {
-    const selected = image()?.file;
-    if (!selected) return;
-    const controller = new AbortController();
-    recognitionRequest?.abort();
-    recognitionRequest = controller;
+    const prepared = candidate();
+    if (!prepared) return;
+    const selected = prepared.file;
+    const genre = candidateGenre();
+    const operation = operations.begin();
     setRecognitionBusy(true);
-    setDetectedLanguage(undefined);
-    setSegments(reconcile([]));
-    setEditHistory(new History<Segment[]>([]));
+    setRequestRevision({});
     reportStatus("建立 Gemini upload session…");
     try {
       requireOnline();
       const sessionResponse = await fetch("/api/uploads", {
-        signal: controller.signal,
+        signal: operation.signal,
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ mimeType: selected.type, sizeBytes: selected.size }),
@@ -192,41 +246,68 @@ export default function Home() {
       if (!sessionResponse.ok)
         throw new Error(await apiErrorMessage(sessionResponse, "無法建立上傳工作階段"));
       const upload = (await sessionResponse.json()) as UploadTarget;
-      controller.signal.throwIfAborted();
+      if (!operation.current()) return;
       reportStatus("透過 Bragi 安全轉送至 Gemini…");
       const response = await fetch(upload.target.url, {
-        signal: controller.signal,
+        signal: operation.signal,
         method: upload.target.method,
         headers: upload.target.headers,
         body: selected,
       });
       if (!response.ok) throw new Error(await apiErrorMessage(response, "無法上傳圖片"));
       const receipt = await response.json();
-      controller.signal.throwIfAborted();
+      if (!operation.current()) return;
       reportStatus("Gemini 正在辨識與分段…");
       const ocrResponse = await fetch("/api/ocr", {
-        signal: controller.signal,
+        signal: operation.signal,
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           uploadId: upload.uploadId,
           receipt,
-          genreHint: genreHint().trim() || undefined,
+          genreHint: genre.trim() || undefined,
         }),
       });
       if (!ocrResponse.ok) throw new Error(await apiErrorMessage(ocrResponse, "無法辨識圖片"));
-      const result = (await ocrResponse.json()) as OcrResult;
-      controller.signal.throwIfAborted();
-      setDetectedLanguage(result.detectedLanguage);
-      setSegments(reconcile(result.segments));
-      setEditHistory(new History<Segment[]>(result.segments));
-      setScreen("review");
-      reportStatus(`辨識完成 · ${result.segments.length} 個段落`, "success");
+      const value: unknown = await ocrResponse.json();
+      if (!operation.current()) return;
+      const parsed = ocrResponseSchema.safeParse(value);
+      if (!parsed.success) throw new Error("辨識結果格式不正確，請重試");
+      const draft: Draft = { ...parsed.data, genreHint: genre || undefined };
+      if (
+        !commitCandidate(
+          operation,
+          draft,
+          !!detectedLanguage(),
+          () => window.confirm("辨識完成；新稿件會取代目前的圖片、校閱文字與音訊，確定要繼續嗎？"),
+          (next) => applyDraft(next, prepared),
+        )
+      ) {
+        if (operation.current()) reportStatus("已保留目前稿件；候選圖片可重新辨識");
+        return;
+      }
+      reportStatus(`辨識完成 · ${draft.segments.length} 個段落`, "success");
     } catch (error) {
-      if (controller.signal.aborted) return;
-      reportStatus(networkErrorMessage(error, "上傳失敗"), "error");
+      if (operation.current()) reportStatus(networkErrorMessage(error, "上傳失敗"), "error");
     } finally {
-      if (recognitionRequest === controller) setRecognitionBusy(false);
+      if (operation.current()) setRecognitionBusy(false);
+    }
+  }
+
+  function editGenre(input: HTMLInputElement) {
+    const value = input.value;
+    try {
+      if (graphemeCount(value) > MAX_DRAFT_GENRE) throw new Error("題材提示最多 80 字");
+      if (candidateActive()) setCandidateGenre(value);
+      else {
+        if (detectedLanguage())
+          serializeDraft({ ...currentDraft(), genreHint: value || undefined });
+        setGenreHint(value);
+        setCandidateGenre(value);
+      }
+    } catch (error) {
+      input.value = candidateActive() ? candidateGenre() : genreHint();
+      reportStatus(error instanceof Error ? error.message : "無法修改題材", "error");
     }
   }
 
@@ -314,7 +395,13 @@ export default function Home() {
               {(value) => <option value={value}>{voiceLabel(value)}</option>}
             </For>
           </select>
-          <VoiceSample voice={voice() ?? voices()[0]} onStatus={reportStatus} />
+          <Show when={workspace()} keyed>
+            <VoiceSample
+              voice={voice() ?? voices()[0]}
+              requestRevision={requestRevision()}
+              onStatus={reportStatus}
+            />
+          </Show>
         </Show>
       </section>
       <Show when={!online()}>
@@ -349,14 +436,22 @@ export default function Home() {
             <p>請避免拍入無關的人臉、聯絡資訊或其他敏感資料。</p>
           </aside>
           <Capture
-            disabled={recognitionBusy()}
+            disabled={authBusy()}
+            onSelect={() => {
+              cancelOperation();
+              setCandidate(undefined);
+              setCandidateActive(true);
+              setCandidateGenre(genreHint());
+              return operations.begin();
+            }}
+            onCancel={() => {
+              cancelOperation();
+              setCandidate(undefined);
+              setCandidateActive(false);
+              reportStatus("已取消候選圖片，目前稿件已保留");
+            }}
             onChange={(prepared) => {
-              speechCache.clear();
-              setImage(prepared);
-              setDetectedLanguage(undefined);
-              setSegments(reconcile([]));
-              setEditHistory(new History<Segment[]>([]));
-              setScreen("review");
+              setCandidate(prepared);
             }}
             onStatus={reportStatus}
           />
@@ -364,15 +459,15 @@ export default function Home() {
           <input
             id="genre"
             type="text"
-            maxlength="80"
             placeholder="例如：奇幻、懸疑、科幻"
-            value={genreHint()}
-            onInput={(event) => setGenreHint(event.currentTarget.value)}
+            disabled={recognitionBusy() || authBusy()}
+            value={candidateActive() ? candidateGenre() : genreHint()}
+            onInput={(event) => editGenre(event.currentTarget)}
           />
           <button
             type="button"
             class="wide"
-            disabled={recognitionBusy() || !image()}
+            disabled={recognitionBusy() || !candidate() || authBusy()}
             onClick={recognizeUpload}
           >
             {recognitionBusy() ? "正在上傳與辨識…" : "上傳並辨識文字"}
@@ -381,7 +476,7 @@ export default function Home() {
             <label
               class="file-button secondary small"
               for="draft-import"
-              aria-disabled={recognitionBusy()}
+              aria-disabled={authBusy()}
             >
               匯入草稿 JSON
             </label>
@@ -391,7 +486,7 @@ export default function Home() {
               type="file"
               aria-describedby="draft-import-note"
               accept="application/json,.json"
-              disabled={recognitionBusy()}
+              disabled={authBusy()}
               onChange={(event) => void importDraft(event.currentTarget)}
             />
             <p id="draft-import-note">草稿只含文字與語氣，不含圖片或音訊，也不會上傳到 Gemini。</p>
@@ -404,6 +499,7 @@ export default function Home() {
               when={screen() === "review"}
               fallback={
                 <Playback
+                  requestRevision={requestRevision()}
                   segments={segments}
                   genreHint={genreHint().trim() || undefined}
                   voice={voice()}
@@ -416,6 +512,7 @@ export default function Home() {
               }
             >
               <Review
+                requestRevision={requestRevision()}
                 detectedLanguage={language()}
                 image={image()?.file}
                 genreHint={genreHint().trim() || undefined}

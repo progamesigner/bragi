@@ -5,6 +5,7 @@ import { requestCachedSpeech } from "~/lib/speech-cache";
 import type { StatusReporter } from "~/lib/status";
 
 type SpeechPreviewProps = {
+  requestRevision?: object;
   text: string;
   toneHint: string;
   genreHint?: string;
@@ -34,9 +35,11 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
 
   createEffect(
     on(
-      () => [props.text, props.toneHint, props.genreHint, props.voice],
+      () => [props.text, props.toneHint, props.genreHint, props.voice, props.requestRevision],
       () => {
         request?.abort();
+        request = undefined;
+        setBusy(false);
         clearAudio();
       },
       { defer: true },
@@ -44,6 +47,7 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
   );
   onCleanup(() => {
     request?.abort();
+    request = undefined;
     audioElement?.pause();
     const url = untrack(audioUrl);
     if (url) URL.revokeObjectURL(url);
@@ -75,10 +79,10 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
       setDuration(audio.durationMs);
       props.onStatus("試聽已準備完成，請按播放", "success");
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
+      if (request !== controller || controller.signal.aborted) return;
       props.onStatus(networkErrorMessage(error, "無法產生試聽"), "error");
     } finally {
-      if (request === controller) setBusy(false);
+      if (request === controller && !controller.signal.aborted) setBusy(false);
     }
   }
 

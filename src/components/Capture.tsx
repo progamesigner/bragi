@@ -1,10 +1,13 @@
 import { createSignal, onCleanup, Show } from "solid-js";
 import { type PreparedImage, prepareImage } from "~/lib/image";
 import type { StatusReporter } from "~/lib/status";
+import { type Operation, WorkspaceRevision } from "~/lib/workspace";
 
 type CaptureProps = {
   disabled: boolean;
-  onChange: (image: PreparedImage | undefined) => void;
+  onChange: (image: PreparedImage) => void;
+  onSelect: () => Operation;
+  onCancel: () => void;
   onStatus: StatusReporter;
 };
 
@@ -13,7 +16,7 @@ export default function Capture(props: CaptureProps) {
   const [previewUrl, setPreviewUrl] = createSignal<string>();
   const [previewFailed, setPreviewFailed] = createSignal(false);
   const [preparing, setPreparing] = createSignal(false);
-  let disposed = false;
+  const operations = new WorkspaceRevision();
 
   function replacePreview(url?: string) {
     const previous = previewUrl();
@@ -23,21 +26,23 @@ export default function Capture(props: CaptureProps) {
   }
 
   onCleanup(() => {
-    disposed = true;
+    operations.invalidate();
     const url = previewUrl();
     if (url) URL.revokeObjectURL(url);
   });
 
   async function selectFile(file?: File) {
     if (!file) return;
+    const operation = operations.begin();
+    const workspaceOperation = props.onSelect();
+    const current = () => operation.current() && workspaceOperation.current();
     setPreparing(true);
     setImage(undefined);
-    props.onChange(undefined);
     replacePreview();
     props.onStatus("正在調整方向與圖片大小…");
     try {
       const prepared = await prepareImage(file);
-      if (disposed) return;
+      if (!current()) return;
       setImage(prepared);
       replacePreview(URL.createObjectURL(prepared.file));
       props.onChange(prepared);
@@ -46,10 +51,10 @@ export default function Capture(props: CaptureProps) {
         prepared.warning ? "info" : "success",
       );
     } catch (error) {
-      if (disposed) return;
+      if (!current()) return;
       props.onStatus(error instanceof Error ? error.message : "無法處理圖片", "error");
     } finally {
-      if (!disposed) setPreparing(false);
+      if (operation.current()) setPreparing(false);
     }
   }
 
@@ -92,6 +97,22 @@ export default function Capture(props: CaptureProps) {
           onChange={inputChanged}
         />
       </div>
+
+      <Show when={preparing() || image()}>
+        <button
+          type="button"
+          class="small secondary"
+          onClick={() => {
+            operations.invalidate();
+            setPreparing(false);
+            setImage(undefined);
+            replacePreview();
+            props.onCancel();
+          }}
+        >
+          取消候選圖片
+        </button>
+      </Show>
 
       <Show when={image()}>
         {(selected) => (
