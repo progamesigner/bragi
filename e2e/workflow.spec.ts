@@ -536,3 +536,34 @@ test("voice picker labels voices, samples them and remembers the choice", async 
   await page.reload();
   await expect(page.getByLabel("朗讀聲音")).toHaveValue("Puck");
 });
+
+test("reading presets increase actual narration and editor font sizes", async ({ page }) => {
+  await mockApi(page, true);
+  await page.goto("/");
+  await recognize(page);
+  const editorSizes: number[] = [];
+  for (const preset of ["normal", "large", "largest"]) {
+    await page.getByLabel("朗讀字級").selectOption(preset);
+    editorSizes.push(
+      await page
+        .getByLabel("口白文字", { exact: true })
+        .first()
+        .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+    );
+  }
+  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  const scriptSizes: number[] = [];
+  for (const preset of ["normal", "large", "largest"]) {
+    await page.getByLabel("朗讀字級").selectOption(preset);
+    scriptSizes.push(
+      await page
+        .locator(".playback-script p")
+        .first()
+        .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+    );
+  }
+  expect(scriptSizes).toEqual(editorSizes);
+  expect(scriptSizes[1]).toBeGreaterThan(scriptSizes[0] ?? 0);
+  expect(scriptSizes[2]).toBeGreaterThan(scriptSizes[1] ?? 0);
+});
+

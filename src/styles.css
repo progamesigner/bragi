@@ -20,6 +20,7 @@ body {
   background: #f7c47f;
 }
 main {
+  --reading-font-size: clamp(1.35rem, 5vw, 2rem);
   width: min(100% - 32px, 680px);
   margin: 0 auto;
   padding: max(56px, env(safe-area-inset-top)) 0 max(72px, env(safe-area-inset-bottom));
@@ -419,7 +420,7 @@ button.danger {
   margin: 0;
   color: #f3ead8;
   font-family: Georgia, serif;
-  font-size: clamp(1.35rem, 5vw, 2rem);
+  font-size: var(--reading-font-size);
   line-height: 1.55;
   white-space: pre-wrap;
 }
@@ -427,7 +428,7 @@ button.danger {
   margin-top: 16px;
   color: #c8bbaa;
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: var(--reading-font-size);
 }
 .playback-script span {
   display: block;
@@ -500,13 +501,14 @@ button.danger {
     transition: none;
   }
 }
-main[data-font-size="large"] .playback-script,
-main[data-font-size="large"] .review-segment textarea {
-  font-size: 1.4rem;
+main[data-font-size="large"] {
+  --reading-font-size: clamp(1.7rem, 6vw, 2.5rem);
 }
-main[data-font-size="largest"] .playback-script,
-main[data-font-size="largest"] .review-segment textarea {
-  font-size: 1.8rem;
+main[data-font-size="largest"] {
+  --reading-font-size: clamp(2.1rem, 7vw, 3rem);
+}
+.review-segment textarea {
+  font-size: var(--reading-font-size);
 }
 select {
   font: inherit;
