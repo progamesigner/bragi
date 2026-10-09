@@ -28,7 +28,9 @@ function canFocus(element: Element | null | undefined): element is HTMLElement {
 
 /** Focuses the page's main heading, making it programmatically focusable if needed. */
 function focusPageHeading() {
-  const heading = document.querySelector<HTMLElement>("main h1, main h2");
+  const heading = [...document.querySelectorAll<HTMLElement>("h1, h2")].find(
+    (element) => !element.closest("dialog") && element.getClientRects().length > 0,
+  );
   if (!heading) return;
   if (!heading.hasAttribute("tabindex")) heading.setAttribute("tabindex", "-1");
   heading.focus();
