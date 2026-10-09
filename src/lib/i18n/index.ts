@@ -11,7 +11,7 @@ import zhHant, { type MessageKey, type Messages } from "./messages/zh-Hant";
 export { DEFAULT_LOCALE, LOCALE_NAMES, LOCALES, type Locale } from "./locales";
 export type { MessageKey, Messages };
 
-const dictionaries: Record<Locale, Partial<Messages>> = {
+const dictionaries: Record<Locale, Messages> = {
   "zh-Hant": zhHant,
   "zh-Hans": zhHans,
   ja,

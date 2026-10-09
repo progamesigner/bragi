@@ -1,5 +1,5 @@
 import { createEffect, createSignal, onCleanup, untrack } from "solid-js";
-import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, LOCALES, type Locale } from "../i18n/locales";
+import { browserLocale, LOCALE_STORAGE_KEY, LOCALES, type Locale } from "../i18n/locales";
 import {
   applyTheme,
   resolveTheme,
@@ -46,7 +46,11 @@ const [themePreference, setThemeSignal] = createSignal<ThemePreference>(
   readChoice(STORAGE_KEYS.theme, THEME_PREFERENCES, "system"),
 );
 const [locale, setLocaleSignal] = createSignal<Locale>(
-  readChoice(STORAGE_KEYS.locale, LOCALES, DEFAULT_LOCALE),
+  readChoice(
+    STORAGE_KEYS.locale,
+    LOCALES,
+    browserLocale(typeof window === "undefined" ? undefined : navigator.language),
+  ),
 );
 const [fontSize, setFontSizeSignal] = createSignal<FontSize>(
   readChoice(STORAGE_KEYS.fontSize, FONT_SIZES, "normal"),

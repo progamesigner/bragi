@@ -14,3 +14,10 @@ export const LOCALE_NAMES: Record<Locale, string> = {
   de: "Deutsch",
   es: "Español",
 };
+
+/** Use a stored choice first; otherwise match the browser language without translating content. */
+export function browserLocale(language: string | undefined): Locale {
+  const tag = language?.toLowerCase() ?? "";
+  if (tag.startsWith("zh")) return /hant|tw|hk|mo/.test(tag) ? "zh-Hant" : "zh-Hans";
+  return LOCALES.find((value) => tag === value || tag.startsWith(`${value}-`)) ?? DEFAULT_LOCALE;
+}
