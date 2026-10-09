@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { format } from "../src/lib/i18n";
 import de from "../src/lib/i18n/messages/de";
 import en from "../src/lib/i18n/messages/en";
 import es from "../src/lib/i18n/messages/es";
@@ -6,12 +7,15 @@ import ja from "../src/lib/i18n/messages/ja";
 import ko from "../src/lib/i18n/messages/ko";
 import zhHans from "../src/lib/i18n/messages/zh-Hans";
 import zhHant from "../src/lib/i18n/messages/zh-Hant";
+import { VOICE_CATALOG } from "../src/lib/voices";
 import { mockAudio } from "./audio-fixture";
 import { image, mockSignedInApi } from "./fixtures";
 
+const VOICES = VOICE_CATALOG.map(([name]) => name);
+
 // Translations change string lengths a lot (German most of all). Every control on the capture,
-// review, settings, reading and finish screens must fit the phone width without pushing the page sideways or
-// clipping its label.
+// review, settings, voice picker, reading and finish screens must fit the phone width without
+// pushing the page sideways or clipping its label.
 
 /** Describes controls whose label is wider than the control, and the page's sideways overflow. */
 function layoutProblems(page: Page, scope: string) {
@@ -57,6 +61,14 @@ for (const [locale, dictionary] of Object.entries({
       await page.setViewportSize({ width, height: 844 });
       await mockSignedInApi(page);
       await mockAudio(page);
+      await page.route("**/api/session", (route) =>
+        route.fulfill({
+          json: {
+            authenticated: true,
+            voices: ["Kore", ...VOICES.filter((name) => name !== "Kore")],
+          },
+        }),
+      );
       await page.goto("/");
       await expect(page.locator("#capture-heading")).toHaveText(dictionary["capture.heading"]);
       await page.evaluate(() => document.fonts.ready);
@@ -108,6 +120,26 @@ for (const [locale, dictionary] of Object.entries({
       const settings = page.getByRole("dialog", { name: dictionary["settings.title"] });
       await expect(settings).toBeVisible();
       expect(await layoutProblems(page, "dialog[open]"), "settings").toEqual([]);
+
+      // The voice picker on top of settings, with the full catalog, one trait filtered and a preview.
+      await settings.locator(".voice-current").click();
+      const picker = page.getByRole("dialog", { name: dictionary["voicePicker.title"] });
+      await expect(picker).toBeVisible();
+      await expect(picker.getByRole("radio")).toHaveCount(VOICE_CATALOG.length);
+      expect(await layoutProblems(page, ".voice-picker-sheet"), "voice picker").toEqual([]);
+      await picker.locator("select").selectOption("firm");
+      await picker
+        .getByRole("button", {
+          name: format(dictionary["voicePicker.action"], {
+            action: dictionary["voicePicker.preview"],
+            voice: "Alnilam",
+          }),
+        })
+        .click();
+      await expect(picker.locator(".voice-sample-compact[data-phase=playing]")).toHaveCount(1);
+      expect(await layoutProblems(page, ".voice-picker-sheet"), "voice picker preview").toEqual([]);
+      await picker.getByRole("button", { name: dictionary["voicePicker.close"] }).click();
+      await expect(picker).toBeHidden();
       await settings.getByRole("button", { name: dictionary["settings.close"] }).click();
       await expect(settings).toBeHidden();
 
