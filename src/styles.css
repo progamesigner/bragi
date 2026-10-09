@@ -1173,7 +1173,9 @@ label.file-button:has(+ input:focus-visible) {
   z-index: 5;
   top: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  /* The side columns never shrink below their content, so a long step label cannot slide under the
+     wordmark or the settings button; the steps stay centred whenever there is room. */
+  grid-template-columns: minmax(min-content, 1fr) auto minmax(min-content, 1fr);
   align-items: center;
   gap: 4px;
   min-height: 60px;
@@ -1255,6 +1257,38 @@ a.step:hover {
 .step-unavailable {
   color: var(--text-faint);
   cursor: not-allowed;
+}
+/* At 320px the German steps, the wordmark and settings only fit with the spacing pulled in. */
+@media (max-width: 379px) {
+  .top-nav {
+    gap: 0;
+    padding-inline: max(4px, env(safe-area-inset-left)) max(4px, env(safe-area-inset-right));
+  }
+  /* Keeps the wordmark or "previous page" visibly apart from the first step when they meet. */
+  .top-nav-start {
+    padding-right: 8px;
+  }
+  .wordmark {
+    padding-left: 4px;
+  }
+  .top-nav-back {
+    padding-right: 4px;
+    font-size: 0.8125rem;
+  }
+  .steps ol,
+  .steps li {
+    gap: 0;
+  }
+  .steps .icon {
+    width: 10px;
+    height: 10px;
+  }
+  .step {
+    padding: 0 3px;
+  }
+  .top-nav .settings-button {
+    width: 44px;
+  }
 }
 @media (min-width: 900px) {
   .top-nav {

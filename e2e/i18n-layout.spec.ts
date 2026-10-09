@@ -14,8 +14,8 @@ import { image, mockSignedInApi } from "./fixtures";
 const VOICES = VOICE_CATALOG.map(([name]) => name);
 
 // Translations change string lengths a lot (German most of all). Every control on the capture,
-// review, settings, voice picker, reading and finish screens must fit the phone width without
-// pushing the page sideways or clipping its label.
+// review, settings, voice picker, reading and finish screens, and the top bar with its wordmark,
+// must fit the phone width without pushing the page sideways, clipping or overlapping.
 
 /** Describes controls whose label is wider than the control, and the page's sideways overflow. */
 function layoutProblems(page: Page, scope: string) {
@@ -41,6 +41,29 @@ function layoutProblems(page: Page, scope: string) {
         if (style.textOverflow === "ellipsis" && part.scrollWidth > part.clientWidth + 1)
           problems.push(`"${name}" is cut off with an ellipsis`);
       }
+    }
+    // The top bar: the wordmark or "previous page", the steps and settings sit side by side, none
+    // wider than its column and none drawn over its neighbour.
+    const nav = root.querySelector(".top-nav");
+    let before: { name: string; right: number } | undefined;
+    for (const name of ["start", "steps", "end"]) {
+      const column = nav?.querySelector<HTMLElement>(
+        name === "steps" ? ".steps" : `.top-nav-${name}`,
+      );
+      if (!column) continue;
+      if (column.scrollWidth > column.clientWidth + 1)
+        problems.push(
+          `top bar ${name} is ${column.scrollWidth - column.clientWidth}px wider than its column`,
+        );
+      const boxes = Array.from(column.querySelectorAll<Element>("*"))
+        .filter((part) => !part.closest(".visually-hidden") && part.checkVisibility())
+        .map((part) => part.getBoundingClientRect())
+        .filter((box) => box.width > 1);
+      if (!boxes.length) continue;
+      const left = Math.min(...boxes.map((box) => box.left));
+      if (before && left < before.right - 0.5)
+        problems.push(`top bar ${name} overlaps ${before.name} by ${before.right - left}px`);
+      before = { name, right: Math.max(...boxes.map((box) => box.right)) };
     }
     return problems;
   }, scope);
@@ -178,4 +201,23 @@ test("the layout check notices a clipped label", async ({ page }) => {
   const problems = await layoutProblems(page, "body");
   expect(problems.some((problem) => problem.includes("too narrow"))).toBe(true);
   expect(problems.some((problem) => problem.includes("ellipsis"))).toBe(true);
+});
+
+test("the layout check notices a crowded top bar", async ({ page }) => {
+  // German at 320px with the old evenly shrinking columns drew the wordmark under "Erfassen".
+  await page.addInitScript(() => localStorage.setItem("bragi-locale", "de"));
+  await page.setViewportSize({ width: 320, height: 844 });
+  await mockSignedInApi(page);
+  await page.goto("/");
+  await page.evaluate(() => {
+    const nav = document.querySelector<HTMLElement>(".top-nav");
+    if (nav) {
+      nav.style.gridTemplateColumns = "minmax(0, 1fr) auto minmax(0, 1fr)";
+      nav.style.gap = "4px";
+      nav.style.paddingInline = "8px";
+    }
+  });
+  const problems = await layoutProblems(page, "body");
+  expect(problems.some((problem) => problem.includes("top bar start is"))).toBe(true);
+  expect(problems.some((problem) => problem.includes("top bar steps overlaps start"))).toBe(true);
 });
