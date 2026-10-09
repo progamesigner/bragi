@@ -6,10 +6,11 @@ import ja from "../src/lib/i18n/messages/ja";
 import ko from "../src/lib/i18n/messages/ko";
 import zhHans from "../src/lib/i18n/messages/zh-Hans";
 import zhHant from "../src/lib/i18n/messages/zh-Hant";
+import { mockAudio } from "./audio-fixture";
 import { image, mockSignedInApi } from "./fixtures";
 
 // Translations change string lengths a lot (German most of all). Every control on the capture,
-// review and settings screens must fit the phone width without pushing the page sideways or
+// review, settings, reading and finish screens must fit the phone width without pushing the page sideways or
 // clipping its label.
 
 /** Describes controls whose label is wider than the control, and the page's sideways overflow. */
@@ -50,12 +51,11 @@ for (const [locale, dictionary] of Object.entries({
   es,
 })) {
   for (const width of [390, 320]) {
-    test(`${locale} at ${width}px fits capture, review and settings without clipping`, async ({
-      page,
-    }) => {
+    test(`${locale} at ${width}px fits every screen without clipping`, async ({ page }) => {
       await page.addInitScript((value) => localStorage.setItem("bragi-locale", value), locale);
       await page.setViewportSize({ width, height: 844 });
       await mockSignedInApi(page);
+      await mockAudio(page);
       await page.goto("/");
       await expect(page.locator("#capture-heading")).toHaveText(dictionary["capture.heading"]);
       await page.evaluate(() => document.fonts.ready);
@@ -79,6 +79,28 @@ for (const [locale, dictionary] of Object.entries({
       const settings = page.getByRole("dialog", { name: dictionary["settings.title"] });
       await expect(settings).toBeVisible();
       expect(await layoutProblems(page, "dialog[open]"), "settings").toEqual([]);
+      await settings.getByRole("button", { name: dictionary["settings.close"] }).click();
+      await expect(settings).toBeHidden();
+
+      // Reading: idle on the first part, then playing and waiting on the last one, then complete.
+      await page.locator(".review-footer button").click();
+      const reading = page.locator(".playback");
+      await expect(reading).toBeVisible();
+      expect(await layoutProblems(page, "body"), "reading").toEqual([]);
+      await page.getByRole("button", { name: dictionary["playback.next"], exact: true }).click();
+      await page.locator(".playback-primary").click();
+      await expect(reading).toHaveAttribute("data-phase", "playing");
+      expect(await layoutProblems(page, "body"), "reading while playing").toEqual([]);
+      await page.evaluate(() => window.audioTest.finish());
+      await expect(reading).toHaveAttribute("data-phase", "complete");
+      expect(await layoutProblems(page, "body"), "reading complete").toEqual([]);
+
+      await page.locator(".playback-primary").click();
+      await expect(page).toHaveURL(/\/finished$/);
+      await expect(
+        page.getByRole("heading", { name: dictionary["finished.heading"] }),
+      ).toBeVisible();
+      expect(await layoutProblems(page, "body"), "finished").toEqual([]);
     });
   }
 }
