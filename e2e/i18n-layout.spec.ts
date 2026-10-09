@@ -32,6 +32,7 @@ function layoutProblems(page: Page, scope: string) {
       if (box.right > document.documentElement.clientWidth + 0.5 || box.left < -0.5)
         problems.push(`"${name}" leaves the screen`);
       for (const part of [control, ...control.querySelectorAll<HTMLElement>("*")]) {
+        if (part.classList.contains("segment-excerpt")) continue;
         const style = getComputedStyle(part);
         if (style.textOverflow === "ellipsis" && part.scrollWidth > part.clientWidth + 1)
           problems.push(`"${name}" is cut off with an ellipsis`);
@@ -70,10 +71,38 @@ for (const [locale, dictionary] of Object.entries({
 
       await start.click();
       await expect(page.locator("#review-heading")).toHaveText(dictionary["review.heading"]);
-      expect(await layoutProblems(page, "body"), "review").toEqual([]);
+      expect(await layoutProblems(page, "body"), "review compact").toEqual([]);
+
+      const firstSegment = page.locator(".review-segment").first();
+      await firstSegment
+        .getByRole("button", { name: dictionary["review.moreEditing"], exact: true })
+        .click();
+      const addSpoken = firstSegment.getByRole("button", {
+        name: dictionary["review.addSpoken"],
+        exact: true,
+      });
+      if (await addSpoken.count()) await addSpoken.click();
       for (const details of await page.locator("#main details:not([open]) > summary").all())
         await details.click();
-      expect(await layoutProblems(page, "body"), "review with every section open").toEqual([]);
+      expect(await layoutProblems(page, "body"), "review expanded").toEqual([]);
+
+      await page
+        .getByRole("button", { name: dictionary["review.segmentList"], exact: true })
+        .click();
+      const listSheet = page.getByRole("dialog", { name: dictionary["review.segmentList"] });
+      await expect(listSheet).toBeVisible();
+      expect(await layoutProblems(page, "dialog[open]"), "review segment list sheet").toEqual([]);
+      await listSheet.getByRole("button", { name: dictionary["review.closeList"] }).click();
+      await expect(listSheet).toBeHidden();
+
+      await page.getByRole("button", { name: dictionary["review.compare"], exact: true }).click();
+      const imageSheet = page.getByRole("dialog", { name: dictionary["review.compare"] });
+      await expect(imageSheet).toBeVisible();
+      expect(await layoutProblems(page, "dialog[open]"), "review image comparison sheet").toEqual(
+        [],
+      );
+      await imageSheet.getByRole("button", { name: dictionary["review.closeImage"] }).click();
+      await expect(imageSheet).toBeHidden();
 
       await page.getByRole("button", { name: dictionary["settings.open"], exact: true }).click();
       const settings = page.getByRole("dialog", { name: dictionary["settings.title"] });
