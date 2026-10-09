@@ -152,8 +152,12 @@ for (const api of ["ocr", "tts-stream"]) {
     expect(page.url()).toBe(path);
     expect(attempts).toBe(1);
     if (api === "ocr") {
-      page.once("dialog", (dialog) => dialog.dismiss());
       await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
+      await page
+        .getByRole("dialog", { name: "取代目前稿件？" })
+        .getByRole("button", { name: "取消", exact: true })
+        .last()
+        .click();
       await expect(page.getByText("已保留目前稿件；候選圖片可重新辨識")).toBeVisible();
     } else {
       await page.getByRole("button", { name: "重試本段" }).click();

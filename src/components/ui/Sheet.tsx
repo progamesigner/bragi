@@ -69,6 +69,8 @@ export default function Sheet(props: SheetProps) {
   );
 
   function closed() {
+    // close events are queued: a newer question may already have reopened this same dialog.
+    if (dialog.open) return;
     const target = canFocus(opener) ? opener : props.fallbackFocus?.();
     opener = null;
     if (canFocus(target)) target.focus();

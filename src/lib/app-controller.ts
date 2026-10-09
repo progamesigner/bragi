@@ -44,7 +44,7 @@ export type ToastAction = { label: string; run: () => void; valid?: () => boolea
 export type ToastMessage = { id: number; message: string; action?: ToastAction };
 
 /** Actions that drop the workspace and so may need the "export first" confirmation. */
-export type LossAction = "clear" | "signOut" | "update";
+export type LossAction = "clear" | "signOut" | "update" | "import" | "replace";
 
 export type AppPath = "/" | "/review" | "/play";
 
@@ -104,6 +104,9 @@ export function createAppController(navigate: Navigator, location: Location) {
   const authOperations = new WorkspaceRevision();
   const autosave = new DraftAutosave(() => localStorage);
   let toastId = 0;
+  let replacementDecision:
+    | { action: "import" | "replace"; settle: (accepted: boolean) => void }
+    | undefined;
 
   const currentDraft = (): Draft => ({
     detectedLanguage: workspace.detectedLanguage() ?? "未指定",
@@ -161,6 +164,7 @@ export function createAppController(navigate: Navigator, location: Location) {
   }
 
   function cancelOperation() {
+    cancelLoss();
     operations.invalidate();
     setRecognitionBusy(false);
     setPreparing(false);
@@ -289,16 +293,49 @@ export function createAppController(navigate: Navigator, location: Location) {
     }
   }
 
-  /** Images, history and candidate content are lost even after the text has been exported. */
-  const contentAtRisk = () =>
+  /**
+   * Images, history and candidate content are lost even after the text has been exported.
+   * Recognition carries its candidate image and genre forward, so those fields are retained.
+   */
+  const contentAtRisk = (retainedImage?: PreparedImage, retainedGenre?: string) =>
     workspace.hasDraft() ||
-    !!workspace.image() ||
-    candidateActive() ||
-    !!workspace.genreHint().trim() ||
+    workspace.canUndo() ||
+    workspace.canRedo() ||
+    (!!workspace.image() && workspace.image() !== retainedImage) ||
+    (candidateActive() && (!retainedImage || candidate() !== retainedImage)) ||
+    (!!workspace.genreHint().trim() && workspace.genreHint() !== retainedGenre) ||
     !!savedDraft();
 
-  function perform(action: LossAction) {
+  function cancelLoss() {
+    replacementDecision?.settle(false);
     setPendingLoss(undefined);
+  }
+
+  /** Keep validated results in the awaiting transaction; abort also dismisses its question. */
+  function confirmReplacement(action: "import" | "replace", operation: Operation) {
+    cancelLoss();
+    if (!operation.current()) return Promise.resolve(false);
+    return new Promise<boolean>((resolve) => {
+      const aborted = () => settle(false);
+      const settle = (accepted: boolean) => {
+        operation.signal.removeEventListener("abort", aborted);
+        replacementDecision = undefined;
+        setPendingLoss(undefined);
+        resolve(accepted && operation.current());
+      };
+      replacementDecision = { action, settle };
+      operation.signal.addEventListener("abort", aborted, { once: true });
+      setPendingLoss(action);
+    });
+  }
+
+  function perform(action: LossAction) {
+    if (action === "import" || action === "replace") {
+      if (pendingLoss() === action && replacementDecision?.action === action)
+        replacementDecision.settle(true);
+      return;
+    }
+    cancelLoss();
     if (action === "clear") {
       setSettingsOpen(false);
       clearWorkspace();
@@ -308,11 +345,15 @@ export function createAppController(navigate: Navigator, location: Location) {
     } else if (action === "signOut") {
       setSettingsOpen(false);
       void signOut();
-    } else updateActivator()?.();
+    } else if (action === "update") {
+      cancelOperation();
+      updateActivator()?.();
+    }
   }
 
   /** Runs the action now, or first asks (offering an export) when content would be lost. */
-  function requestLoss(action: LossAction) {
+  function requestLoss(action: "clear" | "signOut" | "update") {
+    cancelLoss();
     if (contentAtRisk()) setPendingLoss(action);
     else perform(action);
   }
@@ -329,16 +370,16 @@ export function createAppController(navigate: Navigator, location: Location) {
       if (!operation.current()) return;
       const draft = parseDraft(source);
       if (
-        !commitCandidate(
+        !(await commitCandidate(
           operation,
           draft,
-          workspace.hasDraft(),
-          () => window.confirm(t("draft.importConfirm")),
+          contentAtRisk(),
+          () => confirmReplacement("import", operation),
           (next) => {
             setCandidate(undefined);
             applyDraft(next, { saved: true });
           },
-        )
+        ))
       )
         return;
       showToast(t("draft.imported", { n: draft.segments.length }));
@@ -407,13 +448,13 @@ export function createAppController(navigate: Navigator, location: Location) {
       if (!parsed.success) throw new Error(t("recognize.invalidResult"));
       const draft: Draft = { ...parsed.data, genreHint: genre || undefined };
       if (
-        !commitCandidate(
+        !(await commitCandidate(
           operation,
           draft,
-          workspace.hasDraft(),
-          () => window.confirm(t("recognize.replaceConfirm")),
+          contentAtRisk(prepared, draft.genreHint),
+          () => confirmReplacement("replace", operation),
           (next) => applyDraft(next, { prepared, saved: false }),
-        )
+        ))
       ) {
         if (operation.current()) reportCapture(t("recognize.kept"));
         return;
@@ -476,7 +517,7 @@ export function createAppController(navigate: Navigator, location: Location) {
       cancelOperation();
       reportCapture(t("recognize.cancelled"));
     },
-    cancelLoss: () => setPendingLoss(undefined),
+    cancelLoss,
     /** Best effort: a blocked download still counts as tried, so the person decides what is next. */
     exportForLoss(): boolean {
       try {

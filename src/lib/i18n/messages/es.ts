@@ -69,6 +69,16 @@ const messages = {
     "La actualización recarga la página y elimina imágenes, historial de edición y audio. El texto guardado localmente se puede recuperar después.",
   "loss.updateProceed": "Actualizar sin exportar",
   "loss.updateContinue": "Continuar con la actualización",
+  "loss.importTitle": "¿Importar borrador?",
+  "loss.importBody":
+    "La importación reemplaza la imagen, el borrador, el historial de edición y el contenido pendiente actuales. La exportación guarda solo el texto del borrador actual. Cancela para conservar el contenido actual.",
+  "loss.importProceed": "Importar sin exportar",
+  "loss.importContinue": "Continuar con la importación",
+  "loss.replaceTitle": "¿Reemplazar el borrador actual?",
+  "loss.replaceBody":
+    "El nuevo resultado reemplaza la imagen, el borrador y el historial de edición actuales. La exportación guarda solo el texto del borrador actual. Cancela para conservar el borrador anterior y la imagen pendiente e intentar el reconocimiento de nuevo.",
+  "loss.replaceProceed": "Reemplazar sin exportar",
+  "loss.replaceContinue": "Continuar con el reemplazo",
   "loss.exportFirst": "Exportar y continuar",
   "loss.exported":
     "Se inició la descarga. Comprueba que el archivo se guardó antes de continuar. Si no lo encuentras, vuelve a exportarlo.",
@@ -164,8 +174,6 @@ const messages = {
   "autosave.discard": "Descartar",
   "autosave.restored": "Borrador recuperado sin enviarlo a Gemini",
   "recognize.invalidResult": "Resultado de reconocimiento inválido. Vuelve a intentarlo.",
-  "recognize.replaceConfirm":
-    "Reconocimiento completo. ¿Reemplazar la imagen, el texto revisado y el audio actuales con este borrador?",
   "recognize.kept":
     "Se conserva el borrador actual. Puedes reconocer de nuevo la imagen seleccionada.",
   "capture.candidateCancelled": "Imagen seleccionada cancelada. Se conserva el borrador actual.",
@@ -183,8 +191,6 @@ const messages = {
   "draft.import": "Importar borrador",
   "draft.importNote":
     "Los borradores solo contienen texto y tono, sin imágenes ni audio. No se envían a Gemini.",
-  "draft.importConfirm":
-    "La importación reemplaza la imagen, el texto revisado y el audio actuales. ¿Continuar?",
   "draft.imported": "Borrador importado · {n} segmentos",
   "draft.importFailed": "No se pudo importar el borrador",
   "draft.exportFailed": "No se pudo exportar el borrador",

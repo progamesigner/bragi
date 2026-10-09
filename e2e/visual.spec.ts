@@ -1,6 +1,13 @@
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
-import { mockSignedInApi, openSettings, recognize, selectImage } from "./fixtures";
+import {
+  draftFile,
+  goToStep,
+  mockSignedInApi,
+  openSettings,
+  recognize,
+  selectImage,
+} from "./fixtures";
 
 // Baselines for the routed screens and shared settings. Animations are off, fonts are the
 // system Noto CJK faces and every API response is mocked, so only real visual changes show up.
@@ -177,5 +184,36 @@ for (const locale of ["ja", "de"] as const) {
       element.style.visibility = "hidden";
     });
     await snap(page, `review-${locale}`);
+  });
+}
+
+for (const colorScheme of ["light", "dark"] as const) {
+  test.describe(`${colorScheme} replacement sheets`, () => {
+    test.use({ colorScheme });
+    for (const action of ["import", "replace"] as const) {
+      test(`${action} loss confirmation`, async ({ page }) => {
+        await mockSignedInApi(page);
+        await page.goto("/");
+        await recognize(page);
+        await page.getByLabel("口白文字", { exact: true }).first().fill("保留這段舊稿。");
+        await goToStep(page, "取圖");
+        await selectImage(page);
+        await page.locator(".toast").evaluate((element) => {
+          element.style.visibility = "hidden";
+        });
+        if (action === "import")
+          await page.locator("#draft-import").setInputFiles(draftFile("匯入的新稿。"));
+        else await page.getByRole("button", { name: "辨識文字", exact: true }).click();
+        const sheet = page.getByRole("dialog", {
+          name: action === "import" ? "匯入草稿？" : "取代目前稿件？",
+        });
+        await expect(sheet).toBeVisible();
+        await snap(page, `loss-${action}-${colorScheme}`);
+        const download = page.waitForEvent("download");
+        await sheet.getByRole("button", { name: "先匯出，再繼續" }).click();
+        await download;
+        await snap(page, `loss-${action}-exported-${colorScheme}`);
+      });
+    }
   });
 }

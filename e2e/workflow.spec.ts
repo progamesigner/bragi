@@ -76,11 +76,16 @@ async function mockApi(page: Page, authenticated = false) {
   return calls;
 }
 
-async function recognize(page: Page) {
+async function recognize(page: Page, replace = false) {
   await page
     .getByLabel("選擇圖片")
     .setInputFiles({ name: "card.png", mimeType: "image/png", buffer: image });
   await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
+  if (replace)
+    await page
+      .getByRole("dialog", { name: "取代目前稿件？" })
+      .getByRole("button", { name: "不匯出，直接取代" })
+      .click();
   await expect(page).toHaveURL(/\/review$/);
   await expect(page.getByRole("heading", { name: "校對辨識草稿" })).toBeFocused();
 }
@@ -235,7 +240,7 @@ test("restores session and blocks playback until empty segments are fixed", asyn
   await expect(page.getByRole("link", { name: "朗讀", exact: true })).toHaveCount(0);
   await page.goto("/play");
   await expect(page).toHaveURL(/\/$/);
-  await recognize(page);
+  await recognize(page, true);
   await page.getByLabel("口白文字", { exact: true }).first().fill("");
   await page.evaluate(() => history.pushState(null, "", "/play"));
   await page.evaluate(() => dispatchEvent(new PopStateEvent("popstate")));
@@ -734,8 +739,12 @@ test("new photos preserve the draft, language, genre, comparison and undo until 
       },
     }),
   );
-  page.once("dialog", (dialog) => dialog.dismiss());
   await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
+  await page
+    .getByRole("dialog", { name: "取代目前稿件？" })
+    .getByRole("button", { name: "取消", exact: true })
+    .last()
+    .click();
   await expect(page.getByText("已保留目前稿件；候選圖片可重新辨識")).toBeVisible();
   await expect(page).toHaveURL(/\/$/);
   await goToStep(page, "校對");
@@ -744,8 +753,12 @@ test("new photos preserve the draft, language, genre, comparison and undo until 
     page.locator("#main").getByRole("button", { name: "復原", exact: true }),
   ).toBeEnabled();
   await goToStep(page, "取圖");
-  page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
+  await page
+    .getByRole("dialog", { name: "取代目前稿件？" })
+    .getByRole("button", { name: "不匯出，直接取代", exact: true })
+    .last()
+    .click();
   await expect(page).toHaveURL(/\/review$/);
   await expect(toast(page)).toContainText("辨識完成 · 1 個段落");
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(1);
@@ -1132,17 +1145,24 @@ for (const mode of ["playback", "stream"] as const) {
 
     failure = false;
     await page.getByRole("button", { name: /返回校對/ }).click();
-    page.once("dialog", (dialog) => dialog.dismiss());
     await startOcrAndPlay();
     await expect.poll(paused).toBe(false);
     finishOcr();
+    await page
+      .getByRole("dialog", { name: "取代目前稿件？" })
+      .getByRole("button", { name: "取消", exact: true })
+      .last()
+      .click();
     await expect(page.getByRole("button", { name: "暫停", exact: true })).toBeVisible();
     expect(await paused()).toBe(false);
 
     await page.getByRole("button", { name: /返回校對/ }).click();
-    page.once("dialog", (dialog) => dialog.accept());
     await startOcrAndPlay();
     finishOcr();
+    await page
+      .getByRole("dialog", { name: "取代目前稿件？" })
+      .getByRole("button", { name: "不匯出，直接取代", exact: true })
+      .click();
     await expect(page).toHaveURL(/\/review$/);
     await expect(page.getByLabel("口白文字", { exact: true })).toHaveValue("Replacement.");
     await expect.poll(paused).toBe(true);

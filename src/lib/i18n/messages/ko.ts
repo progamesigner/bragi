@@ -69,6 +69,16 @@ const messages = {
     "업데이트하면 페이지를 새로고침하고 이미지, 편집 기록과 오디오를 지워요. 로컬에 저장된 텍스트는 새로고침 후 복원할 수 있어요.",
   "loss.updateProceed": "내보내지 않고 업데이트",
   "loss.updateContinue": "계속 업데이트",
+  "loss.importTitle": "초안을 가져올까요?",
+  "loss.importBody":
+    "가져오면 현재 이미지, 초안, 편집 기록과 후보 내용이 교체됩니다. 내보내기는 현재 초안의 텍스트만 저장합니다. 취소하면 현재 내용이 유지됩니다.",
+  "loss.importProceed": "내보내지 않고 가져오기",
+  "loss.importContinue": "가져오기 계속",
+  "loss.replaceTitle": "현재 초안을 교체할까요?",
+  "loss.replaceBody":
+    "새 인식 결과가 현재 이미지, 초안과 편집 기록을 교체합니다. 내보내기는 현재 초안의 텍스트만 저장합니다. 취소하면 기존 초안과 후보 이미지가 유지되어 다시 인식할 수 있습니다.",
+  "loss.replaceProceed": "내보내지 않고 교체",
+  "loss.replaceContinue": "교체 계속",
   "loss.exportFirst": "내보낸 후 계속",
   "loss.exported":
     "초안 다운로드를 시작했어요. 파일이 저장됐는지 확인한 후 계속해 주세요. 파일이 없으면 다시 내보낼 수 있어요.",
@@ -161,8 +171,6 @@ const messages = {
   "autosave.discard": "버리기",
   "autosave.restored": "Gemini로 전송하지 않고 초안을 복원했어요",
   "recognize.invalidResult": "인식 결과 형식이 올바르지 않아요. 다시 시도해 주세요",
-  "recognize.replaceConfirm":
-    "인식이 완료됐어요. 현재 이미지, 교정한 텍스트와 오디오를 새 초안으로 바꿀까요?",
   "recognize.kept": "현재 초안을 보존했어요. 선택한 이미지를 다시 인식할 수 있어요",
   "capture.candidateCancelled": "선택한 이미지를 취소했어요. 현재 초안은 보존돼요",
   "genre.tooLong": "장르 힌트는 80자 이하여야 해요",
@@ -178,7 +186,6 @@ const messages = {
   "draft.import": "초안 가져오기",
   "draft.importNote":
     "초안에는 텍스트와 어조만 포함돼요. 이미지나 오디오는 없으며 Gemini로 전송되지 않아요.",
-  "draft.importConfirm": "가져오면 현재 이미지, 교정한 텍스트와 오디오가 바뀌어요. 계속할까요?",
   "draft.imported": "초안을 가져왔어요 · {n}개 문단",
   "draft.importFailed": "초안을 가져올 수 없어요",
   "draft.exportFailed": "초안을 내보낼 수 없어요",

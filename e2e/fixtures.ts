@@ -128,3 +128,19 @@ export async function goToStep(page: Page, name: "取圖" | "校對" | "朗讀")
 }
 
 export const toast = (page: Page) => page.locator(".toast");
+
+export function draftFile(text: string, name = "draft.json") {
+  return {
+    name,
+    mimeType: "application/json",
+    buffer: Buffer.from(
+      JSON.stringify({
+        format: "bragi-draft",
+        version: 1,
+        exportedAt: "2026-10-09T00:00:00Z",
+        detectedLanguage: "繁體中文",
+        segments: [{ id: "imported", text, suggestedToneHint: "" }],
+      }),
+    ),
+  };
+}

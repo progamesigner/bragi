@@ -69,6 +69,16 @@ const messages = {
     "Das Update lädt die Seite neu und löscht Bilder, Bearbeitungsverlauf und Audio. Lokal gespeicherter Text kann danach wiederhergestellt werden.",
   "loss.updateProceed": "Ohne Export aktualisieren",
   "loss.updateContinue": "Update fortsetzen",
+  "loss.importTitle": "Entwurf importieren?",
+  "loss.importBody":
+    "Der Import ersetzt das aktuelle Bild, den Entwurf, den Bearbeitungsverlauf und die vorgemerkten Inhalte. Der Export speichert nur den aktuellen Entwurfstext. Abbrechen behält die aktuellen Inhalte.",
+  "loss.importProceed": "Ohne Export importieren",
+  "loss.importContinue": "Import fortsetzen",
+  "loss.replaceTitle": "Aktuellen Entwurf ersetzen?",
+  "loss.replaceBody":
+    "Das neue Erkennungsergebnis ersetzt das aktuelle Bild, den Entwurf und den Bearbeitungsverlauf. Der Export speichert nur den aktuellen Entwurfstext. Abbrechen behält den alten Entwurf und das vorgemerkte Bild für eine erneute Erkennung.",
+  "loss.replaceProceed": "Ohne Export ersetzen",
+  "loss.replaceContinue": "Ersetzen fortsetzen",
   "loss.exportFirst": "Exportieren und fortfahren",
   "loss.exported":
     "Der Download wurde gestartet. Prüfe vor dem Fortfahren, ob die Datei gespeichert wurde. Exportiere erneut, falls sie fehlt.",
@@ -166,8 +176,6 @@ const messages = {
   "autosave.discard": "Verwerfen",
   "autosave.restored": "Entwurf wiederhergestellt, ohne Übertragung an Gemini",
   "recognize.invalidResult": "Ungültiges Erkennungsergebnis. Bitte erneut versuchen.",
-  "recognize.replaceConfirm":
-    "Erkennung abgeschlossen. Aktuelles Bild, bearbeiteten Text und Audio durch diesen Entwurf ersetzen?",
   "recognize.kept":
     "Aktueller Entwurf bleibt erhalten. Das ausgewählte Bild kann erneut erkannt werden.",
   "capture.candidateCancelled": "Ausgewähltes Bild verworfen. Aktueller Entwurf bleibt erhalten.",
@@ -186,8 +194,6 @@ const messages = {
   "draft.import": "Entwurf importieren",
   "draft.importNote":
     "Entwürfe enthalten nur Text und Tonfall, keine Bilder oder Audio. Sie werden nicht an Gemini gesendet.",
-  "draft.importConfirm":
-    "Der Import ersetzt aktuelles Bild, bearbeiteten Text und Audio. Fortfahren?",
   "draft.imported": "Entwurf importiert · {n} Abschnitte",
   "draft.importFailed": "Entwurf konnte nicht importiert werden",
   "draft.exportFailed": "Entwurf konnte nicht exportiert werden",

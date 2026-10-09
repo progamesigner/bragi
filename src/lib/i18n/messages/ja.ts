@@ -69,6 +69,16 @@ const messages = {
     "更新するとページが再読み込みされ、画像、編集履歴、音声が消去されます。端末内に保存された草稿の文字は再読み込み後に復元できます。",
   "loss.updateProceed": "書き出さずに更新",
   "loss.updateContinue": "更新を続ける",
+  "loss.importTitle": "下書きを読み込みますか？",
+  "loss.importBody":
+    "読み込むと現在の画像、下書き、編集履歴、候補の内容が置き換わります。書き出しで保存されるのは現在の下書きのテキストのみです。キャンセルすると現在の内容が残ります。",
+  "loss.importProceed": "書き出さずに読み込む",
+  "loss.importContinue": "読み込みを続ける",
+  "loss.replaceTitle": "現在の下書きを置き換えますか？",
+  "loss.replaceBody":
+    "新しい認識結果で現在の画像、下書き、編集履歴が置き換わります。書き出しで保存されるのは現在の下書きのテキストのみです。キャンセルすると元の下書きと候補画像が残り、再認識できます。",
+  "loss.replaceProceed": "書き出さずに置き換える",
+  "loss.replaceContinue": "置き換えを続ける",
   "loss.exportFirst": "書き出してから続ける",
   "loss.exported":
     "草稿のダウンロードを開始しました。保存を確認してから続けてください。見つからない場合はもう一度書き出せます。",
@@ -161,8 +171,6 @@ const messages = {
   "autosave.discard": "破棄",
   "autosave.restored": "草稿を復元しました。Geminiへの送信は行っていません",
   "recognize.invalidResult": "認識結果の形式が正しくありません。再試行してください",
-  "recognize.replaceConfirm":
-    "認識が完了しました。現在の画像、校正した文字、音声を新しい草稿で置き換えますか？",
   "recognize.kept": "現在の草稿を保持しました。選択画像は再認識できます",
   "capture.candidateCancelled": "選択画像を取り消しました。現在の草稿は保持されています",
   "genre.tooLong": "ジャンルのヒントは80文字以内にしてください",
@@ -178,7 +186,6 @@ const messages = {
   "draft.import": "下書きを読み込む",
   "draft.importNote":
     "草稿に含まれるのは文字と口調のみです。画像や音声は含まず、Geminiへも送信しません。",
-  "draft.importConfirm": "読み込むと現在の画像、校正した文字、音声が置き換わります。続けますか？",
   "draft.imported": "草稿を読み込みました · {n}段落",
   "draft.importFailed": "草稿を読み込めませんでした",
   "draft.exportFailed": "草稿を書き出せませんでした",

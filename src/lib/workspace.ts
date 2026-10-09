@@ -26,16 +26,16 @@ export class WorkspaceRevision {
 }
 
 /** Validation and confirmation finish before the caller atomically replaces its workspace. */
-export function commitCandidate(
+export async function commitCandidate(
   operation: Operation,
   draft: Draft,
-  hasDraft: boolean,
-  confirm: () => boolean,
+  contentAtRisk: boolean,
+  confirm: () => boolean | Promise<boolean>,
   commit: (draft: Draft) => void,
-): boolean {
+): Promise<boolean> {
   if (!operation.current()) return false;
   serializeDraft(draft);
-  if (hasDraft && !confirm()) return false;
+  if (contentAtRisk && !(await confirm())) return false;
   if (!operation.current()) return false;
   commit(draft);
   return true;

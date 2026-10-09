@@ -8,6 +8,18 @@ const TEXT: Record<
   LossAction,
   { title: MessageKey; body: MessageKey; proceed: MessageKey; continue: MessageKey }
 > = {
+  import: {
+    title: "loss.importTitle",
+    body: "loss.importBody",
+    proceed: "loss.importProceed",
+    continue: "loss.importContinue",
+  },
+  replace: {
+    title: "loss.replaceTitle",
+    body: "loss.replaceBody",
+    proceed: "loss.replaceProceed",
+    continue: "loss.replaceContinue",
+  },
   clear: {
     title: "loss.clearTitle",
     body: "loss.clearBody",
@@ -29,7 +41,7 @@ const TEXT: Record<
 };
 
 /**
- * Asked when clearing, signing out or updating would discard workspace content. "Export first"
+ * Asked whenever an action would discard workspace content. "Export first"
  * downloads the draft but never continues by itself: a download can fail silently, so the person
  * confirms they have the file and then continues with a separate button.
  */

@@ -148,8 +148,12 @@ for (const [path, stage] of [
       "保留目前的故事。",
     );
     await goToStep(page, "取圖");
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "辨識文字", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "取代目前稿件？" })
+      .getByRole("button", { name: "不匯出，直接取代", exact: true })
+      .last()
+      .click();
     await expect(page).toHaveURL(/\/review$/);
     await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue(
       segments[0]?.text ?? "",
@@ -291,8 +295,12 @@ test("tablet capture, review and reading use columns; text-only drafts use full 
   await page.getByRole("button", { name: "選擇第 2 段" }).click();
   await expect(page.getByRole("heading", { name: "第 2 段，共 2 段" })).toBeVisible();
   await goToStep(page, "取圖");
-  page.once("dialog", (dialog) => dialog.accept());
   await importDraft(page);
+  await page
+    .getByRole("dialog", { name: "匯入草稿？" })
+    .getByRole("button", { name: "不匯出，直接匯入", exact: true })
+    .last()
+    .click();
   await expect(page.locator(".image-comparison")).toHaveCount(0);
   await expect(page.locator(".review-no-image")).toBeVisible();
   const full = await bounds(page.locator(".review-segments"));

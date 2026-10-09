@@ -69,6 +69,16 @@ const messages = {
     "Updating reloads the page and clears images, edit history and audio. Locally saved text can be restored after reloading.",
   "loss.updateProceed": "Update without exporting",
   "loss.updateContinue": "Continue updating",
+  "loss.importTitle": "Import draft?",
+  "loss.importBody":
+    "Importing replaces the current image, draft, edit history and candidate content. Export saves only the current draft text. Cancel to keep the current content.",
+  "loss.importProceed": "Import without exporting",
+  "loss.importContinue": "Continue importing",
+  "loss.replaceTitle": "Replace current draft?",
+  "loss.replaceBody":
+    "The new recognition replaces the current image, draft and edit history. Export saves only the current draft text. Cancel to keep the old draft and candidate image for another recognition attempt.",
+  "loss.replaceProceed": "Replace without exporting",
+  "loss.replaceContinue": "Continue replacing",
   "loss.exportFirst": "Export, then continue",
   "loss.exported":
     "Draft download started. Check that the file was saved before continuing. Export again if you cannot find it.",
@@ -165,8 +175,6 @@ const messages = {
   "autosave.discard": "Discard",
   "autosave.restored": "Draft restored without sending it to Gemini",
   "recognize.invalidResult": "Invalid recognition result. Please retry.",
-  "recognize.replaceConfirm":
-    "Recognition complete. Replace your current image, reviewed text and audio with this draft?",
   "recognize.kept": "Current draft kept. You can recognize the selected image again.",
   "capture.candidateCancelled": "Selected image cancelled. Current draft kept.",
   "genre.tooLong": "Genre hint must be 80 characters or less",
@@ -182,8 +190,6 @@ const messages = {
   "draft.import": "Import draft",
   "draft.importNote":
     "Drafts contain only text and tone, without images or audio. They are not uploaded to Gemini.",
-  "draft.importConfirm":
-    "Importing replaces your current image, reviewed text and audio. Continue?",
   "draft.imported": "Draft imported · {n} segments",
   "draft.importFailed": "Could not import the draft",
   "draft.exportFailed": "Could not export the draft",
