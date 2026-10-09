@@ -36,7 +36,7 @@ const messages = {
   "auth.otpHelp": "인증 앱에 표시된 6자리 숫자를 입력하세요",
   "auth.signIn": "로그인",
   "auth.signingIn": "확인 중…",
-  "auth.signedIn": "이 기기에 로그인했어요. 세션은 최대 90일간 유지돼요.",
+  "auth.signedIn": "이 기기에 로그인했어요. 로그인 상태는 최대 90일간 유지돼요.",
   "auth.signOut": "로그아웃",
   "auth.signingOut": "로그아웃 중…",
   "auth.success": "로그인했어요",

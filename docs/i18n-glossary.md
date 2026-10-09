@@ -28,6 +28,7 @@ never translated.
 | Undo / redo | 復原／重做 | 撤销／重做 | 元に戻す／やり直す | 실행 취소／다시 실행 | Undo / Redo | Rückgängig / Wiederholen | Deshacer / Rehacer |
 | Local autosave | 本機暫存 | 本地暂存 | 端末内の保存 | 로컬 저장 | saved on this device | lokal gespeichert | guardado localmente |
 | Settings | 設定 | 设置 | 設定 | 설정 | Settings | Einstellungen | Ajustes |
+| Sign-in state | 登入狀態 | 登录状态 | ログイン状態 | 로그인 상태 | signed in | angemeldet | sesión iniciada |
 | Sign in / sign out | 登入／登出 | 登录／退出登录 | ログイン／ログアウト | 로그인／로그아웃 | Sign in / Sign out | Anmelden / Abmelden | Iniciar / Cerrar sesión |
 | Clear current content | 清除目前內容 | 清除当前内容 | 現在の内容を消去 | 현재 내용 지우기 | Clear current content | Aktuellen Inhalt löschen | Borrar el contenido actual |
 | Offline | 離線 | 离线 | オフライン | 오프라인 | offline | offline | sin conexión |
@@ -39,6 +40,7 @@ never translated.
 
 ## Reasons for the choices
 
+- **Sign-in state.** Account settings describe how long the device stays signed in, using everyday local terms rather than the technical session noun. Japanese uses システム for the compact appearance option.
 - **Segment → "part" / Abschnitt / parte / 단락.** The v4 design drafts use "part" in English and
   Spanish, 단락 in Korean and 段落 in Japanese. The dictionaries had mixed "segment"/"part",
   "segmento"/"parte" and 문단/단락; each language now uses one word. "Part" is plainer than

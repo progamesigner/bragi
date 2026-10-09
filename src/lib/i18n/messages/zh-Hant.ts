@@ -39,7 +39,7 @@ const zhHant = {
   "auth.otpHelp": "輸入驗證器 App 顯示的 6 位數字",
   "auth.signIn": "登入",
   "auth.signingIn": "驗證中…",
-  "auth.signedIn": "這台裝置已登入，session 最長保留 90 天。",
+  "auth.signedIn": "這台裝置已登入，登入狀態最長保留 90 天。",
   "auth.signOut": "登出",
   "auth.signingOut": "登出中…",
   "auth.success": "登入成功",

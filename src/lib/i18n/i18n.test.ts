@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { format, LOCALE_NAMES, LOCALES, t, translate } from ".";
+import { format, LOCALE_NAMES, LOCALES, languageName, t, translate } from ".";
 import { browserLocale } from "./locales";
 import de from "./messages/de";
 import en from "./messages/en";
@@ -12,6 +12,13 @@ import zhHant from "./messages/zh-Hant";
 describe("interface strings", () => {
   it("defaults to Traditional Chinese", () => {
     expect(t("review.undo")).toBe("復原");
+  });
+
+  it("names OCR language tags and preserves readable or unknown values", () => {
+    expect(languageName("ko")).toBe("韓文");
+    expect(languageName("繁體中文")).toBe("繁體中文");
+    expect(languageName("x-unknown")).toBe("x-unknown");
+    expect(languageName("zz")).toBe("zz");
   });
 
   it("provides every source key and preserves placeholders in every dictionary", () => {

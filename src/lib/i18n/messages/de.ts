@@ -36,7 +36,7 @@ const messages = {
   "auth.otpHelp": "Gib den 6-stelligen Code aus deiner Authenticator-App ein",
   "auth.signIn": "Anmelden",
   "auth.signingIn": "Wird geprüft…",
-  "auth.signedIn": "Dieses Gerät ist angemeldet. Die Sitzung bleibt bis zu 90 Tage aktiv.",
+  "auth.signedIn": "Dieses Gerät ist angemeldet. Du bleibst bis zu 90 Tage angemeldet.",
   "auth.signOut": "Abmelden",
   "auth.signingOut": "Wird abgemeldet…",
   "auth.success": "Angemeldet",

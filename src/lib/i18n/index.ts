@@ -39,3 +39,15 @@ export function translate(target: Locale, key: MessageKey, params?: MessageParam
 export function t(key: MessageKey, params?: MessageParams): string {
   return translate(locale(), key, params);
 }
+
+/** OCR may return a language tag or an already readable name. Keep unknown values intact. */
+export function languageName(language: string): string {
+  try {
+    return (
+      new Intl.DisplayNames([locale()], { type: "language", fallback: "code" }).of(language) ??
+      language
+    );
+  } catch {
+    return language;
+  }
+}
