@@ -59,7 +59,7 @@ export async function mockSignedInApi(page: Page, { authenticated = true } = {})
         throw new Error(`Unexpected API request: ${request.method()} ${path}`);
     }
   });
-  await page.route(/^https?:\/\/(?!127\.0\.0\.1:4173(?:\/|$))/, (route) => route.abort());
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1(?::\d+)?(?:\/|$))/, (route) => route.abort());
 }
 
 export async function selectImage(page: Page) {
