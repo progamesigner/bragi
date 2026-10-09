@@ -194,6 +194,25 @@ const messages = {
   "draft.importFailed": "No se pudo importar el borrador",
   "draft.exportFailed": "No se pudo exportar el borrador",
   "draft.exported": "Borrador exportado a JSON. Solo contiene texto, sin imágenes ni audio.",
+  "review.splitSpokenWarning":
+    "Al dividir se elimina la corrección de pronunciación de esta parte. Vuelve a configurarla para las nuevas partes.",
+  "review.moreEditing": "Más ediciones",
+  "review.lessEditing": "Cerrar ediciones",
+  "review.segmentList": "Lista de partes",
+  "review.closeList": "Cerrar lista de partes",
+  "review.closeImage": "Cerrar comparación de imagen",
+  "review.emptyExcerpt": "(Parte vacía)",
+  "review.issueMark": "Requiere corrección",
+  "review.toneSummary": "Tono: {tone}",
+  "review.defaultTone": "Sin especificar",
+  "review.hasSpoken": "Tiene corrección de pronunciación",
+  "review.splitSuggestion":
+    "Esta parte supera el límite de lectura. Divídela automáticamente en partes más cortas.",
+  "review.zoomIn": "Ampliar",
+  "review.zoomOut": "Reducir",
+  "review.imageHelp":
+    "Pellizca o usa los botones para ampliar; arrastra para desplazar. Se muestra la imagen preparada. Ampliarla no restaura los detalles perdidos al comprimirla.",
+
   "review.heading": "Revisar el borrador reconocido",
   "review.summary": "Idioma principal: {language} · {n} partes",
   "review.undo": "Deshacer",

@@ -197,6 +197,23 @@ const zhHant = {
   "draft.exportFailed": "無法匯出草稿",
   "draft.exported": "已匯出草稿 JSON；檔案只含文字，不含圖片或音訊",
 
+  "review.splitSpokenWarning": "分割會移除這段的朗讀修正，請依新段落重新設定。",
+  "review.moreEditing": "更多編輯",
+  "review.lessEditing": "收合編輯",
+  "review.segmentList": "段落列表",
+  "review.closeList": "關閉段落列表",
+  "review.closeImage": "關閉原圖對照",
+  "review.emptyExcerpt": "（空白段落）",
+  "review.issueMark": "需修正",
+  "review.toneSummary": "語氣：{tone}",
+  "review.defaultTone": "未指定",
+  "review.hasSpoken": "有朗讀修正",
+  "review.splitSuggestion": "這段超過朗讀上限，建議自動分成較短的段落。",
+  "review.zoomIn": "放大",
+  "review.zoomOut": "縮小",
+  "review.imageHelp":
+    "可用雙指或按鈕縮放，拖曳平移。顯示的是已準備的圖片，放大不會恢復壓縮前的細節。",
+
   "review.heading": "校對辨識草稿",
   "review.summary": "主要語言：{language} · {n} 個段落",
   "review.undo": "復原",

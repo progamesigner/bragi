@@ -198,6 +198,25 @@ const messages = {
   "draft.importFailed": "Entwurf konnte nicht importiert werden",
   "draft.exportFailed": "Entwurf konnte nicht exportiert werden",
   "draft.exported": "Entwurf als JSON exportiert. Er enthält nur Text, keine Bilder oder Audio.",
+  "review.splitSpokenWarning":
+    "Beim Teilen wird die Aussprache für diesen Abschnitt entfernt. Richte sie für die neuen Abschnitte neu ein.",
+  "review.moreEditing": "Weitere Bearbeitung",
+  "review.lessEditing": "Bearbeitung einklappen",
+  "review.segmentList": "Abschnittsliste",
+  "review.closeList": "Abschnittsliste schließen",
+  "review.closeImage": "Bildvergleich schließen",
+  "review.emptyExcerpt": "(Leerer Abschnitt)",
+  "review.issueMark": "Korrektur nötig",
+  "review.toneSummary": "Tonfall: {tone}",
+  "review.defaultTone": "Nicht angegeben",
+  "review.hasSpoken": "Aussprache angepasst",
+  "review.splitSuggestion":
+    "Dieser Abschnitt überschreitet die Vorlesegrenze. Teile ihn automatisch in kürzere Abschnitte.",
+  "review.zoomIn": "Vergrößern",
+  "review.zoomOut": "Verkleinern",
+  "review.imageHelp":
+    "Mit zwei Fingern oder den Tasten zoomen; zum Verschieben ziehen. Dies ist das aufbereitete Bild. Verlorene Details lassen sich durch Zoomen nicht wiederherstellen.",
+
   "review.heading": "Erkannten Entwurf prüfen",
   "review.summary": "Hauptsprache: {language} · {n} Abschnitte",
   "review.undo": "Rückgängig",

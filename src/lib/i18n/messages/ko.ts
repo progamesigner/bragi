@@ -190,6 +190,25 @@ const messages = {
   "draft.importFailed": "초안을 가져올 수 없어요",
   "draft.exportFailed": "초안을 내보낼 수 없어요",
   "draft.exported": "초안을 JSON으로 내보냈어요. 텍스트만 포함하며 이미지나 오디오는 없어요",
+  "review.splitSpokenWarning":
+    "분할하면 이 단락의 발음 수정이 사라져요. 새 단락에 맞춰 다시 설정해 주세요.",
+  "review.moreEditing": "추가 편집",
+  "review.lessEditing": "편집 접기",
+  "review.segmentList": "단락 목록",
+  "review.closeList": "단락 목록 닫기",
+  "review.closeImage": "원본 이미지 비교 닫기",
+  "review.emptyExcerpt": "(빈 단락)",
+  "review.issueMark": "수정 필요",
+  "review.toneSummary": "어조: {tone}",
+  "review.defaultTone": "미지정",
+  "review.hasSpoken": "발음 수정 있음",
+  "review.splitSuggestion":
+    "이 단락은 낭독 한도를 초과했어요. 더 짧은 단락으로 자동 분할해 보세요.",
+  "review.zoomIn": "확대",
+  "review.zoomOut": "축소",
+  "review.imageHelp":
+    "두 손가락이나 버튼으로 확대하고 드래그하여 이동할 수 있어요. 준비된 이미지를 표시하며, 확대해도 압축으로 손실된 세부 정보는 복원되지 않아요.",
+
   "review.heading": "인식한 초안 교정",
   "review.summary": "주요 언어: {language} · {n}개 단락",
   "review.undo": "실행 취소",

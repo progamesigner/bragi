@@ -190,6 +190,25 @@ const messages = {
   "draft.importFailed": "下書きを読み込めませんでした",
   "draft.exportFailed": "下書きを書き出せませんでした",
   "draft.exported": "下書きをJSONで書き出しました。文字のみで画像や音声は含みません",
+  "review.splitSpokenWarning":
+    "分割するとこの段落の読み修正が削除されます。新しい段落ごとに設定し直してください。",
+  "review.moreEditing": "その他の編集",
+  "review.lessEditing": "編集を閉じる",
+  "review.segmentList": "段落一覧",
+  "review.closeList": "段落一覧を閉じる",
+  "review.closeImage": "原画像との比較を閉じる",
+  "review.emptyExcerpt": "（空の段落）",
+  "review.issueMark": "要修正",
+  "review.toneSummary": "口調：{tone}",
+  "review.defaultTone": "未指定",
+  "review.hasSpoken": "読み修正あり",
+  "review.splitSuggestion":
+    "この段落は朗読の上限を超えています。短い段落への自動分割をおすすめします。",
+  "review.zoomIn": "拡大",
+  "review.zoomOut": "縮小",
+  "review.imageHelp":
+    "ピンチまたはボタンで拡大し、ドラッグで移動できます。処理済みの画像を表示しています。圧縮で失われた細部は拡大しても戻りません。",
+
   "review.heading": "認識した下書きを校正",
   "review.summary": "主な言語：{language} · {n}段落",
   "review.undo": "元に戻す",

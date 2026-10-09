@@ -194,6 +194,25 @@ const messages = {
   "draft.importFailed": "Could not import the draft",
   "draft.exportFailed": "Could not export the draft",
   "draft.exported": "Draft JSON exported. It contains text only, without images or audio.",
+  "review.splitSpokenWarning":
+    "Splitting removes this part’s pronunciation fix. Set it again for each new part.",
+  "review.moreEditing": "More editing",
+  "review.lessEditing": "Collapse editing",
+  "review.segmentList": "Part list",
+  "review.closeList": "Close part list",
+  "review.closeImage": "Close image comparison",
+  "review.emptyExcerpt": "(Empty part)",
+  "review.issueMark": "Needs correction",
+  "review.toneSummary": "Tone: {tone}",
+  "review.defaultTone": "Unspecified",
+  "review.hasSpoken": "Has pronunciation fix",
+  "review.splitSuggestion":
+    "This part exceeds the reading limit. Split it into shorter parts automatically.",
+  "review.zoomIn": "Zoom in",
+  "review.zoomOut": "Zoom out",
+  "review.imageHelp":
+    "Pinch or use the buttons to zoom; drag to pan. This is the prepared image. Zooming cannot restore detail lost during compression.",
+
   "review.heading": "Review recognized draft",
   "review.summary": "Main language: {language} · {n} parts",
   "review.undo": "Undo",
