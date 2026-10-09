@@ -537,34 +537,53 @@ test("voice picker labels voices, samples them and remembers the choice", async 
   await expect(page.getByLabel("朗讀聲音")).toHaveValue("Puck");
 });
 
-test("reading presets increase actual narration and editor font sizes", async ({ page }) => {
+test("reading presets preserve the normal editor size and secondary spoken hierarchy", async ({
+  page,
+}) => {
   await mockApi(page, true);
   await page.goto("/");
   await recognize(page);
+  await page.getByRole("button", { name: "另設朗讀文字" }).first().click();
   const editorSizes: number[] = [];
   for (const preset of ["normal", "large", "largest"]) {
     await page.getByLabel("朗讀字級").selectOption(preset);
-    editorSizes.push(
+    const size = await page
+      .getByLabel("口白文字", { exact: true })
+      .first()
+      .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+    editorSizes.push(size);
+    expect(
       await page
-        .getByLabel("口白文字", { exact: true })
-        .first()
+        .getByLabel("朗讀文字（只影響語音）")
         .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
-    );
+    ).toBe(size);
   }
+  // Release 1.0.0 used font: inherit, with the page's default 16px font.
+  expect(editorSizes[0]).toBe(16);
+  expect(editorSizes[1]).toBeGreaterThan(editorSizes[0] ?? 0);
+  expect(editorSizes[2]).toBeGreaterThan(editorSizes[1] ?? 0);
   await page.getByRole("button", { name: "開始逐段朗讀" }).click();
   const scriptSizes: number[] = [];
+  const spokenSizes: number[] = [];
   for (const preset of ["normal", "large", "largest"]) {
     await page.getByLabel("朗讀字級").selectOption(preset);
-    scriptSizes.push(
-      await page
-        .locator(".playback-script p")
-        .first()
-        .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
-    );
+    const script = await page
+      .locator(".playback-script p")
+      .first()
+      .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+    const spoken = await page
+      .locator(".playback-script p.spoken-text")
+      .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+    scriptSizes.push(script);
+    spokenSizes.push(spoken);
+    expect(spoken).toBeLessThan(script);
+    expect(spoken / script).toBeCloseTo(2 / 3, 4);
   }
-  expect(scriptSizes).toEqual(editorSizes);
-  expect(scriptSizes[1]).toBeGreaterThan(scriptSizes[0] ?? 0);
-  expect(scriptSizes[2]).toBeGreaterThan(scriptSizes[1] ?? 0);
+  expect(spokenSizes[0]).toBeCloseTo(14.4);
+  for (const sizes of [scriptSizes, spokenSizes]) {
+    expect(sizes[1]).toBeGreaterThan(sizes[0] ?? 0);
+    expect(sizes[2]).toBeGreaterThan(sizes[1] ?? 0);
+  }
 });
 
 test("50-segment drafts disable insertion and splitting and reject oversized edits", async ({

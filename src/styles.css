@@ -428,7 +428,7 @@ button.danger {
   margin-top: 16px;
   color: #c8bbaa;
   font-family: inherit;
-  font-size: var(--reading-font-size);
+  font-size: calc(var(--reading-font-size) * 2 / 3);
 }
 .playback-script span {
   display: block;
@@ -508,6 +508,10 @@ main[data-font-size="largest"] {
   --reading-font-size: clamp(2.1rem, 7vw, 3rem);
 }
 .review-segment textarea {
+  font-size: inherit;
+}
+main[data-font-size="large"] .review-segment textarea,
+main[data-font-size="largest"] .review-segment textarea {
   font-size: var(--reading-font-size);
 }
 select {
