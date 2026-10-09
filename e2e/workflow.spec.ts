@@ -840,3 +840,63 @@ test("new photos invalidate pending voice and segment preview errors", async ({ 
     await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(2);
   }
 });
+
+test("autosave restores only text after reload, and clear or logout removes it", async ({
+  page,
+}) => {
+  const calls = await mockApi(page, true);
+  await page.goto("/");
+  await recognize(page);
+  await page.getByLabel("口白文字", { exact: true }).first().fill("重新整理後仍保留。");
+  await page.getByRole("button", { name: "另設朗讀文字" }).first().click();
+  await page.getByLabel("朗讀文字（只影響語音）").fill("重新整理，仍保留。");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("bragi:autosave:v1") ?? "{}").segments?.[0]?.spokenText,
+      ),
+    )
+    .toBe("重新整理，仍保留。");
+  await page.reload();
+  await expect(page.getByRole("button", { name: "恢復上次的草稿" })).toBeVisible();
+  await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(0);
+  const before = calls.filter((call) => call.path !== "/api/session").length;
+  await page.getByRole("button", { name: "恢復上次的草稿" }).click();
+  await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue(
+    "重新整理後仍保留。",
+  );
+  await expect(page.getByLabel("朗讀文字（只影響語音）")).toHaveValue("重新整理，仍保留。");
+  await expect(page.getByText("查看圖片對照")).toHaveCount(0);
+  expect(calls.filter((call) => call.path !== "/api/session")).toHaveLength(before);
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "清除目前內容" }).click();
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("bragi:autosave:v1")))
+    .toBeNull();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "恢復上次的草稿" })).toHaveCount(0);
+  await recognize(page);
+  await page.getByRole("button", { name: "登出", exact: true }).click();
+  await expect(page.getByRole("button", { name: "登入", exact: true })).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("bragi:autosave:v1")))
+    .toBeNull();
+});
+
+test("saved drafts require a choice and discard or malformed data removes the local copy", async ({
+  page,
+}) => {
+  await mockApi(page, true);
+  await page.goto("/");
+  await recognize(page);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "恢復上次的草稿" })).toBeVisible();
+  await page.getByRole("button", { name: "捨棄", exact: true }).click();
+  expect(await page.evaluate(() => localStorage.getItem("bragi:autosave:v1"))).toBeNull();
+  await page.evaluate(() => localStorage.setItem("bragi:autosave:v1", "{"));
+  await page.reload();
+  await expect(page.getByRole("button", { name: "恢復上次的草稿" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "登出", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("bragi:autosave:v1"))).toBeNull();
+});

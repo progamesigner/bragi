@@ -1,10 +1,11 @@
-import { batch, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { batch, createEffect, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import Capture from "~/components/Capture";
 import Playback from "~/components/Playback";
 import Review from "~/components/Review";
 import VoiceSample from "~/components/VoiceSample";
 import { apiErrorMessage } from "~/lib/api";
+import { DraftAutosave } from "~/lib/autosave";
 import { type Draft, MAX_DRAFT_BYTES, parseDraft, serializeDraft } from "~/lib/draft";
 import { graphemeCount, MAX_DRAFT_GENRE } from "~/lib/draft-limits";
 import { History } from "~/lib/editing";
@@ -32,6 +33,9 @@ export default function Home() {
   const [requestRevision, setRequestRevision] = createSignal({});
   const operations = new WorkspaceRevision();
   const authOperations = new WorkspaceRevision();
+  const autosave = new DraftAutosave(() => localStorage);
+  const [autosaveReady, setAutosaveReady] = createSignal(false);
+  const [savedDraft, setSavedDraft] = createSignal<Draft>();
   const [otp, setOtp] = createSignal("");
   const [image, setImage] = createSignal<PreparedImage>();
   const [candidate, setCandidate] = createSignal<PreparedImage>();
@@ -54,6 +58,11 @@ export default function Home() {
     segments: segments.map((segment) => ({ ...segment })),
   });
 
+  createEffect(() => {
+    if (!autosaveReady() || !detectedLanguage()) return;
+    autosave.schedule(currentDraft());
+  });
+
   function restoreVoice(available: string[]) {
     setVoices(available);
     try {
@@ -74,12 +83,14 @@ export default function Home() {
 
   function clearWorkspace() {
     cancelOperation();
+    autosave.clear();
     batch(() => {
       speechCache.clear();
       setImage(undefined);
       setCandidate(undefined);
       setCandidateActive(false);
       setCandidateGenre("");
+      setSavedDraft(undefined);
       setDetectedLanguage(undefined);
       setSegments(reconcile([]));
       setEditHistory(new History<Segment[]>([]));
@@ -97,6 +108,7 @@ export default function Home() {
       setCandidateActive(false);
       setGenreHint(draft.genreHint ?? "");
       setCandidateGenre(draft.genreHint ?? "");
+      setSavedDraft(undefined);
       setSegments(reconcile(draft.segments));
       setEditHistory(new History<Segment[]>(draft.segments));
       setDetectedLanguage(draft.detectedLanguage);
@@ -104,9 +116,12 @@ export default function Home() {
       // Recreate the view even when the new draft has the same detected language.
       setWorkspace({});
     });
+    autosave.save(draft);
   }
 
   onMount(() => {
+    setSavedDraft(autosave.load());
+    setAutosaveReady(true);
     try {
       const saved = localStorage.getItem("bragi-font-size");
       if (saved && ["normal", "large", "largest"].includes(saved)) setFontSize(saved);
@@ -124,6 +139,7 @@ export default function Home() {
   onCleanup(() => {
     operations.invalidate();
     authOperations.invalidate();
+    autosave.dispose();
   });
 
   onMount(async () => {
@@ -179,6 +195,7 @@ export default function Home() {
     // Unmount pending image/audio operations while the logout request is in flight.
     setWorkspace({});
     setCandidate(undefined);
+    autosave.clear();
     setAuthBusy(true);
     try {
       requireOnline();
@@ -406,6 +423,35 @@ export default function Home() {
       </section>
       <Show when={!online()}>
         <p role="status">目前離線。已載入的文字與音訊仍可使用；連線恢復後請手動重試。</p>
+      </Show>
+      <Show when={savedDraft() && !detectedLanguage()}>
+        <section class="card" aria-label="本機暫存草稿">
+          <p>此裝置有上次的文字草稿，可恢復繼續校對。</p>
+          <button
+            type="button"
+            class="small"
+            onClick={() => {
+              const draft = savedDraft();
+              if (!draft) return;
+              cancelOperation();
+              setCandidate(undefined);
+              applyDraft(draft);
+              reportStatus("已恢復上次的草稿，未傳送至 Gemini", "success");
+            }}
+          >
+            恢復上次的草稿
+          </button>
+          <button
+            type="button"
+            class="small secondary"
+            onClick={() => {
+              autosave.clear();
+              setSavedDraft(undefined);
+            }}
+          >
+            捨棄
+          </button>
+        </section>
       </Show>
       <Show when={authenticated() && workspace()} keyed>
         <button
