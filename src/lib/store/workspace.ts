@@ -47,6 +47,7 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
   const [genreHint, setGenreHint] = createSignal("");
   const [history, setHistory] = createSignal(new History<Segment[]>([]), { equals: false });
   const [savedSnapshot, setSavedSnapshot] = createSignal(EMPTY);
+  const [historyRevision, setHistoryRevision] = createSignal(0);
   const [currentSegment, setCurrentSegmentSignal] = createSignal(0);
 
   const content = (): WorkspaceContent => ({
@@ -65,6 +66,7 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
     detectedLanguage,
     genreHint,
     currentSegment,
+    historyRevision,
     content,
     /** True once there is recognised or imported text to review. */
     hasDraft: () => detectedLanguage() !== undefined,
@@ -93,6 +95,7 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
         setGenreHint(next.genreHint ?? "");
         setSegments(reconcile(next.segments));
         setHistory(new History<Segment[]>(next.segments));
+        setHistoryRevision((value) => value + 1);
         setCurrentSegmentSignal(0);
         setSavedSnapshot(saved ? snapshot(next) : EMPTY);
       });
@@ -104,6 +107,7 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
         setDetectedLanguage(undefined);
         setSegments(reconcile([]));
         setHistory(new History<Segment[]>([]));
+        setHistoryRevision((value) => value + 1);
         setCurrentSegmentSignal(0);
         setSavedSnapshot(snapshot({ genreHint: genreHint(), segments: [] }));
       });
@@ -117,6 +121,7 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
         setDetectedLanguage(undefined);
         setSegments(reconcile([]));
         setHistory(new History<Segment[]>([]));
+        setHistoryRevision((value) => value + 1);
         setCurrentSegmentSignal(0);
         setSavedSnapshot(EMPTY);
       });
@@ -131,6 +136,7 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
       history().commit(next, group);
       batch(() => {
         setHistory(history());
+        setHistoryRevision((value) => value + 1);
         setSegments(reconcile(next));
         setCurrentSegmentSignal((index) => clampSegment(index));
       });
@@ -148,6 +154,7 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
       }
       batch(() => {
         setHistory(history());
+        setHistoryRevision((value) => value + 1);
         setSegments(reconcile(previous));
         setCurrentSegmentSignal((index) => clampSegment(index));
       });
@@ -165,6 +172,7 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
       }
       batch(() => {
         setHistory(history());
+        setHistoryRevision((value) => value + 1);
         setSegments(reconcile(next));
         setCurrentSegmentSignal((index) => clampSegment(index));
       });

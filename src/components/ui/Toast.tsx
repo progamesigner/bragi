@@ -56,7 +56,11 @@ export default function Toast(props: ToastProps) {
         {(toast) => (
           <>
             <p>{toast().message}</p>
-            <Show when={toast().action}>
+            <Show
+              when={
+                toast().action && (toast().action?.valid?.() ?? true) ? toast().action : undefined
+              }
+            >
               {(action) => (
                 <Button
                   variant="ghost"

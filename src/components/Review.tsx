@@ -57,7 +57,17 @@ export default function Review(props: ReviewProps) {
       props.onStatus(error instanceof Error ? error.message : t("review.restoreFailed"), "error");
     }
   };
-  const undoAction = (): ToastAction => ({ label: t("review.undo"), run: () => restore() });
+  const undoAction = (): ToastAction => {
+    const revision = workspace.historyRevision();
+    const valid = () => workspace.historyRevision() === revision && workspace.canUndo();
+    return {
+      label: t("review.undo"),
+      valid,
+      run: () => {
+        if (valid()) restore();
+      },
+    };
+  };
 
   // Without scrolling, so returning to review can restore where it was.
   onMount(() => heading.focus({ preventScroll: true }));
