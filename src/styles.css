@@ -1015,14 +1015,18 @@ label.file-button:has(+ input:focus-visible) {
   padding: 0;
   border: 0;
 }
+/* A floated legend is laid out as content, so a divider above the fieldset never crosses it. */
 .choice-group legend {
+  float: left;
+  width: 100%;
+  margin-bottom: 10px;
   padding: 0;
 }
 .choice-options {
+  clear: both;
   display: grid;
   grid-template-columns: repeat(var(--choices), auto);
   gap: 6px;
-  margin-top: 10px;
   padding: 4px;
   border-radius: 14px;
   background: var(--bg);
@@ -1817,7 +1821,7 @@ input.invalid {
   height: 80px;
   overflow: auto;
   display: grid;
-  align-items: center;
+  align-items: end;
   scrollbar-width: thin;
 }
 .playback-status-slot .inline-status-error {
