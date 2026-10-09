@@ -1,8 +1,10 @@
 import { createEffect, createSignal, on, onCleanup, Show } from "solid-js";
+import { t } from "~/lib/i18n";
 import { networkErrorMessage } from "~/lib/network";
 import { requestSpeech } from "~/lib/speech";
 import type { StatusReporter } from "~/lib/status";
 import { VOICE_SAMPLE_TEXT, voiceLabel } from "~/lib/voices";
+import Button from "./ui/Button";
 
 type VoiceSampleProps = {
   requestRevision?: object;
@@ -49,17 +51,17 @@ export default function VoiceSample(props: VoiceSampleProps) {
     const controller = new AbortController();
     request = controller;
     setBusy(true);
-    props.onStatus(`正在產生 ${voiceLabel(voice)} 的試聽…`);
+    props.onStatus(t("voiceSample.generating", { voice: voiceLabel(voice) }));
     try {
       const audio = await requestSpeech({ text: VOICE_SAMPLE_TEXT, voice }, controller.signal);
       if (request !== controller || controller.signal.aborted) return;
       const url = URL.createObjectURL(audio.blob);
       samples.set(voice, url);
       if (props.voice === voice) setCurrent({ voice, url });
-      props.onStatus("聲音試聽已準備完成，請按播放", "success");
+      props.onStatus(t("voiceSample.ready"), "success");
     } catch (error) {
       if (controller.signal.aborted) return;
-      props.onStatus(networkErrorMessage(error, "無法產生聲音試聽"), "error");
+      props.onStatus(networkErrorMessage(error, t("voiceSample.failed")), "error");
     } finally {
       if (request === controller) setBusy(false);
     }
@@ -67,14 +69,14 @@ export default function VoiceSample(props: VoiceSampleProps) {
 
   return (
     <div class="voice-sample">
-      <button
-        type="button"
-        class="small secondary"
+      <Button
+        variant="secondary"
+        size="compact"
         disabled={busy() || !props.voice}
         onClick={generate}
       >
-        {busy() ? "產生中…" : "試聽這個聲音"}
-      </button>
+        {busy() ? t("common.generating") : t("voiceSample.play")}
+      </Button>
       <Show when={current()?.voice === props.voice ? current() : undefined}>
         {(sample) => (
           <audio
@@ -82,12 +84,12 @@ export default function VoiceSample(props: VoiceSampleProps) {
             controls
             preload="metadata"
             src={sample().url}
-            aria-label="聲音試聽"
+            aria-label={t("voiceSample.audio")}
           >
             <track
               kind="captions"
               src={`data:text/vtt;charset=utf-8,${encodeURIComponent(`WEBVTT\n\n00:00.000 --> 01:00.000\n${VOICE_SAMPLE_TEXT}`)}`}
-              label="試聽句子"
+              label={t("voiceSample.captions")}
               default
             />
           </audio>

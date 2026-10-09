@@ -3,18 +3,27 @@ import { createStore, reconcile } from "solid-js/store";
 import Capture from "~/components/Capture";
 import Playback from "~/components/Playback";
 import Review from "~/components/Review";
+import Banner from "~/components/ui/Banner";
+import Button, { buttonClass, IconButton } from "~/components/ui/Button";
+import { SettingsIcon } from "~/components/ui/icons";
+import Select from "~/components/ui/Select";
+import Sheet from "~/components/ui/Sheet";
+import Toast from "~/components/ui/Toast";
 import VoiceSample from "~/components/VoiceSample";
 import { apiErrorMessage } from "~/lib/api";
 import { DraftAutosave } from "~/lib/autosave";
 import { type Draft, MAX_DRAFT_BYTES, parseDraft, serializeDraft } from "~/lib/draft";
 import { graphemeCount, MAX_DRAFT_GENRE } from "~/lib/draft-limits";
 import { History } from "~/lib/editing";
+import { LOCALE_NAMES, LOCALES, type Locale, t } from "~/lib/i18n";
 import type { PreparedImage } from "~/lib/image";
 import { networkErrorMessage, requireOnline } from "~/lib/network";
 import { ocrResponseSchema } from "~/lib/schemas";
 import { speechCache } from "~/lib/speech-cache";
 import type { Segment } from "~/lib/state";
 import type { StatusMessage, StatusTone } from "~/lib/status";
+import { locale, setLocale, setThemePreference, themePreference } from "~/lib/store/preferences";
+import { THEME_PREFERENCES, type ThemePreference } from "~/lib/theme";
 import { voiceLabel } from "~/lib/voices";
 import { commitCandidate, WorkspaceRevision } from "~/lib/workspace";
 
@@ -45,12 +54,16 @@ export default function Home() {
   const [detectedLanguage, setDetectedLanguage] = createSignal<string>();
   const [editHistory, setEditHistory] = createSignal(new History<Segment[]>([]));
   const [segments, setSegments] = createStore<Segment[]>([]);
-  const [status, setStatus] = createSignal<StatusMessage>({ message: "尚未驗證", tone: "info" });
+  const [status, setStatus] = createSignal<StatusMessage>({
+    message: t("auth.unverified"),
+    tone: "info",
+  });
   const [authBusy, setAuthBusy] = createSignal(false);
   const [sessionChecking, setSessionChecking] = createSignal(true);
   const [authenticated, setAuthenticated] = createSignal(false);
   const [recognitionBusy, setRecognitionBusy] = createSignal(false);
   const [screen, setScreen] = createSignal<"review" | "playback">("review");
+  const [settingsOpen, setSettingsOpen] = createSignal(false);
 
   const currentDraft = (): Draft => ({
     detectedLanguage: detectedLanguage() ?? "未指定",
@@ -147,18 +160,18 @@ export default function Home() {
     const operation = authOperations.begin();
     try {
       const response = await fetch("/api/session", { cache: "no-store", signal: operation.signal });
-      if (!response.ok) throw new Error(await apiErrorMessage(response, "無法確認登入狀態"));
+      if (!response.ok) throw new Error(await apiErrorMessage(response, t("auth.checkFailed")));
       const session = (await response.json()) as { authenticated: boolean; voices?: string[] };
       if (!operation.current()) return;
       setAuthenticated(session.authenticated);
       restoreVoice(session.voices ?? []);
       reportStatus(
-        session.authenticated ? "已恢復登入狀態" : "請先使用 Authenticator 驗證碼登入",
+        t(session.authenticated ? "auth.restored" : "auth.prompt"),
         session.authenticated ? "success" : "info",
       );
     } catch (error) {
       if (operation.current())
-        reportStatus(error instanceof Error ? error.message : "無法確認登入狀態", "error");
+        reportStatus(error instanceof Error ? error.message : t("auth.checkFailed"), "error");
     } finally {
       if (operation.current()) setSessionChecking(false);
     }
@@ -176,15 +189,15 @@ export default function Home() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ otp: otp() }),
       });
-      if (!response.ok) throw new Error(await apiErrorMessage(response, "驗證失敗"));
+      if (!response.ok) throw new Error(await apiErrorMessage(response, t("auth.failed")));
       const session = await response.json();
       if (!operation.current()) return;
       restoreVoice(session.voices ?? []);
       setAuthenticated(true);
       setOtp("");
-      reportStatus("驗證成功，可以上傳圖片", "success");
+      reportStatus(t("auth.success"), "success");
     } catch (error) {
-      if (operation.current()) reportStatus(networkErrorMessage(error, "驗證失敗"), "error");
+      if (operation.current()) reportStatus(networkErrorMessage(error, t("auth.failed")), "error");
     } finally {
       if (operation.current()) setAuthBusy(false);
     }
@@ -202,13 +215,14 @@ export default function Home() {
     try {
       requireOnline();
       const response = await fetch("/api/session", { method: "DELETE", signal: operation.signal });
-      if (!response.ok) throw new Error(await apiErrorMessage(response, "登出失敗"));
+      if (!response.ok) throw new Error(await apiErrorMessage(response, t("auth.signOutFailed")));
       if (!operation.current()) return;
       setAuthenticated(false);
       clearWorkspace();
-      reportStatus("已安全登出", "success");
+      reportStatus(t("auth.signedOut"), "success");
     } catch (error) {
-      if (operation.current()) reportStatus(networkErrorMessage(error, "登出失敗"), "error");
+      if (operation.current())
+        reportStatus(networkErrorMessage(error, t("auth.signOutFailed")), "error");
     } finally {
       if (operation.current()) setAuthBusy(false);
     }
@@ -230,7 +244,7 @@ export default function Home() {
           operation,
           draft,
           !!detectedLanguage(),
-          () => window.confirm("匯入草稿會取代目前的圖片、校閱文字與音訊，確定要繼續嗎？"),
+          () => window.confirm(t("draft.importConfirm")),
           (next) => {
             setCandidate(undefined);
             applyDraft(next);
@@ -238,10 +252,10 @@ export default function Home() {
         )
       )
         return;
-      reportStatus(`已匯入草稿 · ${draft.segments.length} 個段落`, "success");
+      reportStatus(t("draft.imported", { n: draft.segments.length }), "success");
     } catch (error) {
       if (operation.current())
-        reportStatus(error instanceof Error ? error.message : "無法匯入草稿", "error");
+        reportStatus(error instanceof Error ? error.message : t("draft.importFailed"), "error");
     }
   }
 
@@ -252,7 +266,7 @@ export default function Home() {
     const genre = candidateGenre();
     const operation = operations.begin();
     setRecognitionBusy(true);
-    reportStatus("建立 Gemini upload session…");
+    reportStatus(t("recognize.creatingSession"));
     try {
       requireOnline();
       const sessionResponse = await fetch("/api/uploads", {
@@ -262,20 +276,21 @@ export default function Home() {
         body: JSON.stringify({ mimeType: selected.type, sizeBytes: selected.size }),
       });
       if (!sessionResponse.ok)
-        throw new Error(await apiErrorMessage(sessionResponse, "無法建立上傳工作階段"));
+        throw new Error(await apiErrorMessage(sessionResponse, t("recognize.sessionFailed")));
       const upload = (await sessionResponse.json()) as UploadTarget;
       if (!operation.current()) return;
-      reportStatus("透過 Bragi 安全轉送至 Gemini…");
+      reportStatus(t("recognize.uploading"));
       const response = await fetch(upload.target.url, {
         signal: operation.signal,
         method: upload.target.method,
         headers: upload.target.headers,
         body: selected,
       });
-      if (!response.ok) throw new Error(await apiErrorMessage(response, "無法上傳圖片"));
+      if (!response.ok)
+        throw new Error(await apiErrorMessage(response, t("recognize.uploadFailed")));
       const receipt = await response.json();
       if (!operation.current()) return;
-      reportStatus("Gemini 正在辨識與分段…");
+      reportStatus(t("recognize.analyzing"));
       const ocrResponse = await fetch("/api/ocr", {
         signal: operation.signal,
         method: "POST",
@@ -286,27 +301,29 @@ export default function Home() {
           genreHint: genre.trim() || undefined,
         }),
       });
-      if (!ocrResponse.ok) throw new Error(await apiErrorMessage(ocrResponse, "無法辨識圖片"));
+      if (!ocrResponse.ok)
+        throw new Error(await apiErrorMessage(ocrResponse, t("recognize.ocrFailed")));
       const value: unknown = await ocrResponse.json();
       if (!operation.current()) return;
       const parsed = ocrResponseSchema.safeParse(value);
-      if (!parsed.success) throw new Error("辨識結果格式不正確，請重試");
+      if (!parsed.success) throw new Error(t("recognize.invalidResult"));
       const draft: Draft = { ...parsed.data, genreHint: genre || undefined };
       if (
         !commitCandidate(
           operation,
           draft,
           !!detectedLanguage(),
-          () => window.confirm("辨識完成；新稿件會取代目前的圖片、校閱文字與音訊，確定要繼續嗎？"),
+          () => window.confirm(t("recognize.replaceConfirm")),
           (next) => applyDraft(next, prepared),
         )
       ) {
-        if (operation.current()) reportStatus("已保留目前稿件；候選圖片可重新辨識");
+        if (operation.current()) reportStatus(t("recognize.kept"));
         return;
       }
-      reportStatus(`辨識完成 · ${draft.segments.length} 個段落`, "success");
+      reportStatus(t("recognize.done", { n: draft.segments.length }), "success");
     } catch (error) {
-      if (operation.current()) reportStatus(networkErrorMessage(error, "上傳失敗"), "error");
+      if (operation.current())
+        reportStatus(networkErrorMessage(error, t("recognize.failed")), "error");
     } finally {
       if (operation.current()) setRecognitionBusy(false);
     }
@@ -315,7 +332,7 @@ export default function Home() {
   function editGenre(input: HTMLInputElement) {
     const value = input.value;
     try {
-      if (graphemeCount(value) > MAX_DRAFT_GENRE) throw new Error("題材提示最多 80 字");
+      if (graphemeCount(value) > MAX_DRAFT_GENRE) throw new Error(t("genre.tooLong"));
       if (candidateActive()) setCandidateGenre(value);
       else {
         if (detectedLanguage())
@@ -325,32 +342,70 @@ export default function Home() {
       }
     } catch (error) {
       input.value = candidateActive() ? candidateGenre() : genreHint();
-      reportStatus(error instanceof Error ? error.message : "無法修改題材", "error");
+      reportStatus(error instanceof Error ? error.message : t("genre.editFailed"), "error");
     }
   }
 
   return (
     <main data-font-size={fontSize()}>
+      <div class="app-bar">
+        <IconButton label={t("settings.open")} onClick={() => setSettingsOpen(true)}>
+          <SettingsIcon />
+        </IconButton>
+      </div>
+      <Sheet
+        open={settingsOpen()}
+        title={t("settings.title")}
+        closeLabel={t("settings.close")}
+        onClose={() => setSettingsOpen(false)}
+      >
+        <div>
+          <label for="theme">{t("settings.theme")}</label>
+          <Select
+            id="theme"
+            value={themePreference()}
+            onChange={(event) => setThemePreference(event.currentTarget.value as ThemePreference)}
+          >
+            <For each={THEME_PREFERENCES}>
+              {(value) => <option value={value}>{t(`theme.${value}`)}</option>}
+            </For>
+          </Select>
+        </div>
+        <div>
+          <label for="locale">{t("settings.language")}</label>
+          <Select
+            id="locale"
+            value={locale()}
+            onChange={(event) => setLocale(event.currentTarget.value as Locale)}
+          >
+            <For each={LOCALES}>
+              {(value) => (
+                <option value={value} lang={value}>
+                  {LOCALE_NAMES[value]}
+                </option>
+              )}
+            </For>
+          </Select>
+        </div>
+      </Sheet>
       <header>
         <p class="eyebrow">BRAGI · OCR</p>
         <h1>
-          讓桌上的故事，
+          {t("header.titleLine1")}
           <br />
-          用對的語氣開口。
+          {t("header.titleLine2")}
         </h1>
-        <p class="lede">
-          拍下劇本或卡牌，交給 Gemini 辨識與分段。辨識結果仍是草稿，朗讀前請務必校對。
-        </p>
+        <p class="lede">{t("header.lede")}</p>
       </header>
 
       <section class="card">
-        <h2>1. 驗證存取</h2>
-        <Show when={!sessionChecking()} fallback={<p>正在確認登入狀態…</p>}>
+        <h2>{t("auth.heading")}</h2>
+        <Show when={!sessionChecking()} fallback={<p>{t("auth.checking")}</p>}>
           <Show
             when={authenticated()}
             fallback={
               <form onSubmit={signIn} aria-busy={authBusy()}>
-                <label for="otp">Authenticator 6 位驗證碼</label>
+                <label for="otp">{t("auth.otpLabel")}</label>
                 <div class="row">
                   <input
                     id="otp"
@@ -361,26 +416,26 @@ export default function Home() {
                     value={otp()}
                     onInput={(e) => setOtp(e.currentTarget.value)}
                   />
-                  <button type="submit" disabled={authBusy() || otp().length !== 6}>
-                    {authBusy() ? "驗證中…" : "登入"}
-                  </button>
+                  <Button type="submit" disabled={authBusy() || otp().length !== 6}>
+                    {authBusy() ? t("auth.signingIn") : t("auth.signIn")}
+                  </Button>
                 </div>
               </form>
             }
           >
             <div class="session-state">
-              <p>這台裝置已登入，session 最長保留 90 天。</p>
-              <button type="button" class="small secondary" disabled={authBusy()} onClick={signOut}>
-                {authBusy() ? "登出中…" : "登出"}
-              </button>
+              <p>{t("auth.signedIn")}</p>
+              <Button variant="secondary" size="compact" disabled={authBusy()} onClick={signOut}>
+                {authBusy() ? t("auth.signingOut") : t("auth.signOut")}
+              </Button>
             </div>
           </Show>
         </Show>
       </section>
 
       <section class="card">
-        <label for="font-size">朗讀字級</label>
-        <select
+        <label for="font-size">{t("prefs.fontSize")}</label>
+        <Select
           id="font-size"
           value={fontSize()}
           onChange={(event) => {
@@ -390,13 +445,13 @@ export default function Home() {
             } catch {}
           }}
         >
-          <option value="normal">標準</option>
-          <option value="large">大</option>
-          <option value="largest">特大</option>
-        </select>
+          <option value="normal">{t("fontSize.normal")}</option>
+          <option value="large">{t("fontSize.large")}</option>
+          <option value="largest">{t("fontSize.largest")}</option>
+        </Select>
         <Show when={authenticated() && voices().length > 1}>
-          <label for="voice">朗讀聲音</label>
-          <select
+          <label for="voice">{t("prefs.voice")}</label>
+          <Select
             id="voice"
             disabled={screen() === "playback" || recognitionBusy()}
             value={voice() ?? ""}
@@ -408,11 +463,13 @@ export default function Home() {
               } catch {}
             }}
           >
-            <option value="">預設聲音（{voiceLabel(voices()[0] ?? "")}）</option>
+            <option value="">
+              {t("prefs.defaultVoice", { voice: voiceLabel(voices()[0] ?? "") })}
+            </option>
             <For each={voices().slice(1)}>
               {(value) => <option value={value}>{voiceLabel(value)}</option>}
             </For>
-          </select>
+          </Select>
           <Show when={workspace()} keyed>
             <VoiceSample
               voice={voice() ?? voices()[0]}
@@ -423,7 +480,9 @@ export default function Home() {
         </Show>
       </section>
       <Show when={!online()}>
-        <p role="status">目前離線。已載入的文字與音訊仍可使用；連線恢復後請手動重試。</p>
+        <Banner role="status" tone="warning">
+          <p>{t("offline.notice")}</p>
+        </Banner>
       </Show>
       <Show
         when={
@@ -434,11 +493,11 @@ export default function Home() {
           !detectedLanguage()
         }
       >
-        <section class="card" aria-label="本機暫存草稿">
-          <p>此裝置有上次的文字草稿，可恢復繼續校對。</p>
-          <button
-            type="button"
-            class="small"
+        <section class="card" aria-label={t("autosave.label")}>
+          <p>{t("autosave.found")}</p>
+          <Button
+            size="compact"
+            class="autosave-action"
             onClick={() => {
               if (!authenticated() || sessionChecking() || authBusy() || detectedLanguage()) return;
               const draft = savedDraft();
@@ -446,50 +505,47 @@ export default function Home() {
               cancelOperation();
               setCandidate(undefined);
               applyDraft(draft);
-              reportStatus("已恢復上次的草稿，未傳送至 Gemini", "success");
+              reportStatus(t("autosave.restored"), "success");
             }}
           >
-            恢復上次的草稿
-          </button>
-          <button
-            type="button"
-            class="small secondary"
+            {t("autosave.restore")}
+          </Button>
+          <Button
+            variant="secondary"
+            size="compact"
+            class="autosave-action"
             onClick={() => {
               autosave.clear();
               setSavedDraft(undefined);
             }}
           >
-            捨棄
-          </button>
+            {t("autosave.discard")}
+          </Button>
         </section>
       </Show>
       <Show when={authenticated() && workspace()} keyed>
-        <button
-          type="button"
-          class="small secondary"
+        <Button
+          variant="secondary"
+          size="compact"
           onClick={() => {
-            if (!window.confirm("清除目前圖片、校閱文字與音訊？此操作無法復原，但會保留登入狀態。"))
-              return;
+            if (!window.confirm(t("workspace.clearConfirm"))) return;
             clearWorkspace();
-            reportStatus("已清除目前內容，登入狀態已保留", "success");
+            reportStatus(t("workspace.cleared"), "success");
           }}
         >
-          清除目前內容
-        </button>
+          {t("workspace.clear")}
+        </Button>
         <section class="card" aria-busy={recognitionBusy()}>
-          <h2>2. 上傳並辨識</h2>
-          <p>
-            拍攝或選擇一張不含敏感資訊的圖片。Bragi 會在裝置上調整方向、尺寸與檔案大小，再轉送至
-            Google Gemini，最多保存 48 小時。
-          </p>
+          <h2>{t("capture.heading")}</h2>
+          <p>{t("capture.intro")}</p>
           <aside class="privacy-note" id="upload-privacy" aria-labelledby="privacy-heading">
-            <h3 id="privacy-heading">資料如何處理</h3>
+            <h3 id="privacy-heading">{t("privacy.heading")}</h3>
             <ul>
-              <li>照片的方向修正與壓縮先在此裝置完成。</li>
-              <li>照片與朗讀文字會送往 Google Gemini；照片最多保存 48 小時。</li>
-              <li>Bragi 不建立辨識歷史，也不把產生的音訊存入資料庫。</li>
+              <li>{t("privacy.local")}</li>
+              <li>{t("privacy.gemini")}</li>
+              <li>{t("privacy.noHistory")}</li>
             </ul>
-            <p>請避免拍入無關的人臉、聯絡資訊或其他敏感資料。</p>
+            <p>{t("privacy.avoid")}</p>
           </aside>
           <Capture
             disabled={authBusy()}
@@ -504,37 +560,37 @@ export default function Home() {
               cancelOperation();
               setCandidate(undefined);
               setCandidateActive(false);
-              reportStatus("已取消候選圖片，目前稿件已保留");
+              reportStatus(t("capture.candidateCancelled"));
             }}
             onChange={(prepared) => {
               setCandidate(prepared);
             }}
             onStatus={reportStatus}
           />
-          <label for="genre">題材提示（選填）</label>
+          <label for="genre">{t("genre.label")}</label>
           <input
             id="genre"
             type="text"
-            placeholder="例如：奇幻、懸疑、科幻"
+            placeholder={t("genre.placeholder")}
             disabled={recognitionBusy() || authBusy()}
             value={candidateActive() ? candidateGenre() : genreHint()}
             onInput={(event) => editGenre(event.currentTarget)}
           />
-          <button
-            type="button"
-            class="wide"
+          <Button
+            wide
+            class="recognize"
             disabled={recognitionBusy() || !candidate() || authBusy()}
             onClick={recognizeUpload}
           >
-            {recognitionBusy() ? "正在上傳與辨識…" : "上傳並辨識文字"}
-          </button>
+            {recognitionBusy() ? t("recognize.busy") : t("recognize.start")}
+          </Button>
           <div class="draft-import">
             <label
-              class="file-button secondary small"
+              class={`${buttonClass("secondary", "compact")} file-button`}
               for="draft-import"
               aria-disabled={authBusy()}
             >
-              匯入草稿 JSON
+              {t("draft.import")}
             </label>
             <input
               id="draft-import"
@@ -545,7 +601,7 @@ export default function Home() {
               disabled={authBusy()}
               onChange={(event) => void importDraft(event.currentTarget)}
             />
-            <p id="draft-import-note">草稿只含文字與語氣，不含圖片或音訊，也不會上傳到 Gemini。</p>
+            <p id="draft-import-note">{t("draft.importNote")}</p>
           </div>
         </section>
 
@@ -561,7 +617,7 @@ export default function Home() {
                   voice={voice()}
                   onBack={() => {
                     setScreen("review");
-                    reportStatus("已返回校對", "success");
+                    reportStatus(t("playback.backDone"), "success");
                   }}
                   onStatus={reportStatus}
                 />
@@ -578,7 +634,7 @@ export default function Home() {
                 history={editHistory()}
                 onStartPlayback={() => {
                   setScreen("playback");
-                  reportStatus("逐段朗讀已就緒");
+                  reportStatus(t("playback.ready"));
                 }}
                 onStatus={reportStatus}
               />
@@ -587,13 +643,9 @@ export default function Home() {
         </Show>
       </Show>
 
-      <p
-        class="status"
-        classList={{ success: status().tone === "success", error: status().tone === "error" }}
-        role={status().tone === "error" ? "alert" : "status"}
-      >
-        {status().message}
-      </p>
+      <Toast tone={status().tone}>
+        <p>{status().message}</p>
+      </Toast>
     </main>
   );
 }

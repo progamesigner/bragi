@@ -1,7 +1,9 @@
 import { createSignal, onCleanup, Show } from "solid-js";
+import { t } from "~/lib/i18n";
 import { type PreparedImage, prepareImage } from "~/lib/image";
 import type { StatusReporter } from "~/lib/status";
 import { type Operation, WorkspaceRevision } from "~/lib/workspace";
+import Button, { buttonClass } from "./ui/Button";
 
 type CaptureProps = {
   disabled: boolean;
@@ -48,21 +50,18 @@ export default function Capture(props: CaptureProps) {
     setPreparationFailed(false);
     setImage(undefined);
     replacePreview(URL.createObjectURL(file));
-    props.onStatus("正在調整方向與圖片大小…");
+    props.onStatus(t("capture.preparing"));
     try {
       const prepared = await prepareImage(file);
       if (!current()) return;
       setImage(prepared);
       replacePreview(URL.createObjectURL(prepared.file));
       props.onChange(prepared);
-      props.onStatus(
-        prepared.warning ?? "圖片已準備完成，可以開始辨識",
-        prepared.warning ? "info" : "success",
-      );
+      props.onStatus(prepared.warning ?? t("capture.ready"), prepared.warning ? "info" : "success");
     } catch (error) {
       if (!current()) return;
       setPreparationFailed(true);
-      props.onStatus(error instanceof Error ? error.message : "無法處理圖片", "error");
+      props.onStatus(error instanceof Error ? error.message : t("capture.failed"), "error");
     } finally {
       if (operation.current()) setPreparing(false);
     }
@@ -77,8 +76,12 @@ export default function Capture(props: CaptureProps) {
   return (
     <div class="capture">
       <div class="capture-actions">
-        <label class="file-button" for="camera-input" aria-disabled={props.disabled || preparing()}>
-          拍照
+        <label
+          class={`${buttonClass("primary")} file-button`}
+          for="camera-input"
+          aria-disabled={props.disabled || preparing()}
+        >
+          {t("capture.camera")}
         </label>
         <input
           id="camera-input"
@@ -91,11 +94,11 @@ export default function Capture(props: CaptureProps) {
           onChange={inputChanged}
         />
         <label
-          class="file-button secondary"
+          class={`${buttonClass("secondary")} file-button`}
           for="library-input"
           aria-disabled={props.disabled || preparing()}
         >
-          從相簿選擇
+          {t("capture.library")}
         </label>
         <input
           id="library-input"
@@ -109,9 +112,10 @@ export default function Capture(props: CaptureProps) {
       </div>
 
       <Show when={sourceFile()}>
-        <button
-          type="button"
-          class="small secondary"
+        <Button
+          variant="secondary"
+          size="compact"
+          class="capture-secondary"
           onClick={() => {
             operations.invalidate();
             setPreparing(false);
@@ -122,14 +126,19 @@ export default function Capture(props: CaptureProps) {
             props.onCancel();
           }}
         >
-          取消候選圖片
-        </button>
+          {t("capture.cancelCandidate")}
+        </Button>
       </Show>
 
       <Show when={preparationFailed()}>
-        <button type="button" class="small secondary" onClick={() => void selectFile(sourceFile())}>
-          重試圖片處理
-        </button>
+        <Button
+          variant="secondary"
+          size="compact"
+          class="capture-secondary"
+          onClick={() => void selectFile(sourceFile())}
+        >
+          {t("capture.retryPrepare")}
+        </Button>
       </Show>
 
       <Show when={selectedImage()}>
@@ -138,12 +147,12 @@ export default function Capture(props: CaptureProps) {
             <Show when={previewUrl() && !previewFailed()}>
               <img
                 src={previewUrl()}
-                alt="準備上傳的圖片預覽"
+                alt={t("capture.previewAlt")}
                 onError={() => setPreviewFailed(true)}
               />
             </Show>
             <Show when={previewFailed()}>
-              <div class="preview-placeholder">此瀏覽器無法顯示圖片預覽</div>
+              <div class="preview-placeholder">{t("capture.previewUnavailable")}</div>
             </Show>
             <p class="file">
               {selected().file.name} · {(selected().file.size / 1_000_000).toFixed(2)} MB
@@ -152,7 +161,7 @@ export default function Capture(props: CaptureProps) {
               </Show>
             </p>
             <Show when={selected().transformed}>
-              <p class="image-note">已套用照片方向並壓縮為適合上傳的 JPEG</p>
+              <p class="image-note">{t("capture.transformed")}</p>
             </Show>
             <Show when={selected().warning}>
               {(warning) => <p class="image-warning">{warning()}</p>}

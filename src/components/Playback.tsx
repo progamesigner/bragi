@@ -1,6 +1,7 @@
 import {
   createEffect,
   createSignal,
+  For,
   Match,
   on,
   onCleanup,
@@ -9,6 +10,7 @@ import {
   Switch,
   untrack,
 } from "solid-js";
+import { t } from "~/lib/i18n";
 import { networkErrorMessage } from "~/lib/network";
 import { initialPlaybackState, type PlaybackEvent, transitionPlayback } from "~/lib/playback";
 import type { SpeechRequest } from "~/lib/speech";
@@ -18,6 +20,10 @@ import { type Segment, speechText } from "~/lib/state";
 import type { StatusReporter } from "~/lib/status";
 import { ScreenWakeLock } from "~/lib/wake-lock";
 import { pcmDurationMs, pcmToWav } from "~/lib/wav";
+import Button from "./ui/Button";
+import Select from "./ui/Select";
+
+const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5];
 
 type PlaybackProps = {
   requestRevision?: object;
@@ -117,20 +123,20 @@ export default function Playback(props: PlaybackProps) {
     request = new AbortController();
     const controller = request;
     clearAudio();
-    props.onStatus(`正在產生第 ${nextState.index + 1} 段音訊…`);
+    props.onStatus(t("playback.preparingNumber", { n: nextState.index + 1 }));
     try {
       const input = speechInput(nextState.index);
-      if (!input) throw new Error("找不到要播放的段落");
+      if (!input) throw new Error(t("playback.missingSegment"));
       const result = await requestCachedSpeech(input, request.signal, fetch, "playback");
       controller.signal.throwIfAborted();
       setAudioUrl(URL.createObjectURL(result.blob));
       setDuration(result.durationMs);
       dispatch({ type: "audio-ready" });
-      props.onStatus(`第 ${nextState.index + 1} 段已準備，請按播放`, "success");
+      props.onStatus(t("playback.readyNumber", { n: nextState.index + 1 }), "success");
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       if (controller.signal.aborted) return;
-      const message = networkErrorMessage(error, "無法產生朗讀音訊");
+      const message = networkErrorMessage(error, t("playback.failed"));
       dispatch({ type: "fail", message });
       props.onStatus(message, "error");
     }
@@ -176,7 +182,7 @@ export default function Playback(props: PlaybackProps) {
       setAudioUrl(URL.createObjectURL(cached.blob));
       setDuration(cached.durationMs);
       dispatch({ type: "audio-ready" });
-      props.onStatus(`第 ${nextState.index + 1} 段已準備，請按播放`, "success");
+      props.onStatus(t("playback.readyNumber", { n: nextState.index + 1 }), "success");
       return;
     }
     // Web Audio sources cannot keep their pitch when sped up, so other speeds use complete WAV
@@ -196,7 +202,7 @@ export default function Playback(props: PlaybackProps) {
     streamContext = context;
     streamPlayer = player;
     setStreaming(true);
-    props.onStatus(`正在串流第 ${nextState.index + 1} 段音訊…`);
+    props.onStatus(t("playback.streamingNumber", { n: nextState.index + 1 }));
 
     try {
       await player.resume();
@@ -217,7 +223,7 @@ export default function Playback(props: PlaybackProps) {
           started = true;
           dispatch({ type: "audio-ready" });
           dispatch({ type: "play" });
-          props.onStatus(`正在播放第 ${nextState.index + 1} 段`);
+          props.onStatus(t("playback.playingNumber", { n: nextState.index + 1 }));
           void prefetchNext();
         }
       }
@@ -241,7 +247,10 @@ export default function Playback(props: PlaybackProps) {
       setAudioUrl(URL.createObjectURL(audio.blob));
       setDuration(audio.durationMs);
       dispatch({ type: "ended" });
-      props.onStatus(state().phase === "complete" ? "全部段落播放完成" : "本段播放完成", "success");
+      props.onStatus(
+        t(state().phase === "complete" ? "playback.complete" : "playback.segmentDone"),
+        "success",
+      );
     } catch (error) {
       player.stop();
       await context.close().catch(() => undefined);
@@ -249,7 +258,7 @@ export default function Playback(props: PlaybackProps) {
       streamPlayer = undefined;
       streamContext = undefined;
       setStreaming(false);
-      const message = networkErrorMessage(error, "串流播放失敗");
+      const message = networkErrorMessage(error, t("playback.streamFailed"));
       dispatch({ type: "fail", message });
       props.onStatus(message, "error");
     }
@@ -262,10 +271,10 @@ export default function Playback(props: PlaybackProps) {
         await streamPlayer?.resume();
         if (disposed || request !== currentRequest || currentRequest?.signal.aborted) return;
         dispatch({ type: "play" });
-        props.onStatus(`正在播放第 ${state().index + 1} 段`);
+        props.onStatus(t("playback.playingNumber", { n: state().index + 1 }));
       } catch {
         if (disposed || request !== currentRequest || currentRequest?.signal.aborted) return;
-        props.onStatus("瀏覽器阻止播放，請再按一次播放按鈕", "error");
+        props.onStatus(t("playback.blocked"), "error");
       }
       return;
     }
@@ -276,7 +285,7 @@ export default function Playback(props: PlaybackProps) {
       await audio.play();
     } catch {
       if (disposed || request !== currentRequest || currentRequest?.signal.aborted) return;
-      props.onStatus("瀏覽器阻止播放，請再按一次播放按鈕", "error");
+      props.onStatus(t("playback.blocked"), "error");
     }
   }
 
@@ -286,7 +295,7 @@ export default function Playback(props: PlaybackProps) {
       return;
     if (state().phase !== "playing") return;
     dispatch({ type: "pause" });
-    props.onStatus("播放被系統中斷，請按「繼續播放」從中斷處恢復", "error");
+    props.onStatus(t("playback.interrupted"), "error");
   }
 
   async function pause() {
@@ -328,7 +337,7 @@ export default function Playback(props: PlaybackProps) {
     } catch {
       if (disposed || keepAwake() !== enabled) return;
       setKeepAwake(false);
-      props.onStatus("此裝置目前無法保持螢幕常亮", "error");
+      props.onStatus(t("playback.keepAwakeFailed"), "error");
     }
   }
 
@@ -360,39 +369,38 @@ export default function Playback(props: PlaybackProps) {
     <section class="card playback" aria-labelledby="playback-heading">
       <div class="playback-heading">
         <div>
-          <p class="eyebrow">逐段朗讀</p>
+          <p class="eyebrow">{t("playback.eyebrow")}</p>
           <h2 ref={heading} id="playback-heading" tabindex="-1">
-            第 {state().index + 1} 段，共 {props.segments.length} 段
+            {t("playback.heading", { n: state().index + 1, total: props.segments.length })}
           </h2>
         </div>
-        <button type="button" class="small secondary" onClick={leavePlayback}>
-          返回校對
-        </button>
+        <Button variant="secondary" size="compact" onClick={leavePlayback}>
+          {t("playback.back")}
+        </Button>
       </div>
 
       <article class="playback-script" aria-live="polite">
         <p>{segment()?.text}</p>
         <Show when={segment()?.spokenText}>
-          {(spoken) => <p class="spoken-text">朗讀文字：{spoken()}</p>}
+          {(spoken) => <p class="spoken-text">{t("playback.spokenText", { text: spoken() })}</p>}
         </Show>
         <Show when={segment()?.suggestedToneHint}>
-          <span>語氣：{segment()?.suggestedToneHint}</span>
+          <span>{t("playback.tone", { tone: segment()?.suggestedToneHint ?? "" })}</span>
         </Show>
       </article>
-      <label for="playback-rate">播放速度</label>
-      <select
+      <label for="playback-rate">{t("playback.rate")}</label>
+      <Select
         id="playback-rate"
         value={rate()}
         disabled={streaming() || state().phase === "playing" || state().phase === "loading"}
         onChange={(event) => setRate(Number(event.currentTarget.value))}
       >
-        <option value="0.75">0.75 倍</option>
-        <option value="1">1 倍</option>
-        <option value="1.25">1.25 倍</option>
-        <option value="1.5">1.5 倍</option>
-      </select>
+        <For each={PLAYBACK_RATES}>
+          {(value) => <option value={value}>{t("playback.rateOption", { n: value })}</option>}
+        </For>
+      </Select>
       <Show when={rate() !== 1}>
-        <p class="rate-note">非 1 倍速會先產生整段音訊再播放，並保留原本的音高。</p>
+        <p class="rate-note">{t("playback.rateNote")}</p>
       </Show>
       <Show when={wakeLock.supported}>
         <label class="checkbox">
@@ -401,27 +409,27 @@ export default function Playback(props: PlaybackProps) {
             checked={keepAwake()}
             onChange={(event) => void changeKeepAwake(event.currentTarget.checked)}
           />
-          朗讀時保持螢幕常亮
+          {t("playback.keepAwake")}
         </label>
       </Show>
-      <nav aria-label="選擇朗讀段落">
-        <button
-          type="button"
+      <nav class="playback-nav" aria-label={t("playback.segmentNav")}>
+        <Button
+          variant="secondary"
           disabled={state().index === 0}
           onClick={() => navigate(state().index - 1)}
         >
-          上一段
-        </button>
-        <button
-          type="button"
+          {t("playback.previous")}
+        </Button>
+        <Button
+          variant="secondary"
           disabled={state().index >= props.segments.length - 1}
           onClick={() => navigate(state().index + 1)}
         >
-          下一段
-        </button>
+          {t("playback.next")}
+        </Button>
       </nav>
       <progress
-        aria-label="段落進度"
+        aria-label={t("playback.progress")}
         max={props.segments.length}
         value={state().phase === "complete" ? props.segments.length : state().index}
       />
@@ -434,7 +442,7 @@ export default function Playback(props: PlaybackProps) {
               controls
               preload="metadata"
               src={url()}
-              aria-label={`第 ${state().index + 1} 段朗讀`}
+              aria-label={t("playback.audio", { n: state().index + 1 })}
               onPlay={() => {
                 audio.playbackRate = rate();
                 audio.preservesPitch = true;
@@ -447,15 +455,17 @@ export default function Playback(props: PlaybackProps) {
               onEnded={() => {
                 dispatch({ type: "ended" });
                 props.onStatus(
-                  state().phase === "complete" ? "全部段落播放完成" : "本段播放完成",
+                  t(state().phase === "complete" ? "playback.complete" : "playback.segmentDone"),
                   "success",
                 );
               }}
             >
-              <track kind="captions" src={captionsUrl()} label="口白文字" default />
+              <track kind="captions" src={captionsUrl()} label={t("audio.captions")} default />
             </audio>
             <Show when={duration()}>
-              {(durationMs) => <span>{(durationMs() / 1000).toFixed(1)} 秒</span>}
+              {(durationMs) => (
+                <span>{t("common.seconds", { s: (durationMs() / 1000).toFixed(1) })}</span>
+              )}
             </Show>
           </div>
         )}
@@ -464,55 +474,56 @@ export default function Playback(props: PlaybackProps) {
       <div class="playback-actions">
         <Switch>
           <Match when={state().phase === "idle"}>
-            <button type="button" onClick={() => streamAndPlay("start")}>
-              {state().index > 0 ? "播放此段" : rate() === 1 ? "串流播放第一段" : "播放第一段"}
-            </button>
+            <Button onClick={() => streamAndPlay("start")}>
+              {t(
+                state().index > 0
+                  ? "playback.playThis"
+                  : rate() === 1
+                    ? "playback.streamFirst"
+                    : "playback.playFirst",
+              )}
+            </Button>
           </Match>
           <Match when={state().phase === "loading"}>
-            <button type="button" disabled>
-              正在產生音訊…
-            </button>
+            <Button disabled>{t("playback.generating")}</Button>
           </Match>
           <Match when={state().phase === "ready"}>
-            <button type="button" onClick={play}>
-              {streaming() ? "繼續播放" : `播放第 ${state().index + 1} 段`}
-            </button>
+            <Button onClick={play}>
+              {streaming()
+                ? t("playback.resume")
+                : t("playback.playNumber", { n: state().index + 1 })}
+            </Button>
           </Match>
           <Match when={state().phase === "playing"}>
-            <button type="button" onClick={pause}>
-              暫停
-            </button>
+            <Button onClick={pause}>{t("playback.pause")}</Button>
           </Match>
           <Match when={state().phase === "waiting"}>
             <Show when={prefetch()?.index === state().index + 1}>
               <p class="prefetch-status">
-                {prefetch()?.phase === "ready" ? "下一段已準備完成" : "正在準備下一段…"}
+                {t(prefetch()?.phase === "ready" ? "playback.nextReady" : "playback.nextPreparing")}
               </p>
             </Show>
-            <button type="button" class="secondary" onClick={play}>
-              重播本段
-            </button>
-            <button type="button" onClick={() => prepare("next")}>
-              {prefetch()?.phase === "ready" ? "繼續下一段" : "準備下一段"}
-            </button>
+            <Button variant="secondary" onClick={play}>
+              {t("playback.replay")}
+            </Button>
+            <Button onClick={() => prepare("next")}>
+              {t(prefetch()?.phase === "ready" ? "playback.continueNext" : "playback.prepareNext")}
+            </Button>
           </Match>
           <Match when={state().phase === "error"}>
             <p role="alert">{state().error}</p>
-            <button type="button" onClick={() => streamAndPlay("retry")}>
-              重試本段
-            </button>
+            <Button onClick={() => streamAndPlay("retry")}>{t("playback.retry")}</Button>
           </Match>
           <Match when={state().phase === "complete"}>
-            <p>全部段落播放完成。</p>
-            <button
-              type="button"
+            <p>{t("playback.allDone")}</p>
+            <Button
               onClick={() => {
                 dispatch({ type: "reset" });
                 void streamAndPlay("start");
               }}
             >
-              從頭播放
-            </button>
+              {t("playback.restart")}
+            </Button>
           </Match>
         </Switch>
       </div>

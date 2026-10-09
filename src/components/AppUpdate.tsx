@@ -1,4 +1,7 @@
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
+import { t } from "~/lib/i18n";
+import Banner from "./ui/Banner";
+import Button from "./ui/Button";
 
 export default function AppUpdate() {
   const [waiting, setWaiting] = createSignal<ServiceWorker>();
@@ -35,7 +38,7 @@ export default function AppUpdate() {
           registration.installing?.addEventListener("statechange", check),
         );
         const activate = () => {
-          if (!window.confirm("更新會重新載入，清除目前圖片、草稿與音訊。確定更新？")) return;
+          if (!window.confirm(t("update.confirm"))) return;
           reload = true;
           waiting()?.postMessage("ACTIVATE_UPDATE");
         };
@@ -49,18 +52,22 @@ export default function AppUpdate() {
   return (
     <>
       <Show when={otherTabs()}>
-        <p role="status">請先關閉其他 Bragi 分頁，再按更新。</p>
+        <Banner role="status" tone="warning">
+          <p>{t("update.closeOtherTabs")}</p>
+        </Banner>
       </Show>
       <Show when={waiting()}>
-        <p role="status">
-          Bragi 有新版本。
-          <button type="button" onClick={() => activate()()}>
-            更新並重新載入
-          </button>
-        </p>
+        <Banner role="status">
+          <p>{t("update.available")}</p>
+          <Button size="compact" onClick={() => activate()()}>
+            {t("update.apply")}
+          </Button>
+        </Banner>
       </Show>
       <Show when={failed()}>
-        <p>無法準備離線頁面；仍可正常使用線上功能。</p>
+        <Banner>
+          <p>{t("update.offlineUnavailable")}</p>
+        </Banner>
       </Show>
     </>
   );

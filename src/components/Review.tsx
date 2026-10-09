@@ -3,6 +3,7 @@ import { reconcile, type SetStoreFunction } from "solid-js/store";
 import { draftFileName, serializeDraft } from "~/lib/draft";
 import { MAX_DRAFT_SEGMENTS } from "~/lib/draft-limits";
 import { type History, splitNarration, textBudget } from "~/lib/editing";
+import { t } from "~/lib/i18n";
 import {
   insertAfter,
   mergeWithNext,
@@ -14,6 +15,8 @@ import {
 } from "~/lib/state";
 import type { StatusReporter } from "~/lib/status";
 import SpeechPreview from "./SpeechPreview";
+import Button from "./ui/Button";
+import Select from "./ui/Select";
 
 type ReviewProps = {
   requestRevision?: object;
@@ -67,7 +70,7 @@ export default function Review(props: ReviewProps) {
     } catch (error) {
       if (redo) history().undo();
       else history().redo();
-      props.onStatus(error instanceof Error ? error.message : "無法復原草稿", "error");
+      props.onStatus(error instanceof Error ? error.message : t("review.restoreFailed"), "error");
     }
     setHistoryVersion((v) => v + 1);
   };
@@ -87,7 +90,7 @@ export default function Review(props: ReviewProps) {
         segments,
       });
     } catch (error) {
-      props.onStatus(error instanceof Error ? error.message : "無法修改草稿", "error");
+      props.onStatus(error instanceof Error ? error.message : t("review.editFailed"), "error");
       return false;
     }
     history().commit(segments, group);
@@ -132,7 +135,7 @@ export default function Review(props: ReviewProps) {
     try {
       const parts = splitNarration(segment.text);
       if (parts.length < 2) {
-        props.onStatus("這個段落已符合朗讀限制");
+        props.onStatus(t("review.alreadyShort"));
         return;
       }
       const changed = replaceSegments([
@@ -147,11 +150,11 @@ export default function Review(props: ReviewProps) {
       ]);
       if (!changed) return;
       props.onStatus(
-        `已分成 ${parts.length} 個可朗讀段落${spokenCorrectionNotice(segment)}`,
+        `${t("review.autoSplitDone", { n: parts.length })}${spokenCorrectionNotice(segment)}`,
         "success",
       );
     } catch (error) {
-      props.onStatus(error instanceof Error ? error.message : "無法自動分段", "error");
+      props.onStatus(error instanceof Error ? error.message : t("review.autoSplitFailed"), "error");
     }
   }
   function exportDraft() {
@@ -173,21 +176,24 @@ export default function Review(props: ReviewProps) {
       link.click();
       // Give the browser time to start the download before releasing the file.
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      props.onStatus("已匯出草稿 JSON；檔案只含文字，不含圖片或音訊", "success");
+      props.onStatus(t("draft.exported"), "success");
     } catch (error) {
-      props.onStatus(error instanceof Error ? error.message : "無法匯出草稿", "error");
+      props.onStatus(error instanceof Error ? error.message : t("draft.exportFailed"), "error");
     }
   }
   function spokenCorrectionNotice(segment: Segment) {
-    return segment.spokenText === undefined ? "" : "；原本的朗讀修正已移除，請依新段落重新設定";
+    return segment.spokenText === undefined ? "" : t("review.spokenReset");
   }
   function split(index: number, editor: HTMLTextAreaElement) {
     const segment = props.segments[index];
     try {
       if (!replaceSegments(splitAtCursor(props.segments, index, editor.selectionStart))) return;
-      props.onStatus(`段落已分割${segment ? spokenCorrectionNotice(segment) : ""}`, "success");
+      props.onStatus(
+        `${t("review.splitDone")}${segment ? spokenCorrectionNotice(segment) : ""}`,
+        "success",
+      );
     } catch (error) {
-      props.onStatus(error instanceof Error ? error.message : "無法分割段落", "error");
+      props.onStatus(error instanceof Error ? error.message : t("review.splitFailed"), "error");
       editor.focus();
     }
   }
@@ -197,85 +203,80 @@ export default function Review(props: ReviewProps) {
       <div class="review-heading">
         <div>
           <h2 ref={heading} id="review-heading" tabindex="-1">
-            3. 校對辨識草稿
+            {t("review.heading")}
           </h2>
           <p>
-            主要語言：{props.detectedLanguage} · {props.segments.length} 個段落
+            {t("review.summary", {
+              language: props.detectedLanguage,
+              n: props.segments.length,
+            })}
           </p>
         </div>
         <div class="review-heading-actions">
-          <button
-            type="button"
-            class="small secondary"
+          <Button
+            variant="secondary"
+            size="compact"
             disabled={!canUndo()}
             onClick={() => restore()}
           >
-            復原
-          </button>
-          <button
-            type="button"
-            class="small secondary"
+            {t("review.undo")}
+          </Button>
+          <Button
+            variant="secondary"
+            size="compact"
             disabled={!canRedo()}
             onClick={() => restore(true)}
           >
-            重做
-          </button>
-          <button
-            type="button"
-            class="small secondary"
+            {t("review.redo")}
+          </Button>
+          <Button
+            variant="secondary"
+            size="compact"
             disabled={!canAdd()}
             aria-describedby={!canAdd() ? "draft-limit-note" : undefined}
             onClick={() => replaceSegments(insertAfter(props.segments, props.segments.length - 1))}
           >
-            新增段落
-          </button>
-          <button type="button" class="small secondary" onClick={exportDraft}>
-            匯出草稿
-          </button>
-          <button
-            type="button"
-            class="small"
-            disabled={!canStartPlayback()}
-            onClick={props.onStartPlayback}
-          >
-            開始逐段朗讀
-          </button>
+            {t("review.addSegment")}
+          </Button>
+          <Button variant="secondary" size="compact" onClick={exportDraft}>
+            {t("review.export")}
+          </Button>
+          <Button disabled={!canStartPlayback()} onClick={props.onStartPlayback}>
+            {t("review.startPlayback")}
+          </Button>
         </div>
       </div>
 
       <Show when={!canAdd()}>
         <p id="draft-limit-note" class="field-error">
-          草稿最多 50 個段落、200 KB；已達新增上限，請先刪除、縮短或合併段落。
+          {t("review.limitReached")}
         </p>
       </Show>
 
       <Show when={imageUrl()}>
         {(url) => (
           <details class="image-comparison">
-            <summary>查看圖片對照</summary>
-            <label for="comparison-zoom">圖片放大</label>
-            <select
+            <summary>{t("review.compare")}</summary>
+            <label for="comparison-zoom">{t("review.zoom")}</label>
+            <Select
               id="comparison-zoom"
               value={zoom()}
               onChange={(event) => setZoom(event.currentTarget.value)}
             >
-              <option value="1">符合寬度</option>
-              <option value="1.5">1.5 倍</option>
-              <option value="2">2 倍</option>
-              <option value="3">3 倍</option>
-            </select>
-            <Show
-              when={!imageFailed()}
-              fallback={<p>此裝置無法預覽這個圖片格式，請使用原始照片校對。</p>}
-            >
+              <option value="1">{t("review.zoomFit")}</option>
+              <option value="1.5">{t("review.zoomTimes", { n: 1.5 })}</option>
+              <option value="2">{t("review.zoomTimes", { n: 2 })}</option>
+              <option value="3">{t("review.zoomTimes", { n: 3 })}</option>
+            </Select>
+            <Show when={!imageFailed()} fallback={<p>{t("review.imageUnsupported")}</p>}>
               <section
                 style={{ overflow: "auto", "max-height": "60vh" }}
                 tabindex="0"
-                aria-label="圖片對照，可捲動查看"
+                aria-label={t("review.imageScroller")}
               >
                 <img
                   src={url()}
-                  alt="校對用圖片"
+                  alt={t("review.imageAlt")}
                   style={{
                     width: `${Number(zoom()) * 100}%`,
                     "max-width": "none",
@@ -290,7 +291,7 @@ export default function Review(props: ReviewProps) {
       </Show>
       <Show
         when={props.segments.length > 0}
-        fallback={<p class="empty-state">目前沒有段落。新增一段，或重新辨識圖片。</p>}
+        fallback={<p class="empty-state">{t("review.empty")}</p>}
       >
         <ol class="review-segments">
           <For each={props.segments}>
@@ -298,8 +299,8 @@ export default function Review(props: ReviewProps) {
               let editor!: HTMLTextAreaElement;
               return (
                 <li class="review-segment">
-                  <div class="segment-number">段落 {index() + 1}</div>
-                  <label for={`segment-text-${segment.id}`}>口白文字</label>
+                  <div class="segment-number">{t("review.segment", { n: index() + 1 })}</div>
+                  <label for={`segment-text-${segment.id}`}>{t("review.text")}</label>
                   <textarea
                     ref={editor}
                     id={`segment-text-${segment.id}`}
@@ -318,20 +319,22 @@ export default function Review(props: ReviewProps) {
                     }}
                   />
                   <p class="text-budget">
-                    {textBudget(segment.text).graphemes} / 400 字 · {textBudget(segment.text).bytes}{" "}
-                    / 2,000 位元組
+                    {t("review.budget", {
+                      chars: textBudget(segment.text).graphemes,
+                      bytes: textBudget(segment.text).bytes,
+                    })}
                   </p>
                   <Show when={!textBudget(segment.text).valid}>
                     <span class="field-error" id={`segment-text-error-${segment.id}`}>
-                      請輸入可朗讀文字；超過 400 字或 2,000 位元組時請分段
+                      {t("review.textInvalid")}
                     </span>
                   </Show>
-                  <label for={`segment-tone-${segment.id}`}>朗讀語氣</label>
+                  <label for={`segment-tone-${segment.id}`}>{t("review.tone")}</label>
                   <input
                     id={`segment-tone-${segment.id}`}
                     type="text"
                     value={segment.suggestedToneHint}
-                    placeholder="例如：低沉、急促、帶有期待感"
+                    placeholder={t("review.tonePlaceholder")}
                     onInput={(event) => {
                       if (!edit(index(), "suggestedToneHint", event.currentTarget.value))
                         event.currentTarget.value = segment.suggestedToneHint;
@@ -340,17 +343,18 @@ export default function Review(props: ReviewProps) {
                   <Show
                     when={segment.spokenText !== undefined}
                     fallback={
-                      <button
-                        type="button"
-                        class="small secondary spoken-toggle"
+                      <Button
+                        variant="secondary"
+                        size="compact"
+                        class="spoken-toggle"
                         onClick={() => editSpokenText(index(), segment.text)}
                       >
-                        另設朗讀文字
-                      </button>
+                        {t("review.addSpoken")}
+                      </Button>
                     }
                   >
                     <div class="spoken-correction">
-                      <label for={`segment-spoken-${segment.id}`}>朗讀文字（只影響語音）</label>
+                      <label for={`segment-spoken-${segment.id}`}>{t("review.spoken")}</label>
                       <textarea
                         id={`segment-spoken-${segment.id}`}
                         rows="3"
@@ -366,79 +370,76 @@ export default function Review(props: ReviewProps) {
                       <p class="text-budget" id={`segment-spoken-help-${segment.id}`}>
                         <Show
                           when={textBudget(speechText(segment)).valid}
-                          fallback={
-                            <span class="field-error">
-                              請輸入可朗讀文字；超過 400 字或 2,000 位元組時請縮短
-                            </span>
-                          }
+                          fallback={<span class="field-error">{t("review.spokenInvalid")}</span>}
                         >
-                          畫面仍顯示口白文字，語音改念這段 ·{" "}
-                          {textBudget(speechText(segment)).graphemes} / 400 字
+                          {t("review.spokenHelp", {
+                            chars: textBudget(speechText(segment)).graphemes,
+                          })}
                         </Show>
                       </p>
-                      <button
-                        type="button"
-                        class="small secondary"
+                      <Button
+                        variant="secondary"
+                        size="compact"
                         onClick={() => editSpokenText(index(), undefined)}
                       >
-                        改回朗讀口白文字
-                      </button>
+                        {t("review.removeSpoken")}
+                      </Button>
                     </div>
                   </Show>
                   <div class="segment-actions">
-                    <button
-                      type="button"
-                      class="small secondary"
+                    <Button
+                      variant="secondary"
+                      size="compact"
                       disabled={!segment.text.trim() || !canAdd()}
                       aria-describedby={!canAdd() ? "draft-limit-note" : undefined}
                       onClick={() => autoSplit(index())}
                     >
-                      按句自動分段
-                    </button>
-                    <button
-                      type="button"
-                      class="small secondary"
+                      {t("review.autoSplit")}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="compact"
                       disabled={!canAdd()}
                       aria-describedby={!canAdd() ? "draft-limit-note" : undefined}
                       onClick={() => split(index(), editor)}
                     >
-                      從游標分割
-                    </button>
-                    <button
-                      type="button"
-                      class="small secondary"
+                      {t("review.splitAtCursor")}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="compact"
                       disabled={!canAdd()}
                       aria-describedby={!canAdd() ? "draft-limit-note" : undefined}
                       onClick={() => {
                         if (!replaceSegments(insertAfter(props.segments, index()))) return;
-                        props.onStatus("已新增空白段落", "success");
+                        props.onStatus(t("review.inserted"), "success");
                       }}
                     >
-                      在下方新增
-                    </button>
+                      {t("review.insertBelow")}
+                    </Button>
                     <Show when={index() < props.segments.length - 1}>
-                      <button
-                        type="button"
-                        class="small secondary"
+                      <Button
+                        variant="secondary"
+                        size="compact"
                         onClick={() => {
                           if (!replaceSegments(mergeWithNext(props.segments, index()))) return;
-                          props.onStatus("已與下一段合併", "success");
+                          props.onStatus(t("review.merged"), "success");
                         }}
                       >
-                        合併下一段
-                      </button>
+                        {t("review.mergeNext")}
+                      </Button>
                     </Show>
-                    <button
-                      type="button"
-                      class="small danger"
+                    <Button
+                      variant="danger"
+                      size="compact"
                       onClick={() => {
                         replaceSegments(removeSegment(props.segments, index()));
-                        props.onStatus("段落已刪除", "success");
+                        props.onStatus(t("review.deleted"), "success");
                       }}
-                      aria-label={`刪除段落 ${index() + 1}`}
+                      aria-label={t("review.deleteLabel", { n: index() + 1 })}
                     >
-                      刪除
-                    </button>
+                      {t("review.delete")}
+                    </Button>
                   </div>
                   <SpeechPreview
                     requestRevision={props.requestRevision}

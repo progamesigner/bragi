@@ -1,8 +1,10 @@
 import { createEffect, createSignal, on, onCleanup, Show, untrack } from "solid-js";
 import { textBudget } from "~/lib/editing";
+import { t } from "~/lib/i18n";
 import { networkErrorMessage } from "~/lib/network";
 import { requestCachedSpeech } from "~/lib/speech-cache";
 import type { StatusReporter } from "~/lib/status";
+import Button from "./ui/Button";
 
 type SpeechPreviewProps = {
   requestRevision?: object;
@@ -55,7 +57,7 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
 
   async function generate() {
     if (!textBudget(props.text).valid) {
-      props.onStatus("請先填寫符合長度限制的段落文字", "error");
+      props.onStatus(t("preview.invalid"), "error");
       return;
     }
     clearAudio();
@@ -63,7 +65,7 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
     const controller = new AbortController();
     request = controller;
     setBusy(true);
-    props.onStatus("Gemini 正在產生試聽音訊…");
+    props.onStatus(t("preview.generating"));
     try {
       const audio = await requestCachedSpeech(
         {
@@ -77,10 +79,10 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
       controller.signal.throwIfAborted();
       setAudioUrl(URL.createObjectURL(audio.blob));
       setDuration(audio.durationMs);
-      props.onStatus("試聽已準備完成，請按播放", "success");
+      props.onStatus(t("preview.ready"), "success");
     } catch (error) {
       if (request !== controller || controller.signal.aborted) return;
-      props.onStatus(networkErrorMessage(error, "無法產生試聽"), "error");
+      props.onStatus(networkErrorMessage(error, t("preview.failed")), "error");
     } finally {
       if (request === controller && !controller.signal.aborted) setBusy(false);
     }
@@ -88,22 +90,31 @@ export default function SpeechPreview(props: SpeechPreviewProps) {
 
   return (
     <div class="speech-preview">
-      <button
-        type="button"
-        class="small preview-button"
+      <Button
+        variant="secondary"
+        size="compact"
+        wide
         disabled={busy() || !textBudget(props.text).valid}
         onClick={generate}
       >
-        {busy() ? "產生中…" : "產生試聽"}
-      </button>
+        {busy() ? t("common.generating") : t("preview.generate")}
+      </Button>
       <Show when={audioUrl()}>
         {(url) => (
           <div class="audio-result">
-            <audio ref={audioElement} controls preload="metadata" src={url()} aria-label="段落試聽">
-              <track kind="captions" src={captionsUrl()} label="口白文字" default />
+            <audio
+              ref={audioElement}
+              controls
+              preload="metadata"
+              src={url()}
+              aria-label={t("preview.audio")}
+            >
+              <track kind="captions" src={captionsUrl()} label={t("audio.captions")} default />
             </audio>
             <Show when={duration()}>
-              {(durationMs) => <span>{(durationMs() / 1000).toFixed(1)} 秒</span>}
+              {(durationMs) => (
+                <span>{t("common.seconds", { s: (durationMs() / 1000).toFixed(1) })}</span>
+              )}
             </Show>
           </div>
         )}

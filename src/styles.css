@@ -151,6 +151,9 @@ header {
   justify-content: flex-end;
   margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-1)) 0;
 }
+.autosave-action {
+  margin-right: var(--space-1);
+}
 .recognize {
   margin-top: var(--space-2);
 }
@@ -512,6 +515,10 @@ label:has(+ input:focus-visible) {
 .privacy-note p {
   margin: 8px 0 0;
   color: var(--accent-soft-text);
+}
+.capture-secondary {
+  margin-top: var(--space-1);
+  margin-right: var(--space-1);
 }
 .capture-actions {
   display: grid;
