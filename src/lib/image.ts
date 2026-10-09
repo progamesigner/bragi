@@ -1,3 +1,5 @@
+import { t } from "./i18n";
+
 export const MAX_SOURCE_BYTES = 25_000_000;
 export const MAX_UPLOAD_BYTES = 4_000_000;
 export const MAX_IMAGE_DIMENSION = 2400;
@@ -40,9 +42,9 @@ export function targetDimensions(
 }
 
 export function validateSourceImage(file: File): void {
-  if (!ACCEPTED_TYPES.has(file.type)) throw new Error("請選擇 JPEG、PNG、WebP、HEIC 或 HEIF 圖片");
-  if (file.size <= 0) throw new Error("圖片檔案是空的");
-  if (file.size > MAX_SOURCE_BYTES) throw new Error("原始圖片不可超過 25 MB");
+  if (!ACCEPTED_TYPES.has(file.type)) throw new Error(t("image.unsupportedType"));
+  if (file.size <= 0) throw new Error(t("image.empty"));
+  if (file.size > MAX_SOURCE_BYTES) throw new Error(t("image.sourceTooLarge"));
 }
 
 export function normalizeImageType(file: File): File {
@@ -55,7 +57,7 @@ export function normalizeImageType(file: File): File {
 function canvasBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error("瀏覽器無法建立壓縮圖片"))),
+      (blob) => (blob ? resolve(blob) : reject(new Error(t("image.compressFailed")))),
       "image/jpeg",
       quality,
     );
@@ -91,18 +93,17 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
       return {
         file: source,
         transformed: false,
-        warning: "此瀏覽器無法預覽 HEIC；將保留原檔交給 Gemini 辨識",
+        warning: t("image.heicPreviewWarning"),
       };
     }
-    if (HEIF_TYPES.has(source.type))
-      throw new Error("此瀏覽器無法壓縮大於 4 MB 的 HEIC，請改用 JPEG 或較小的圖片");
-    throw new Error("瀏覽器無法讀取這張圖片，請改用其他檔案");
+    if (HEIF_TYPES.has(source.type)) throw new Error(t("image.heicTooLarge"));
+    throw new Error(t("image.unreadable"));
   }
 
   try {
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d", { alpha: false });
-    if (!context) throw new Error("瀏覽器無法處理圖片");
+    if (!context) throw new Error(t("image.unprocessable"));
     let dimensions = targetDimensions(bitmap.width, bitmap.height);
     for (let attempt = 0; attempt < 4; attempt += 1) {
       canvas.width = dimensions.width;
@@ -127,7 +128,7 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
         Math.max(dimensions.width, dimensions.height) * 0.8,
       );
     }
-    throw new Error("壓縮後仍超過 4 MB，請靠近文字重新拍攝或裁切圖片");
+    throw new Error(t("image.stillTooLarge"));
   } finally {
     bitmap.close();
   }

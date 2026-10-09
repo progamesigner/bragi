@@ -1,4 +1,5 @@
 import { MAX_DRAFT_SEGMENTS } from "./draft-limits";
+import { t } from "./i18n";
 import type { OcrResponse } from "./schemas";
 
 export type Segment = OcrResponse["segments"][number] & {
@@ -54,7 +55,7 @@ export function splitAtCursor(
     throw new Error("請把游標放在完整字元之間再分割");
   const before = segment.text.slice(0, offset).trim();
   const after = segment.text.slice(offset).trim();
-  if (!before || !after) throw new Error("請先把游標放在段落中間再分割");
+  if (!before || !after) throw new Error(t("review.splitNeedsCursor"));
   return [
     ...segments.slice(0, index),
     withSpokenText({ ...segment, text: before }, undefined),

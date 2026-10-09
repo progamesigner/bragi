@@ -1,8 +1,9 @@
 // @refresh reload
 import { createHandler, StartServer } from "@solidjs/start/server";
+import { LOCALES } from "./lib/i18n/locales";
 
-// Applies the saved theme before first paint so a light-mode user never sees a dark flash.
-const bootstrap = `try{var t=localStorage.getItem("bragi-theme");document.documentElement.dataset.theme=t==="dark"||t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}catch(e){}`;
+// Applies the saved theme and language before first paint so nothing flashes.
+const bootstrap = `try{var d=document.documentElement,t=localStorage.getItem("bragi-theme"),l=localStorage.getItem("bragi-locale");d.dataset.theme=t==="dark"||t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";if(${JSON.stringify(LOCALES)}.indexOf(l)>=0)d.lang=l}catch(e){}`;
 
 export default createHandler(() => (
   <StartServer

@@ -1,44 +1,49 @@
-/** Gemini TTS prebuilt voices and their official character, translated for the picker. */
+import { t } from "./i18n";
+
+/** Gemini TTS prebuilt voices and their official character; the picker shows it translated. */
 export const VOICE_CATALOG = [
-  ["Zephyr", "明亮"],
-  ["Puck", "輕快"],
-  ["Charon", "資訊感"],
-  ["Kore", "堅定"],
-  ["Fenrir", "興奮"],
-  ["Leda", "年輕"],
-  ["Orus", "堅定"],
-  ["Aoede", "輕盈"],
-  ["Callirrhoe", "隨和"],
-  ["Autonoe", "明亮"],
-  ["Enceladus", "氣音"],
-  ["Iapetus", "清晰"],
-  ["Umbriel", "隨和"],
-  ["Algieba", "柔順"],
-  ["Despina", "柔順"],
-  ["Erinome", "清晰"],
-  ["Algenib", "沙啞"],
-  ["Rasalgethi", "資訊感"],
-  ["Laomedeia", "輕快"],
-  ["Achernar", "柔和"],
-  ["Alnilam", "堅定"],
-  ["Schedar", "平穩"],
-  ["Gacrux", "成熟"],
-  ["Pulcherrima", "直接"],
-  ["Achird", "友善"],
-  ["Zubenelgenubi", "隨興"],
-  ["Vindemiatrix", "溫和"],
-  ["Sadachbia", "活潑"],
-  ["Sadaltager", "博學"],
-  ["Sulafat", "溫暖"],
+  ["Zephyr", "bright"],
+  ["Puck", "upbeat"],
+  ["Charon", "informative"],
+  ["Kore", "firm"],
+  ["Fenrir", "excitable"],
+  ["Leda", "youthful"],
+  ["Orus", "firm"],
+  ["Aoede", "breezy"],
+  ["Callirrhoe", "easyGoing"],
+  ["Autonoe", "bright"],
+  ["Enceladus", "breathy"],
+  ["Iapetus", "clear"],
+  ["Umbriel", "easyGoing"],
+  ["Algieba", "smooth"],
+  ["Despina", "smooth"],
+  ["Erinome", "clear"],
+  ["Algenib", "gravelly"],
+  ["Rasalgethi", "informative"],
+  ["Laomedeia", "upbeat"],
+  ["Achernar", "soft"],
+  ["Alnilam", "firm"],
+  ["Schedar", "even"],
+  ["Gacrux", "mature"],
+  ["Pulcherrima", "forward"],
+  ["Achird", "friendly"],
+  ["Zubenelgenubi", "casual"],
+  ["Vindemiatrix", "gentle"],
+  ["Sadachbia", "lively"],
+  ["Sadaltager", "knowledgeable"],
+  ["Sulafat", "warm"],
 ] as const;
 
 export const DEFAULT_VOICE = "Kore";
 
-const traits = new Map<string, string>(VOICE_CATALOG);
+export type VoiceTrait = (typeof VOICE_CATALOG)[number][1];
+
+const traits = new Map<string, VoiceTrait>(VOICE_CATALOG);
 
 export function voiceLabel(voice: string): string {
   const trait = traits.get(voice);
-  return trait ? `${voice} · ${trait}` : voice;
+  return trait ? `${voice} · ${t(`voiceTrait.${trait}`)}` : voice;
 }
 
+/** Spoken content, so it stays in Chinese whatever the interface language. */
 export const VOICE_SAMPLE_TEXT = "夜色降臨，古老的城門在眾人面前緩緩開啟。";

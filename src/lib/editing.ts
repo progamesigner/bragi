@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { ttsRequestSchema } from "./schemas";
 
 export function textBudget(text: string) {
@@ -28,7 +29,7 @@ export function splitNarration(text: string): string[] {
     }
     current += unit;
     if (!textBudget(current).valid && current.trim())
-      throw new Error("文字含有無法朗讀的控制字元，請先移除");
+      throw new Error(t("review.controlCharacters"));
   }
   if (current) output.push(current);
   return output;
