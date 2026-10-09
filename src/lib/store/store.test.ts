@@ -9,7 +9,7 @@ import {
   setFontSize,
   setPlaybackRate,
 } from "./preferences";
-import { createWorkspace } from "./workspace";
+import { createWorkspace, draftLimits } from "./workspace";
 
 const draft = {
   detectedLanguage: "繁體中文",
@@ -116,5 +116,34 @@ describe("preference rules", () => {
     setFontSize("largest");
     expect(fontSize()).toBe("largest");
     setFontSize("normal");
+  });
+});
+
+describe("workspace validation", () => {
+  it("rejects an edit beyond the draft limits without touching content or history", () => {
+    const workspace = createWorkspace(draftLimits);
+    workspace.load(draft);
+    const tooMany = Array.from({ length: 51 }, (_, index) => ({
+      id: `s${index}`,
+      text: "段落",
+      suggestedToneHint: "",
+    }));
+    expect(() => workspace.edit(tooMany)).toThrow();
+    expect(workspace.segments).toHaveLength(2);
+    expect(workspace.canUndo()).toBe(false);
+  });
+
+  it("keeps the history position when undo would restore an invalid version", () => {
+    let strict = false;
+    const workspace = createWorkspace((content) => {
+      if (strict && content.segments.length < 2) throw new Error("too short");
+    });
+    workspace.load({ ...draft, segments: draft.segments.slice(0, 1) });
+    workspace.edit(draft.segments);
+    strict = true;
+    expect(() => workspace.undo()).toThrow("too short");
+    expect(workspace.segments).toHaveLength(2);
+    expect(workspace.canUndo()).toBe(true);
+    expect(workspace.canRedo()).toBe(false);
   });
 });

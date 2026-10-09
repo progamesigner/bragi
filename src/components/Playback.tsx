@@ -11,7 +11,7 @@ import {
   untrack,
 } from "solid-js";
 import { t } from "~/lib/i18n";
-import { initialPlaybackState, type PlaybackEvent, transitionPlayback } from "~/lib/playback";
+import { type PlaybackEvent, type PlaybackState, transitionPlayback } from "~/lib/playback";
 import type { SpeechRequest } from "~/lib/speech";
 import { requestCachedSpeech, speechCache } from "~/lib/speech-cache";
 import { openSpeechStream, PcmStreamPlayer } from "~/lib/speech-stream";
@@ -26,6 +26,7 @@ import {
   setKeepAwake,
   setPlaybackRate,
 } from "~/lib/store/preferences";
+import { workspace } from "~/lib/store/workspace";
 import { ScreenWakeLock } from "~/lib/wake-lock";
 import { pcmDurationMs, pcmToWav } from "~/lib/wav";
 import Button from "./ui/Button";
@@ -41,7 +42,12 @@ type PlaybackProps = {
 };
 
 export default function Playback(props: PlaybackProps) {
-  const [state, setState] = createSignal(initialPlaybackState);
+  // Resume on the segment the workspace remembers, so leaving playback does not lose the place.
+  const [state, setState] = createSignal<PlaybackState>({
+    index: untrack(workspace.currentSegment),
+    phase: "idle",
+  });
+  createEffect(() => workspace.setCurrentSegment(state().index));
   const [audioUrl, setAudioUrl] = createSignal<string>();
   const [duration, setDuration] = createSignal<number>();
   const [streaming, setStreaming] = createSignal(false);

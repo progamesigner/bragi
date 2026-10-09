@@ -1,5 +1,6 @@
 import { batch, createSignal } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
+import { serializeDraft } from "../draft";
 import { History } from "../editing";
 import type { PreparedImage } from "../image";
 import type { Segment } from "../state";
@@ -27,7 +28,19 @@ const EMPTY = snapshot({ segments: [] });
  * so routing between capture, review and playback keeps all of it. Every change goes through the
  * methods here so history and the dirty flag cannot drift from the segments.
  */
-export function createWorkspace() {
+/** Throws when content may not be kept, e.g. it would exceed the draft limits. */
+export type WorkspaceValidator = (content: WorkspaceContent) => void;
+
+/** The draft limits: anything the workspace holds must stay exportable and autosavable. */
+export const draftLimits: WorkspaceValidator = (content) => {
+  serializeDraft({
+    detectedLanguage: content.detectedLanguage ?? "未指定",
+    genreHint: content.genreHint?.trim() || undefined,
+    segments: content.segments,
+  });
+};
+
+export function createWorkspace(validate: WorkspaceValidator = () => {}) {
   const [segments, setSegments] = createStore<Segment[]>([]);
   const [image, setImage] = createSignal<PreparedImage>();
   const [detectedLanguage, setDetectedLanguage] = createSignal<string>();
@@ -99,8 +112,12 @@ export function createWorkspace() {
       });
     },
 
-    /** An edit; edits sharing a `group` within a short time undo together (typing). */
+    /**
+     * An edit; edits sharing a `group` within a short time undo together (typing). Throws, changing
+     * nothing, when the result fails validation.
+     */
     edit(next: Segment[], group?: string) {
+      validate({ ...content(), segments: next });
       history().commit(next, group);
       batch(() => {
         setHistory(history());
@@ -109,8 +126,16 @@ export function createWorkspace() {
       });
     },
 
+    /** Steps back; throws, changing nothing, when that version fails validation. */
     undo() {
+      if (!history().canUndo) return;
       const previous = history().undo();
+      try {
+        validate({ ...content(), segments: previous });
+      } catch (error) {
+        history().redo();
+        throw error;
+      }
       batch(() => {
         setHistory(history());
         setSegments(reconcile(previous));
@@ -118,8 +143,16 @@ export function createWorkspace() {
       });
     },
 
+    /** Steps forward; throws, changing nothing, when that version fails validation. */
     redo() {
+      if (!history().canRedo) return;
       const next = history().redo();
+      try {
+        validate({ ...content(), segments: next });
+      } catch (error) {
+        history().undo();
+        throw error;
+      }
       batch(() => {
         setHistory(history());
         setSegments(reconcile(next));
@@ -141,4 +174,4 @@ export function createWorkspace() {
 export type Workspace = ReturnType<typeof createWorkspace>;
 
 /** The app's single workspace. */
-export const workspace = createWorkspace();
+export const workspace = createWorkspace(draftLimits);

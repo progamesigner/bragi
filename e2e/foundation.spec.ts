@@ -179,3 +179,18 @@ for (const width of [320, 1280]) {
     expect(await overflow()).toBe(0);
   });
 }
+
+test("leaving playback keeps the draft, its history and the current segment", async ({ page }) => {
+  await mockSignedInApi(page);
+  await page.goto("/");
+  await recognize(page);
+  await page.getByLabel("朗讀語氣").first().fill("急促");
+  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await page.getByRole("button", { name: "下一段", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "第 2 段，共 2 段" })).toBeVisible();
+  await page.getByRole("button", { name: "返回校對" }).click();
+  await expect(page.getByLabel("朗讀語氣").first()).toHaveValue("急促");
+  await expect(page.getByRole("button", { name: "復原", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "開始逐段朗讀" }).click();
+  await expect(page.getByRole("heading", { name: "第 2 段，共 2 段" })).toBeVisible();
+});

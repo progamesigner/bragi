@@ -1,5 +1,4 @@
 import { batch, createEffect, createSignal, For, onCleanup, onMount, Show } from "solid-js";
-import { createStore, reconcile } from "solid-js/store";
 import Capture from "~/components/Capture";
 import Playback from "~/components/Playback";
 import Review from "~/components/Review";
@@ -14,13 +13,11 @@ import { readApiError } from "~/lib/api";
 import { DraftAutosave } from "~/lib/autosave";
 import { type Draft, MAX_DRAFT_BYTES, parseDraft, serializeDraft } from "~/lib/draft";
 import { graphemeCount, MAX_DRAFT_GENRE } from "~/lib/draft-limits";
-import { History } from "~/lib/editing";
 import { LOCALE_NAMES, LOCALES, type Locale, t } from "~/lib/i18n";
 import type { PreparedImage } from "~/lib/image";
 import { requireOnline } from "~/lib/network";
 import { ocrResponseSchema } from "~/lib/schemas";
 import { speechCache } from "~/lib/speech-cache";
-import type { Segment } from "~/lib/state";
 import { reportError, type StatusMessage, type StatusReporter } from "~/lib/status";
 import {
   type FontSize,
@@ -35,6 +32,7 @@ import {
   voice,
   availableVoices as voices,
 } from "~/lib/store/preferences";
+import { workspace as draftStore } from "~/lib/store/workspace";
 import { THEME_PREFERENCES, type ThemePreference } from "~/lib/theme";
 import { voiceLabel } from "~/lib/voices";
 import { commitCandidate, WorkspaceRevision } from "~/lib/workspace";
@@ -55,14 +53,11 @@ export default function Home() {
   const [autosaveReady, setAutosaveReady] = createSignal(false);
   const [savedDraft, setSavedDraft] = createSignal<Draft>();
   const [otp, setOtp] = createSignal("");
-  const [image, setImage] = createSignal<PreparedImage>();
   const [candidate, setCandidate] = createSignal<PreparedImage>();
   const [candidateActive, setCandidateActive] = createSignal(false);
   const [candidateGenre, setCandidateGenre] = createSignal("");
-  const [genreHint, setGenreHint] = createSignal("");
-  const [detectedLanguage, setDetectedLanguage] = createSignal<string>();
-  const [editHistory, setEditHistory] = createSignal(new History<Segment[]>([]));
-  const [segments, setSegments] = createStore<Segment[]>([]);
+  // The draft lives in the app-wide store so it survives leaving this screen.
+  const { image, genreHint, detectedLanguage, segments } = draftStore;
   const [status, setStatus] = createSignal<StatusMessage>({
     message: t("auth.unverified"),
     tone: "info",
@@ -100,16 +95,12 @@ export default function Home() {
     batch(() => {
       setRequestRevision({});
       speechCache.clear();
-      setImage(undefined);
+      draftStore.clear();
       setCandidate(undefined);
       setCandidateActive(false);
       setCandidateGenre("");
       setSavedDraft(undefined);
-      setDetectedLanguage(undefined);
-      setSegments(reconcile([]));
-      setEditHistory(new History<Segment[]>([]));
       setScreen("review");
-      setGenreHint("");
       setWorkspace({});
     });
   }
@@ -118,15 +109,12 @@ export default function Home() {
     batch(() => {
       setRequestRevision({});
       speechCache.clear();
-      setImage(prepared);
+      draftStore.load(draft);
+      draftStore.setImage(prepared);
       setCandidate(undefined);
       setCandidateActive(false);
-      setGenreHint(draft.genreHint ?? "");
       setCandidateGenre(draft.genreHint ?? "");
       setSavedDraft(undefined);
-      setSegments(reconcile(draft.segments));
-      setEditHistory(new History<Segment[]>(draft.segments));
-      setDetectedLanguage(draft.detectedLanguage);
       setScreen("review");
       // Recreate the view even when the new draft has the same detected language.
       setWorkspace({});
@@ -329,7 +317,7 @@ export default function Home() {
       else {
         if (detectedLanguage())
           serializeDraft({ ...currentDraft(), genreHint: value || undefined });
-        setGenreHint(value);
+        draftStore.setGenreHint(value);
         setCandidateGenre(value);
       }
     } catch (error) {
@@ -613,9 +601,6 @@ export default function Home() {
                 image={image()?.file}
                 genreHint={genreHint().trim() || undefined}
                 voice={voice()}
-                segments={segments}
-                setSegments={setSegments}
-                history={editHistory()}
                 onStartPlayback={() => {
                   setScreen("playback");
                   reportStatus(t("playback.ready"));

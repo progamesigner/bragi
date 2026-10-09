@@ -1,8 +1,7 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
-import { reconcile, type SetStoreFunction } from "solid-js/store";
 import { draftFileName, serializeDraft } from "~/lib/draft";
 import { MAX_DRAFT_SEGMENTS } from "~/lib/draft-limits";
-import { type History, splitNarration, textBudget } from "~/lib/editing";
+import { splitNarration, textBudget } from "~/lib/editing";
 import { t } from "~/lib/i18n";
 import {
   insertAfter,
@@ -14,6 +13,7 @@ import {
   withSpokenText,
 } from "~/lib/state";
 import type { StatusReporter } from "~/lib/status";
+import { workspace } from "~/lib/store/workspace";
 import SpeechPreview from "./SpeechPreview";
 import Button from "./ui/Button";
 import Select from "./ui/Select";
@@ -24,9 +24,6 @@ type ReviewProps = {
   image?: File;
   genreHint?: string;
   voice?: string;
-  segments: Segment[];
-  history: History<Segment[]>;
-  setSegments: SetStoreFunction<Segment[]>;
   onStartPlayback: () => void;
   onStatus: StatusReporter;
 };
@@ -48,35 +45,17 @@ export default function Review(props: ReviewProps) {
     onCleanup(() => URL.revokeObjectURL(url));
   });
   let heading!: HTMLHeadingElement;
-  const history = () => props.history;
-  const [historyVersion, setHistoryVersion] = createSignal(0);
-  const canUndo = () => {
-    historyVersion();
-    return history().canUndo;
-  };
-  const canRedo = () => {
-    historyVersion();
-    return history().canRedo;
-  };
   const restore = (redo = false) => {
-    const restored = redo ? history().redo() : history().undo();
     try {
-      serializeDraft({
-        detectedLanguage: props.detectedLanguage,
-        genreHint: props.genreHint,
-        segments: restored,
-      });
-      props.setSegments(reconcile(restored));
+      if (redo) workspace.redo();
+      else workspace.undo();
     } catch (error) {
-      if (redo) history().undo();
-      else history().redo();
       props.onStatus(error instanceof Error ? error.message : t("review.restoreFailed"), "error");
     }
-    setHistoryVersion((v) => v + 1);
   };
   const canStartPlayback = () =>
-    props.segments.length > 0 &&
-    props.segments.every(
+    workspace.segments.length > 0 &&
+    workspace.segments.every(
       (segment) => textBudget(segment.text).valid && textBudget(speechText(segment)).valid,
     );
 
@@ -84,28 +63,21 @@ export default function Review(props: ReviewProps) {
 
   function replaceSegments(segments: Segment[], group?: string) {
     try {
-      serializeDraft({
-        detectedLanguage: props.detectedLanguage,
-        genreHint: props.genreHint,
-        segments,
-      });
+      workspace.edit(segments, group);
+      return true;
     } catch (error) {
       props.onStatus(error instanceof Error ? error.message : t("review.editFailed"), "error");
       return false;
     }
-    history().commit(segments, group);
-    setHistoryVersion((v) => v + 1);
-    props.setSegments(reconcile(segments));
-    return true;
   }
 
   const canAdd = createMemo(() => {
-    if (props.segments.length >= MAX_DRAFT_SEGMENTS) return false;
+    if (workspace.segments.length >= MAX_DRAFT_SEGMENTS) return false;
     try {
       serializeDraft({
         detectedLanguage: props.detectedLanguage,
         genreHint: props.genreHint,
-        segments: insertAfter(props.segments, props.segments.length - 1),
+        segments: insertAfter(workspace.segments, workspace.segments.length - 1),
       });
       return true;
     } catch {
@@ -115,22 +87,22 @@ export default function Review(props: ReviewProps) {
 
   function edit(index: number, field: "text" | "suggestedToneHint", value: string) {
     return replaceSegments(
-      props.segments.map((segment, position) =>
+      workspace.segments.map((segment, position) =>
         position === index ? { ...segment, [field]: value } : { ...segment },
       ),
-      `${props.segments[index]?.id}:${field}`,
+      `${workspace.segments[index]?.id}:${field}`,
     );
   }
   function editSpokenText(index: number, value: string | undefined) {
     return replaceSegments(
-      props.segments.map((segment, position) =>
+      workspace.segments.map((segment, position) =>
         position === index ? withSpokenText(segment, value) : { ...segment },
       ),
-      value === undefined ? undefined : `${props.segments[index]?.id}:spokenText`,
+      value === undefined ? undefined : `${workspace.segments[index]?.id}:spokenText`,
     );
   }
   function autoSplit(index: number) {
-    const segment = props.segments[index];
+    const segment = workspace.segments[index];
     if (!segment) return;
     try {
       const parts = splitNarration(segment.text);
@@ -139,14 +111,14 @@ export default function Review(props: ReviewProps) {
         return;
       }
       const changed = replaceSegments([
-        ...props.segments.slice(0, index),
+        ...workspace.segments.slice(0, index),
         ...parts.map((text, i) =>
           withSpokenText(
             { ...segment, id: i === 0 ? segment.id : `segment-${crypto.randomUUID()}`, text },
             undefined,
           ),
         ),
-        ...props.segments.slice(index + 1),
+        ...workspace.segments.slice(index + 1),
       ]);
       if (!changed) return;
       props.onStatus(
@@ -164,7 +136,7 @@ export default function Review(props: ReviewProps) {
           serializeDraft({
             detectedLanguage: props.detectedLanguage,
             genreHint: props.genreHint,
-            segments: props.segments,
+            segments: workspace.segments,
           }),
         ],
         { type: "application/json" },
@@ -176,6 +148,7 @@ export default function Review(props: ReviewProps) {
       link.click();
       // Give the browser time to start the download before releasing the file.
       setTimeout(() => URL.revokeObjectURL(url), 1000);
+      workspace.markSaved();
       props.onStatus(t("draft.exported"), "success");
     } catch (error) {
       props.onStatus(error instanceof Error ? error.message : t("draft.exportFailed"), "error");
@@ -185,9 +158,9 @@ export default function Review(props: ReviewProps) {
     return segment.spokenText === undefined ? "" : t("review.spokenReset");
   }
   function split(index: number, editor: HTMLTextAreaElement) {
-    const segment = props.segments[index];
+    const segment = workspace.segments[index];
     try {
-      if (!replaceSegments(splitAtCursor(props.segments, index, editor.selectionStart))) return;
+      if (!replaceSegments(splitAtCursor(workspace.segments, index, editor.selectionStart))) return;
       props.onStatus(
         `${t("review.splitDone")}${segment ? spokenCorrectionNotice(segment) : ""}`,
         "success",
@@ -208,7 +181,7 @@ export default function Review(props: ReviewProps) {
           <p>
             {t("review.summary", {
               language: props.detectedLanguage,
-              n: props.segments.length,
+              n: workspace.segments.length,
             })}
           </p>
         </div>
@@ -216,7 +189,7 @@ export default function Review(props: ReviewProps) {
           <Button
             variant="secondary"
             size="compact"
-            disabled={!canUndo()}
+            disabled={!workspace.canUndo()}
             onClick={() => restore()}
           >
             {t("review.undo")}
@@ -224,7 +197,7 @@ export default function Review(props: ReviewProps) {
           <Button
             variant="secondary"
             size="compact"
-            disabled={!canRedo()}
+            disabled={!workspace.canRedo()}
             onClick={() => restore(true)}
           >
             {t("review.redo")}
@@ -234,7 +207,9 @@ export default function Review(props: ReviewProps) {
             size="compact"
             disabled={!canAdd()}
             aria-describedby={!canAdd() ? "draft-limit-note" : undefined}
-            onClick={() => replaceSegments(insertAfter(props.segments, props.segments.length - 1))}
+            onClick={() =>
+              replaceSegments(insertAfter(workspace.segments, workspace.segments.length - 1))
+            }
           >
             {t("review.addSegment")}
           </Button>
@@ -290,11 +265,11 @@ export default function Review(props: ReviewProps) {
         )}
       </Show>
       <Show
-        when={props.segments.length > 0}
+        when={workspace.segments.length > 0}
         fallback={<p class="empty-state">{t("review.empty")}</p>}
       >
         <ol class="review-segments">
-          <For each={props.segments}>
+          <For each={workspace.segments}>
             {(segment, index) => {
               let editor!: HTMLTextAreaElement;
               return (
@@ -411,18 +386,18 @@ export default function Review(props: ReviewProps) {
                       disabled={!canAdd()}
                       aria-describedby={!canAdd() ? "draft-limit-note" : undefined}
                       onClick={() => {
-                        if (!replaceSegments(insertAfter(props.segments, index()))) return;
+                        if (!replaceSegments(insertAfter(workspace.segments, index()))) return;
                         props.onStatus(t("review.inserted"), "success");
                       }}
                     >
                       {t("review.insertBelow")}
                     </Button>
-                    <Show when={index() < props.segments.length - 1}>
+                    <Show when={index() < workspace.segments.length - 1}>
                       <Button
                         variant="secondary"
                         size="compact"
                         onClick={() => {
-                          if (!replaceSegments(mergeWithNext(props.segments, index()))) return;
+                          if (!replaceSegments(mergeWithNext(workspace.segments, index()))) return;
                           props.onStatus(t("review.merged"), "success");
                         }}
                       >
@@ -433,7 +408,7 @@ export default function Review(props: ReviewProps) {
                       variant="danger"
                       size="compact"
                       onClick={() => {
-                        replaceSegments(removeSegment(props.segments, index()));
+                        replaceSegments(removeSegment(workspace.segments, index()));
                         props.onStatus(t("review.deleted"), "success");
                       }}
                       aria-label={t("review.deleteLabel", { n: index() + 1 })}
