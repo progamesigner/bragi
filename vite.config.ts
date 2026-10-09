@@ -9,10 +9,27 @@ export default defineConfig(({ mode }) => ({
   resolve:
     mode === "test"
       ? {
-          alias: {
-            "server-only": fileURLToPath(new URL("./test/server-only.ts", import.meta.url)),
-            "~": fileURLToPath(new URL("./src", import.meta.url)),
-          },
+          alias: [
+            {
+              find: "server-only",
+              replacement: fileURLToPath(new URL("./test/server-only.ts", import.meta.url)),
+            },
+            { find: "~", replacement: fileURLToPath(new URL("./src", import.meta.url)) },
+            // Node would load Solid's server build, whose stores and effects are inert; the client
+            // stores are tested with the build browsers run.
+            {
+              find: /^solid-js$/,
+              replacement: fileURLToPath(
+                new URL("./node_modules/solid-js/dist/solid.js", import.meta.url),
+              ),
+            },
+            {
+              find: /^solid-js\/store$/,
+              replacement: fileURLToPath(
+                new URL("./node_modules/solid-js/store/dist/store.js", import.meta.url),
+              ),
+            },
+          ],
         }
       : undefined,
   test: {
