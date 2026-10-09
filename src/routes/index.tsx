@@ -218,7 +218,7 @@ export default function Home() {
     cancelOperation();
     const operation = operations.begin();
     try {
-      if (file.size > MAX_DRAFT_BYTES) throw new Error("草稿檔案超過 200 KB，無法匯入");
+      if (file.size > MAX_DRAFT_BYTES) throw new Error(t("draft.tooLargeToImport"));
       const source = await file.text();
       if (!operation.current()) return;
       const draft = parseDraft(source);

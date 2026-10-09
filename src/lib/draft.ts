@@ -10,6 +10,7 @@ import {
   MAX_DRAFT_TONE,
   utf8Bytes,
 } from "./draft-limits";
+import { t } from "./i18n";
 import type { Segment } from "./state";
 
 export { MAX_DRAFT_BYTES } from "./draft-limits";
@@ -62,20 +63,19 @@ export function serializeDraft(draft: Draft, now = new Date()): string {
       spokenText,
     })),
   };
-  if (!draftSchema.safeParse(payload).success) throw new Error("草稿超過段數或欄位限制，無法儲存");
+  if (!draftSchema.safeParse(payload).success) throw new Error(t("draft.overLimits"));
   const source = `${JSON.stringify(payload, null, 2)}\n`;
-  if (utf8Bytes(source) > MAX_DRAFT_BYTES)
-    throw new Error("草稿檔案超過 200 KB，請縮短文字或刪除段落");
+  if (utf8Bytes(source) > MAX_DRAFT_BYTES) throw new Error(t("draft.tooLargeToSave"));
   return source;
 }
 
 export function parseDraft(source: string): Draft {
-  if (utf8Bytes(source) > MAX_DRAFT_BYTES) throw new Error("草稿檔案超過 200 KB，無法匯入");
+  if (utf8Bytes(source) > MAX_DRAFT_BYTES) throw new Error(t("draft.tooLargeToImport"));
   let value: unknown;
   try {
     value = JSON.parse(source);
   } catch {
-    throw new Error("草稿檔案不是有效的 JSON");
+    throw new Error(t("draft.invalidJson"));
   }
   if (
     typeof value === "object" &&
@@ -85,9 +85,9 @@ export function parseDraft(source: string): Draft {
     "version" in value &&
     value.version !== DRAFT_VERSION
   )
-    throw new Error("不支援這個版本的 Bragi 草稿");
+    throw new Error(t("draft.unsupportedVersion"));
   const parsed = draftSchema.safeParse(value);
-  if (!parsed.success) throw new Error("草稿檔案格式不正確，或含有不允許的欄位");
+  if (!parsed.success) throw new Error(t("draft.invalidFormat"));
   const { detectedLanguage, genreHint, segments } = parsed.data;
   const draft = { detectedLanguage, genreHint: genreHint || undefined, segments };
   // Compact imports must also fit the canonical export, so every accepted draft is recoverable.
