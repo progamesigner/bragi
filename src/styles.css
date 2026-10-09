@@ -830,15 +830,6 @@ label.file-button:has(+ input:focus-visible) {
     padding: 20px;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto;
-    transition: none;
-    animation: none;
-  }
-}
 [data-font-size="large"] {
   --reading-font-size: clamp(1.7rem, 6vw, 2.5rem);
 }
@@ -1323,5 +1314,24 @@ input.invalid {
   }
   .wordmark-large {
     font-size: 1.875rem;
+  }
+}
+
+/* Keep this after the component rules, with enough specificity to stop their animations. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto;
+    transition: none;
+    animation: none;
+  }
+  .sheet[open],
+  .sheet.sheet-side[open],
+  .spinner {
+    animation: none;
+  }
+  .switch::after {
+    transition: none;
   }
 }
