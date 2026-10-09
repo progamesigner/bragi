@@ -361,3 +361,74 @@ test("a focused toast action stays available and expires when another edit chang
     "後來的修改不能被舊操作復原。",
   );
 });
+
+test.describe("screen transitions", () => {
+  async function recordFades(page: import("@playwright/test").Page) {
+    await page.addInitScript(() => {
+      const log: { keyframes: string[]; duration: number; at: number }[] = [];
+      const focus: { tag: string; at: number }[] = [];
+      Object.assign(window, { fadeLog: log, focusLog: focus });
+      const animate = Element.prototype.animate;
+      Element.prototype.animate = function (keyframes, options) {
+        if (this.id === "main")
+          log.push({
+            keyframes: (keyframes as Keyframe[]).flatMap((frame) => Object.keys(frame)),
+            duration: typeof options === "number" ? options : Number(options?.duration),
+            at: performance.now(),
+          });
+        return animate.call(this, keyframes, options);
+      };
+      addEventListener("focusin", (event) =>
+        focus.push({ tag: (event.target as Element).tagName, at: performance.now() }),
+      );
+    });
+  }
+  const fades = (page: import("@playwright/test").Page) =>
+    page.evaluate(
+      () => (window as unknown as { fadeLog: { keyframes: string[]; duration: number }[] }).fadeLog,
+    );
+
+  test("moving between steps fades the screen in briefly without delaying focus", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await recordFades(page);
+    await mockSignedInApi(page);
+    await page.goto("/");
+    expect(await fades(page)).toEqual([]);
+    await recognize(page);
+    await goToStep(page, "朗讀");
+    await expect(page.getByRole("heading", { name: "第 1 段，共 2 段" })).toBeFocused();
+    await page.goBack();
+    await expect(page).toHaveURL(/\/review$/);
+    const log = await fades(page);
+    expect(log).toHaveLength(3);
+    for (const fade of log) {
+      expect(fade.keyframes.every((property) => property === "opacity")).toBe(true);
+      expect(fade.duration).toBeLessThanOrEqual(200);
+    }
+    // Headings take focus while the fade is still running, not after it.
+    const { fadeLog, focusLog } = await page.evaluate(() => {
+      const logs = window as unknown as {
+        fadeLog: { at: number; duration: number }[];
+        focusLog: { tag: string; at: number }[];
+      };
+      return { fadeLog: logs.fadeLog, focusLog: logs.focusLog };
+    });
+    for (const fade of fadeLog.slice(0, 2)) {
+      const heading = focusLog.find((entry) => entry.tag === "H1" && entry.at >= fade.at - 50);
+      expect(heading?.at).toBeLessThan(fade.at + fade.duration);
+    }
+  });
+
+  test("reduced motion turns screen fades off", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await recordFades(page);
+    await mockSignedInApi(page);
+    await page.goto("/");
+    await recognize(page);
+    await goToStep(page, "朗讀");
+    await expect(page.getByRole("heading", { name: "第 1 段，共 2 段" })).toBeFocused();
+    expect(await fades(page)).toEqual([]);
+  });
+});
