@@ -22,7 +22,19 @@ import { ocrResponseSchema } from "~/lib/schemas";
 import { speechCache } from "~/lib/speech-cache";
 import type { Segment } from "~/lib/state";
 import { reportError, type StatusMessage, type StatusReporter } from "~/lib/status";
-import { locale, setLocale, setThemePreference, themePreference } from "~/lib/store/preferences";
+import {
+  type FontSize,
+  fontSize,
+  locale,
+  offerVoices,
+  setFontSize,
+  setLocale,
+  setThemePreference,
+  setVoice,
+  themePreference,
+  voice,
+  availableVoices as voices,
+} from "~/lib/store/preferences";
 import { THEME_PREFERENCES, type ThemePreference } from "~/lib/theme";
 import { voiceLabel } from "~/lib/voices";
 import { commitCandidate, WorkspaceRevision } from "~/lib/workspace";
@@ -34,9 +46,6 @@ type UploadTarget = {
 };
 
 export default function Home() {
-  const [voice, setVoice] = createSignal<string>();
-  const [voices, setVoices] = createSignal<string[]>([]);
-  const [fontSize, setFontSize] = createSignal("normal");
   const [online, setOnline] = createSignal(true);
   const [workspace, setWorkspace] = createSignal({});
   const [requestRevision, setRequestRevision] = createSignal({});
@@ -75,14 +84,6 @@ export default function Home() {
     if (!autosaveReady() || !detectedLanguage()) return;
     autosave.schedule(currentDraft());
   });
-
-  function restoreVoice(available: string[]) {
-    setVoices(available);
-    try {
-      const saved = localStorage.getItem("bragi-voice");
-      setVoice(saved && available.includes(saved) ? saved : undefined);
-    } catch {}
-  }
 
   const reportStatus: StatusReporter = (message, tone = "info", details) => {
     setStatus({ message, tone, details });
@@ -136,10 +137,6 @@ export default function Home() {
   onMount(() => {
     setSavedDraft(autosave.load());
     setAutosaveReady(true);
-    try {
-      const saved = localStorage.getItem("bragi-font-size");
-      if (saved && ["normal", "large", "largest"].includes(saved)) setFontSize(saved);
-    } catch {}
     const update = () => setOnline(navigator.onLine);
     update();
     window.addEventListener("online", update);
@@ -164,7 +161,7 @@ export default function Home() {
       const session = (await response.json()) as { authenticated: boolean; voices?: string[] };
       if (!operation.current()) return;
       setAuthenticated(session.authenticated);
-      restoreVoice(session.voices ?? []);
+      offerVoices(session.voices ?? []);
       reportStatus(
         t(session.authenticated ? "auth.restored" : "auth.prompt"),
         session.authenticated ? "success" : "info",
@@ -191,7 +188,7 @@ export default function Home() {
       if (!response.ok) throw await readApiError(response, t("auth.failed"));
       const session = await response.json();
       if (!operation.current()) return;
-      restoreVoice(session.voices ?? []);
+      offerVoices(session.voices ?? []);
       setAuthenticated(true);
       setOtp("");
       reportStatus(t("auth.success"), "success");
@@ -433,12 +430,7 @@ export default function Home() {
         <Select
           id="font-size"
           value={fontSize()}
-          onChange={(event) => {
-            setFontSize(event.currentTarget.value);
-            try {
-              localStorage.setItem("bragi-font-size", fontSize());
-            } catch {}
-          }}
+          onChange={(event) => setFontSize(event.currentTarget.value as FontSize)}
         >
           <option value="normal">{t("fontSize.normal")}</option>
           <option value="large">{t("fontSize.large")}</option>
@@ -453,9 +445,6 @@ export default function Home() {
             onChange={(event) => {
               speechCache.clear();
               setVoice(event.currentTarget.value || undefined);
-              try {
-                localStorage.setItem("bragi-voice", voice() ?? "");
-              } catch {}
             }}
           >
             <option value="">

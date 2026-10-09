@@ -17,12 +17,19 @@ import { requestCachedSpeech, speechCache } from "~/lib/speech-cache";
 import { openSpeechStream, PcmStreamPlayer } from "~/lib/speech-stream";
 import { type Segment, speechText } from "~/lib/state";
 import { reportError, type StatusReporter } from "~/lib/status";
+import {
+  keepAwake,
+  PLAYBACK_RATES,
+  type PlaybackRate,
+  playbackRate,
+  playbackSettings,
+  setKeepAwake,
+  setPlaybackRate,
+} from "~/lib/store/preferences";
 import { ScreenWakeLock } from "~/lib/wake-lock";
 import { pcmDurationMs, pcmToWav } from "~/lib/wav";
 import Button from "./ui/Button";
 import Select from "./ui/Select";
-
-const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5];
 
 type PlaybackProps = {
   requestRevision?: object;
@@ -38,9 +45,9 @@ export default function Playback(props: PlaybackProps) {
   const [audioUrl, setAudioUrl] = createSignal<string>();
   const [duration, setDuration] = createSignal<number>();
   const [streaming, setStreaming] = createSignal(false);
-  const [rate, setRate] = createSignal(1);
   const wakeLock = new ScreenWakeLock();
-  const [keepAwake, setKeepAwake] = createSignal(false);
+  // Whether the lock is actually held; the saved preference survives a failed request.
+  const [awake, setAwake] = createSignal(false);
   const [prefetch, setPrefetch] = createSignal<{
     index: number;
     phase: "loading" | "ready";
@@ -185,7 +192,7 @@ export default function Playback(props: PlaybackProps) {
     }
     // Web Audio sources cannot keep their pitch when sped up, so other speeds use complete WAV
     // audio with the browser's native pitch preservation instead of progressive streaming.
-    if (typeof AudioContext === "undefined" || rate() !== 1) {
+    if (typeof AudioContext === "undefined" || playbackSettings().rate !== 1) {
       await prepare(event);
       return;
     }
@@ -277,7 +284,7 @@ export default function Playback(props: PlaybackProps) {
     }
     if (!audioUrl()) return;
     try {
-      audio.playbackRate = rate();
+      audio.playbackRate = playbackSettings().rate;
       audio.preservesPitch = true;
       await audio.play();
     } catch {
@@ -325,34 +332,30 @@ export default function Playback(props: PlaybackProps) {
   });
   async function changeKeepAwake(enabled: boolean) {
     setKeepAwake(enabled);
-    try {
-      localStorage.setItem("bragi-keep-awake", String(enabled));
-    } catch {}
+    setAwake(enabled);
     try {
       if (enabled) await wakeLock.enable();
       else await wakeLock.disable();
     } catch {
-      if (disposed || keepAwake() !== enabled) return;
-      setKeepAwake(false);
+      if (disposed || awake() !== enabled) return;
+      setAwake(false);
       props.onStatus(t("playback.keepAwakeFailed"), "error");
     }
   }
 
   onMount(() => {
     heading.focus();
-    try {
-      if (wakeLock.supported && localStorage.getItem("bragi-keep-awake") === "true") {
-        setKeepAwake(true);
-        wakeLock.enable().catch(() => {
-          if (!disposed) setKeepAwake(false);
-        });
-      }
-    } catch {}
+    if (wakeLock.supported && keepAwake()) {
+      setAwake(true);
+      wakeLock.enable().catch(() => {
+        if (!disposed) setAwake(false);
+      });
+    }
     const visibilityChanged = () => {
       if (document.visibilityState !== "visible") return;
       if (streamContext) handleInterruption(streamContext);
       wakeLock.reacquire().catch(() => {
-        if (!disposed) setKeepAwake(false);
+        if (!disposed) setAwake(false);
       });
     };
     document.addEventListener("visibilitychange", visibilityChanged);
@@ -388,22 +391,22 @@ export default function Playback(props: PlaybackProps) {
       <label for="playback-rate">{t("playback.rate")}</label>
       <Select
         id="playback-rate"
-        value={rate()}
+        value={playbackRate()}
         disabled={streaming() || state().phase === "playing" || state().phase === "loading"}
-        onChange={(event) => setRate(Number(event.currentTarget.value))}
+        onChange={(event) => setPlaybackRate(Number(event.currentTarget.value) as PlaybackRate)}
       >
         <For each={PLAYBACK_RATES}>
           {(value) => <option value={value}>{t("playback.rateOption", { n: value })}</option>}
         </For>
       </Select>
-      <Show when={rate() !== 1}>
+      <Show when={playbackRate() !== 1}>
         <p class="rate-note">{t("playback.rateNote")}</p>
       </Show>
       <Show when={wakeLock.supported}>
         <label class="checkbox">
           <input
             type="checkbox"
-            checked={keepAwake()}
+            checked={awake()}
             onChange={(event) => void changeKeepAwake(event.currentTarget.checked)}
           />
           {t("playback.keepAwake")}
@@ -441,7 +444,7 @@ export default function Playback(props: PlaybackProps) {
               src={url()}
               aria-label={t("playback.audio", { n: state().index + 1 })}
               onPlay={() => {
-                audio.playbackRate = rate();
+                audio.playbackRate = playbackSettings().rate;
                 audio.preservesPitch = true;
                 dispatch({ type: "play" });
                 void prefetchNext();
@@ -475,7 +478,7 @@ export default function Playback(props: PlaybackProps) {
               {t(
                 state().index > 0
                   ? "playback.playThis"
-                  : rate() === 1
+                  : playbackRate() === 1
                     ? "playback.streamFirst"
                     : "playback.playFirst",
               )}
