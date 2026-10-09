@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SpeechAudio } from "../speech";
 import { SpeechCache } from "../speech-cache";
-import { AudioController, type AudioSnapshot, type SpeechAdapter } from "./controller";
+import {
+  AudioController,
+  type AudioControllerOptions,
+  type AudioSnapshot,
+  type SpeechAdapter,
+} from "./controller";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -114,7 +119,7 @@ const asset: SpeechAudio = {
 };
 const request = { owner: "main" as const, segmentKey: "a:v1", input: { text: "first" }, rate: 1 };
 const controllers: AudioController[] = [];
-function setup() {
+function setup(overrides: Partial<AudioControllerOptions> = {}) {
   const cache = new SpeechCache();
   const audio = new FakeAudio();
   const context = new FakeContext();
@@ -153,6 +158,7 @@ function setup() {
       return vi.fn();
     },
     timeoutMs: 100,
+    ...overrides,
   });
   controllers.push(controller);
   const states: AudioSnapshot[] = [];
@@ -654,4 +660,56 @@ it("resolves resume at a fully consumed PCM tail without getting stuck loading",
   await work;
   await s.controller.resume("main");
   expect(s.controller.snapshot).toMatchObject({ phase: "ended", activeOutputs: 0 });
+});
+
+it("keeps voice samples out of the narration cache while reusing the single output", async () => {
+  const samples = new SpeechCache(8);
+  const sampleSpeech: SpeechAdapter = {
+    get: (input) => samples.get(input),
+    set: (input, audio) => samples.set(input, audio),
+    request: vi.fn(async (input) => {
+      samples.set(input, asset);
+      return asset;
+    }),
+    stream: vi.fn(),
+  };
+  const s = setup({ sampleSpeech });
+  for (const text of ["first", "second", "third"]) s.cache.set({ text, voice: "A" }, asset);
+  await s.controller.play({ ...request, rate: 1.5 });
+  const sample = {
+    owner: "sample" as const,
+    segmentKey: "sample:B",
+    input: { text: "Sample", voice: "B" },
+    rate: 1,
+  };
+  await s.controller.play(sample);
+  expect(s.controller.snapshot).toMatchObject({
+    owner: "sample",
+    phase: "playing",
+    activeOutputs: 1,
+  });
+  expect(sampleSpeech.request).toHaveBeenCalledTimes(1);
+  expect(sampleSpeech.request).toHaveBeenCalledWith(
+    sample.input,
+    expect.any(AbortSignal),
+    "preview",
+  );
+  for (const text of ["first", "second", "third"])
+    expect(s.cache.get({ text, voice: "A" })).toBe(asset);
+  await s.controller.play({ ...request, rate: 1.5 });
+  expect(s.speech.request).not.toHaveBeenCalled();
+  await s.controller.play(sample);
+  expect(sampleSpeech.request).toHaveBeenCalledTimes(1);
+});
+
+it("reports a native resource failure as a recoverable controller error", async () => {
+  const s = setup({
+    createContext: () => {
+      throw new Error("Context unavailable");
+    },
+  });
+  await s.controller.play(request);
+  expect(s.controller.snapshot.phase).toBe("error");
+  expect(s.controller.snapshot.error).toEqual(new Error("Context unavailable"));
+  expect(s.controller.snapshot.activeOutputs).toBe(0);
 });

@@ -1,5 +1,5 @@
-import type { SpeechAudio, SpeechPurpose, SpeechRequest } from "../speech";
-import { requestCachedSpeech, speechCache, speechCacheKey } from "../speech-cache";
+import { requestSpeech, type SpeechAudio, type SpeechPurpose, type SpeechRequest } from "../speech";
+import { requestCachedSpeech, SpeechCache, speechCache, speechCacheKey } from "../speech-cache";
 import { openSpeechStream, PcmStreamPlayer, type SpeechPcmStream } from "../speech-stream";
 import { playbackSettings, subscribePlaybackSettings } from "../store/preferences";
 import { pcmDurationMs, pcmToWav } from "../wav";
@@ -39,6 +39,7 @@ export type PlayInput = {
   segmentKey: string;
   input: SpeechRequest;
   rate?: number;
+  captionsLabel?: string;
 };
 export type PreloadInput = {
   segmentKey: string;
@@ -62,6 +63,7 @@ export const cachedSpeechAdapter: SpeechAdapter = {
 };
 export type AudioControllerOptions = {
   speech?: SpeechAdapter;
+  sampleSpeech?: SpeechAdapter;
   createAudio?: () => HTMLAudioElement;
   createContext?: () => AudioContext;
   urls?: Pick<typeof URL, "createObjectURL" | "revokeObjectURL">;
@@ -74,6 +76,7 @@ type Intent = {
   generation: number;
   abort: AbortController;
   input: SpeechRequest;
+  speech: SpeechAdapter;
   revision?: number;
   reader?: SpeechPcmStream["reader"];
   chunks: Uint8Array[];
@@ -112,6 +115,7 @@ function pcmBytes(chunks: Uint8Array[], length: number): Uint8Array<ArrayBuffer>
 export class AudioController {
   readonly #speech: SpeechAdapter;
   readonly #options: AudioControllerOptions;
+  readonly #sampleSpeech: SpeechAdapter;
   readonly #urls: Pick<typeof URL, "createObjectURL" | "revokeObjectURL">;
   readonly #document?: Document;
   readonly #listeners = new Set<(snapshot: AudioSnapshot) => void>();
@@ -139,6 +143,20 @@ export class AudioController {
 
   constructor(options: AudioControllerOptions = {}) {
     this.#options = options;
+    const samples = new SpeechCache(8);
+    this.#sampleSpeech = options.sampleSpeech ??
+      options.speech ?? {
+        get: (input) => samples.get(input),
+        set: (input, audio) => samples.set(input, audio),
+        request: async (input, signal) => {
+          const audio = await requestSpeech(input, signal);
+          signal.throwIfAborted();
+          samples.set(input, audio);
+          return audio;
+        },
+        stream: openSpeechStream,
+        revision: () => samples.revision,
+      };
     this.#speech = options.speech ?? cachedSpeechAdapter;
     this.#urls = options.urls ?? URL;
     this.#document =
@@ -325,11 +343,13 @@ export class AudioController {
     if (this.#disposed) throw new Error("Audio controller is disposed");
     const settings = this.#settings(request.input, request.rate);
     this.#clearIntent(); // Claim and stop previous output before the first await.
+    const speech = request.owner === "sample" ? this.#sampleSpeech : this.#speech;
     const intent: Intent = {
       generation: this.#state.generation + 1,
       abort: new AbortController(),
       input: settings.input,
-      revision: this.#speech.revision?.(),
+      speech,
+      revision: speech.revision?.(),
       chunks: [],
       bytes: 0,
       sampleRate: 24_000,
@@ -355,15 +375,31 @@ export class AudioController {
       underflow: false,
       activeOutputs: 0,
     };
-    const permission = this.#unlock(intent, true);
-    intent.permission = permission;
-    this.#publish();
     try {
-      const cached = this.#speech.get(intent.input);
+      const permission = this.#unlock(intent, true);
+      // Captions live on the one native element; custom controls and visible transcripts live in UI.
+      const audio = this.#audio;
+      if (audio && this.#document?.createElement) {
+        audio.replaceChildren();
+        const track = this.#document.createElement("track");
+        track.kind = "captions";
+        track.label = request.captionsLabel ?? "";
+        track.default = true;
+        track.src = `data:text/vtt;charset=utf-8,${encodeURIComponent(`WEBVTT\n\n00:00.000 --> 24:00:00.000\n${intent.input.text.replaceAll("-->", "→")}`)}`;
+        audio.append(track);
+      }
+      intent.permission = permission;
+      this.#publish();
+      const cached = intent.speech.get(intent.input);
       const pending = [...this.#preloads].some((preload) => preload.key === this.#state.cacheKey);
-      if (cached || settings.rate !== 1 || pending) {
+      if (cached || request.owner !== "main" || settings.rate !== 1 || pending) {
         intent.asset =
-          cached ?? (await this.#speech.request(intent.input, intent.abort.signal, "playback"));
+          cached ??
+          (await intent.speech.request(
+            intent.input,
+            intent.abort.signal,
+            request.owner === "review" || request.owner === "sample" ? "preview" : "playback",
+          ));
         if (!this.#current(intent)) return;
         intent.eof = true;
         await intent.permission;
@@ -373,7 +409,7 @@ export class AudioController {
       } else {
         await permission;
         if (!this.#current(intent)) return;
-        const stream = await this.#speech.stream(intent.input, intent.abort.signal);
+        const stream = await intent.speech.stream(intent.input, intent.abort.signal);
         if (!this.#current(intent)) {
           void stream.reader.cancel().catch(() => undefined);
           return;
@@ -403,8 +439,8 @@ export class AudioController {
           durationMs: pcmDurationMs(pcm.byteLength, intent.sampleRate),
         };
         intent.eof = true;
-        if (this.#speech.revision?.() === intent.revision)
-          this.#speech.set(intent.input, intent.asset);
+        if (intent.speech.revision?.() === intent.revision)
+          intent.speech.set(intent.input, intent.asset);
         this.#loadWav(intent); // Metadata only: PCM keeps playing until an explicit seek.
         if (intent.player) this.#waitForPcmEnd(intent, intent.player);
         else if (intent.wanted && intent.permitted) this.#startPcm(intent);

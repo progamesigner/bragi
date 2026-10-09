@@ -6,6 +6,8 @@ const baseURL = `http://127.0.0.1:${port}`;
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
+  // Keep audio clocks and screenshot timing reliable on shared runners.
+  workers: 4,
   forbidOnly: !!process.env.CI,
   retries: 0,
   reporter: "list",

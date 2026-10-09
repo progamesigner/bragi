@@ -5,6 +5,7 @@ import {
   clearContent,
   closeSettings,
   goToStep,
+  observeAudio,
   openSettings,
   signIn,
   signOut,
@@ -19,6 +20,7 @@ const image = Buffer.from(
 );
 
 async function mockApi(page: Page, authenticated = false) {
+  await observeAudio(page);
   const calls: { path: string; body: unknown }[] = [];
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -102,19 +104,24 @@ test("font preference persists and selected voice follows both speech paths", as
   await closeSettings(page);
   await recognize(page);
   await page.getByRole("button", { name: /^進入朗讀/ }).click();
-  await page.getByRole("button", { name: "串流播放第一段" }).click();
-  await expect(page.getByRole("button", { name: "重播本段" })).toBeVisible();
+  await page.getByRole("button", { name: "播放此段" }).click();
+  await expect(page.getByRole("button", { name: "播放下一段", exact: true })).toBeVisible();
   settings = await openSettings(page);
   await settings.getByRole("radio", { name: "1.5 倍" }).check();
   await closeSettings(page);
-  await expect(page.getByText("語速 1.5 倍")).toBeVisible();
-  await page.getByRole("button", { name: /^(繼續|準備)下一段$/ }).click();
-  await page.getByRole("button", { name: "播放第 2 段", exact: true }).click();
+  await expect(page.getByText(/下一次播放套用：.*1.5 倍/)).toBeVisible();
+  await page.getByRole("button", { name: "播放下一段" }).click();
   await expect
-    .poll(() => page.locator("audio").evaluate((audio: HTMLAudioElement) => audio.playbackRate))
+    .poll(() =>
+      page.evaluate(
+        () => (window as unknown as { bragiAudio: HTMLAudioElement }).bragiAudio.playbackRate,
+      ),
+    )
     .toBe(1.5);
   expect(
-    await page.locator("audio").evaluate((audio: HTMLAudioElement) => audio.preservesPitch),
+    await page.evaluate(
+      () => (window as unknown as { bragiAudio: HTMLAudioElement }).bragiAudio.preservesPitch,
+    ),
   ).toBe(true);
   expect(calls.find((call) => call.path === "/api/tts-stream")?.body).toMatchObject({
     voice: "Puck",
@@ -157,8 +164,8 @@ test("workspace clear confirms, stops playback and preserves login", async ({ pa
   await closeSettings(page);
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(2);
   await page.getByRole("button", { name: /^進入朗讀/ }).click();
-  await page.getByRole("button", { name: "串流播放第一段" }).click();
-  await expect(page.getByRole("button", { name: "重播本段" })).toBeVisible();
+  await page.getByRole("button", { name: "播放此段" }).click();
+  await expect(page.getByRole("button", { name: "播放下一段", exact: true })).toBeVisible();
   await clearContent(page, "proceed");
   await expect(toast(page)).toContainText("已清除目前內容");
   await expect(page).toHaveURL(/\/$/);
@@ -209,12 +216,11 @@ test("login, upload, edit, stream, manually continue, return and sign out", asyn
   await recognize(page);
   await page.getByLabel("口白文字", { exact: true }).first().fill("修改後的故事。");
   await page.getByRole("button", { name: /^進入朗讀/ }).click();
-  await page.getByRole("button", { name: "串流播放第一段" }).click();
-  await expect(page.getByRole("button", { name: "重播本段" })).toBeVisible();
+  await page.getByRole("button", { name: "播放此段" }).click();
+  await expect(page.getByRole("button", { name: "播放下一段", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "第 1 段，共 2 段" })).toBeVisible();
-  await page.getByRole("button", { name: /^(繼續|準備)下一段$/ }).click();
-  await page.getByRole("button", { name: "播放第 2 段", exact: true }).click();
-  await expect(page.getByText("全部段落播放完成。", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "播放下一段" }).click();
+  await expect(page.getByRole("button", { name: "完成朗讀", exact: true })).toBeVisible();
   expect(calls.find((call) => call.path === "/api/tts-stream")?.body).toEqual({
     text: "修改後的故事。",
     toneHint: "平靜",
@@ -306,11 +312,11 @@ test("speech failure recovers only after manual retry", async ({ page }) => {
   await page.goto("/");
   await recognize(page);
   await page.getByRole("button", { name: /^進入朗讀/ }).click();
-  await page.getByRole("button", { name: "串流播放第一段" }).click();
+  await page.getByRole("button", { name: "播放此段" }).click();
   await expect(page.getByRole("button", { name: "重試本段" })).toBeVisible();
   expect(attempts).toBe(1);
   await page.getByRole("button", { name: "重試本段" }).click();
-  await expect(page.getByRole("button", { name: "重播本段" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "播放下一段", exact: true })).toBeVisible();
   expect(attempts).toBe(2);
 });
 
@@ -358,15 +364,17 @@ test("spoken corrections change synthesis without changing the transcript", asyn
   await expect(page.getByRole("button", { name: /需處理 →$/ })).toBeEnabled();
   await spoken.fill("故事，開始。");
   await page.getByRole("button", { name: "產生試聽" }).first().click();
-  await expect(page.getByLabel("段落試聽")).toBeVisible();
+  await expect(page.getByLabel("段落試聽").getByRole("slider")).toBeEnabled();
   expect(calls.find((c) => c.path === "/api/tts")?.body).toMatchObject({ text: "故事，開始。" });
   await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue("故事開始。");
 
   await page.getByRole("button", { name: /^進入朗讀/ }).click();
   await expect(page.locator(".playback-script")).toContainText("故事開始。");
+  await expect(page.locator(".playback-correction")).not.toHaveAttribute("open");
+  await page.getByText("此段使用發音修正").click();
   await expect(page.locator(".playback-script")).toContainText("朗讀文字：故事，開始。");
-  await page.getByRole("button", { name: "串流播放第一段" }).click();
-  await expect(page.getByRole("button", { name: "播放第 1 段" })).toBeVisible();
+  await page.getByRole("button", { name: "播放此段" }).click();
+  await expect(page.getByRole("button", { name: "播放下一段", exact: true })).toBeVisible();
   // The preview already cached the corrected audio, so playback must reuse it.
   expect(calls.filter((c) => c.path === "/api/tts-stream")).toHaveLength(0);
 
@@ -374,8 +382,8 @@ test("spoken corrections change synthesis without changing the transcript", asyn
   await page.getByRole("button", { name: "改回朗讀口白文字" }).click();
   await expect(page.getByLabel("朗讀文字（只影響語音）")).toHaveCount(0);
   await page.getByRole("button", { name: /^進入朗讀/ }).click();
-  await page.getByRole("button", { name: "串流播放第一段" }).click();
-  await expect(page.getByRole("button", { name: "重播本段" })).toBeVisible();
+  await page.getByRole("button", { name: "播放此段" }).click();
+  await expect(page.getByRole("button", { name: "播放下一段", exact: true })).toBeVisible();
   expect(calls.find((c) => c.path === "/api/tts-stream")?.body).toMatchObject({
     text: "故事開始。",
   });
@@ -460,7 +468,7 @@ test("streamed playback recovers after the system suspends audio", async ({ page
   await page.goto("/");
   await recognize(page);
   await page.getByRole("button", { name: /^進入朗讀/ }).click();
-  await page.getByRole("button", { name: "串流播放第一段" }).click();
+  await page.getByRole("button", { name: "播放此段" }).click();
   await expect(page.getByRole("button", { name: "暫停" })).toBeVisible();
 
   await page.evaluate(() =>
@@ -545,13 +553,18 @@ test("non-1× speeds skip streaming and keep the original pitch", async ({ page 
   await settings.getByRole("radio", { name: "0.75 倍" }).check();
   await expect(settings.getByText("非 1 倍速會先產生整段音訊再播放")).toBeVisible();
   await closeSettings(page);
-  await page.getByRole("button", { name: "播放第一段" }).click();
-  await page.getByRole("button", { name: "播放第 1 段", exact: true }).click();
+  await page.getByRole("button", { name: "播放此段" }).click();
   await expect
-    .poll(() => page.locator("audio").evaluate((audio: HTMLAudioElement) => audio.playbackRate))
+    .poll(() =>
+      page.evaluate(
+        () => (window as unknown as { bragiAudio: HTMLAudioElement }).bragiAudio.playbackRate,
+      ),
+    )
     .toBe(0.75);
   expect(
-    await page.locator("audio").evaluate((audio: HTMLAudioElement) => audio.preservesPitch),
+    await page.evaluate(
+      () => (window as unknown as { bragiAudio: HTMLAudioElement }).bragiAudio.preservesPitch,
+    ),
   ).toBe(true);
   expect(calls.filter((call) => call.path === "/api/tts-stream")).toHaveLength(0);
   expect(calls.filter((call) => call.path === "/api/tts").length).toBeGreaterThan(0);
@@ -565,7 +578,7 @@ test("voice picker labels voices, samples them and remembers the choice", async 
   await expect(picker.locator("option")).toHaveText(["預設聲音（Kore · 堅定）", "Puck · 輕快"]);
 
   await page.getByRole("button", { name: "試聽這個聲音" }).click();
-  await expect(page.getByLabel("聲音試聽")).toBeVisible();
+  await expect(page.getByLabel("聲音試聽", { exact: true }).getByRole("slider")).toBeEnabled();
   expect(calls.filter((c) => c.path === "/api/tts").at(-1)?.body).toMatchObject({
     voice: "Kore",
     text: "夜色降臨，古老的城門在眾人面前緩緩開啟。",
@@ -574,7 +587,7 @@ test("voice picker labels voices, samples them and remembers the choice", async 
   await picker.selectOption("Puck");
   await expect(page.getByLabel("聲音試聽")).toHaveCount(0);
   await page.getByRole("button", { name: "試聽這個聲音" }).click();
-  await expect(page.getByLabel("聲音試聽")).toBeVisible();
+  await expect(page.getByLabel("聲音試聽", { exact: true }).getByRole("slider")).toBeEnabled();
   expect(calls.filter((c) => c.path === "/api/tts").at(-1)?.body).toMatchObject({ voice: "Puck" });
 
   // Returning to a voice that was already sampled reuses its audio.
@@ -628,16 +641,18 @@ test("reading presets preserve the normal editor size and secondary spoken hiera
       .locator(".playback-script p")
       .first()
       .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+    await page.locator(".playback-correction summary").click();
     const spoken = await page
-      .locator(".playback-script p.spoken-text")
+      .locator(".playback-correction p")
       .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
     scriptSizes.push(script);
     spokenSizes.push(spoken);
     expect(spoken).toBeLessThan(script);
-    expect(spoken / script).toBeCloseTo(2 / 3, 4);
+    expect(spoken).toBe(14);
+    await page.locator(".playback-correction summary").click();
   }
-  expect(spokenSizes[0]).toBeCloseTo(14.4);
-  for (const sizes of [scriptSizes, spokenSizes]) {
+  expect(spokenSizes).toEqual([14, 14, 14]);
+  for (const sizes of [scriptSizes]) {
     expect(sizes[1]).toBeGreaterThan(sizes[0] ?? 0);
     expect(sizes[2]).toBeGreaterThan(sizes[1] ?? 0);
   }
@@ -1084,30 +1099,19 @@ for (const mode of ["playback", "stream"] as const) {
       await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
       await expect.poll(() => ocrPending).toBe(true);
       await goToStep(page, "朗讀");
-      if (mode === "stream") {
-        await page.getByRole("button", { name: "串流播放第一段" }).click();
-        // A previous run may already have cached the complete WAV.
-        const ready = page.getByRole("button", { name: "播放第 1 段", exact: true });
-        await expect(
-          page.getByRole("button", { name: "暫停", exact: true }).or(ready),
-        ).toBeVisible();
-        if (await ready.isVisible()) {
-          await page
-            .getByLabel("第 1 段朗讀", { exact: true })
-            .evaluate((audio: HTMLAudioElement) =>
-              Object.assign(window, { originalAudio: audio, originalStream: undefined }),
-            );
-          await ready.click();
-        }
-        await expect(page.getByRole("button", { name: "暫停", exact: true })).toBeVisible();
-      } else {
-        await page.getByRole("button", { name: /^播放(第一段|此段)$/ }).click();
-        const audio = page.getByLabel("第 1 段朗讀", { exact: true });
-        await audio.evaluate(async (element: HTMLAudioElement) => {
-          Object.assign(window, { originalAudio: element });
-          await element.play();
-        });
-      }
+      await page.getByRole("button", { name: "播放此段", exact: true }).click();
+      await expect(page.getByRole("button", { name: "暫停", exact: true })).toBeVisible();
+      await page.evaluate(() => {
+        const host = window as unknown as {
+          bragiAudio: HTMLAudioElement;
+          originalAudio?: HTMLAudioElement;
+          originalStream?: AudioContext;
+        };
+        host.originalAudio = host.bragiAudio;
+        // At EOF the native element holds metadata while PCM still plays. A running PCM
+        // context remains the source; a later cache hit uses the retained native element.
+        if (!host.bragiAudio.paused) host.originalStream = undefined;
+      });
     };
     const paused = () =>
       mode === "stream"

@@ -138,7 +138,7 @@ for (const api of ["ocr", "tts-stream"]) {
       await page.getByRole("button", { name: /^(辨識文字|重新辨識)$/ }).click();
     } else {
       await goToStep(page, "朗讀");
-      await page.getByRole("button", { name: "串流播放第一段" }).click();
+      await page.getByRole("button", { name: "播放此段" }).click();
     }
     const path = page.url();
     await expect(page.getByRole("alert")).toHaveCount(1);
@@ -238,23 +238,19 @@ test("settings trial pauses narration, stops on close and cancels a pending tria
   await page.goto("/");
   await recognize(page);
   await goToStep(page, "朗讀");
-  await page.getByRole("button", { name: "串流播放第一段" }).click();
+  await page.getByRole("button", { name: "播放此段" }).click();
   await expect(page.getByRole("button", { name: "暫停", exact: true })).toBeVisible();
   const settings = await openSettings(page);
   await settings.getByRole("button", { name: "試聽這個聲音" }).click();
-  const sample = settings.getByLabel("聲音試聽", { exact: true });
-  await expect(sample).toBeVisible();
-  await sample.evaluate(async (audio: HTMLAudioElement) => {
-    Object.assign(window, { sampleAudio: audio });
-    await audio.play();
-  });
+  await expect(settings.getByLabel("聲音試聽", { exact: true }).getByRole("slider")).toBeEnabled();
   await closeSettings(page);
   expect(
     await page.evaluate(
-      () => (window as unknown as { sampleAudio: HTMLAudioElement }).sampleAudio.paused,
+      () => (window as unknown as { bragiAudio: HTMLAudioElement }).bragiAudio.paused,
     ),
   ).toBe(true);
-  await expect(page.getByRole("button", { name: "繼續播放", exact: true })).toBeVisible();
+  // A new owner stops the old intent. Starting main again is an explicit playback action.
+  await expect(page.getByRole("button", { name: "播放此段", exact: true })).toBeVisible();
   await openSettings(page);
   await settings.getByLabel("朗讀聲音").selectOption("Puck");
   await page.route("**/api/tts", (route) =>

@@ -22,6 +22,7 @@ export default function TopNav(props: { onSettings: () => void }) {
   const app = useApp();
   const location = useLocation();
   const current = () => location.pathname as AppPath;
+  const activeStep = () => (current() === "/finished" ? "/play" : current());
   const parent = () => (current() === "/" && app.recognitionBusy() ? "/" : PARENT_PATH[current()]);
 
   /** Why a step cannot be opened yet, or nothing when it can. */
@@ -80,7 +81,7 @@ export default function TopNav(props: { onSettings: () => void }) {
                   <a
                     class="step"
                     href={step.path}
-                    aria-current={current() === step.path ? "step" : undefined}
+                    aria-current={activeStep() === step.path ? "step" : undefined}
                     onClick={(event) => follow(event, step.path)}
                   >
                     {t(step.label)}

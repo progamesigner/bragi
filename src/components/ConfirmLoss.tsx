@@ -20,6 +20,12 @@ const TEXT: Record<
     proceed: "loss.replaceProceed",
     continue: "loss.replaceContinue",
   },
+  nextStory: {
+    title: "loss.nextStoryTitle",
+    body: "loss.nextStoryBody",
+    proceed: "loss.nextStoryProceed",
+    continue: "loss.nextStoryContinue",
+  },
   clear: {
     title: "loss.clearTitle",
     body: "loss.clearBody",

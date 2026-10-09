@@ -6,9 +6,7 @@ it("keeps the normal editor size and scales secondary speech text below narratio
   expect(css).toMatch(/\.app \{\s*--reading-font-size:/);
   expect(css).toMatch(/\.playback-script p \{[^}]*font-size: var\(--reading-font-size\)/);
   expect(css).toMatch(/\.review-segment textarea \{\s*font-size: inherit;/);
-  expect(css).toMatch(
-    /\.playback-script p\.spoken-text \{[^}]*font-size: calc\(var\(--reading-font-size\) \* 2 \/ 3\)/,
-  );
+  expect(css).toMatch(/\.playback-script \.playback-correction p \{[^}]*font-size: 0\.875rem/);
   expect(css).toContain('[data-font-size="large"] .review-segment textarea,');
   expect(css).toContain(
     '[data-font-size="largest"] .review-segment textarea {\n  font-size: var(--reading-font-size);',

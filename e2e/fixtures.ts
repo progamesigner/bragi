@@ -23,6 +23,7 @@ export const segments = [
 
 /** A deterministic API, signed in unless asked otherwise; nothing reaches a real provider. */
 export async function mockSignedInApi(page: Page, { authenticated = true } = {}) {
+  await observeAudio(page);
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -143,4 +144,17 @@ export function draftFile(text: string, name = "draft.json") {
       }),
     ),
   };
+}
+
+/** Observe the app's one off-DOM native element without creating another sound source. */
+export async function observeAudio(page: Page) {
+  await page.addInitScript(() => {
+    const Original = window.Audio;
+    window.Audio = class extends Original {
+      constructor(src?: string) {
+        super(src);
+        Object.assign(window, { bragiAudio: this });
+      }
+    };
+  });
 }

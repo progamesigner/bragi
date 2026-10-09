@@ -1,27 +1,34 @@
 import {
   createEffect,
+  createMemo,
   createSignal,
   For,
-  Match,
   on,
   onCleanup,
   onMount,
   Show,
-  Switch,
   untrack,
 } from "solid-js";
-import { type AudioClaim, claimAudio } from "~/lib/audio-focus";
+import { useApp } from "~/lib/app-controller";
+import type { AudioSnapshot } from "~/lib/audio/controller";
+import { audioTime, createAudioSession } from "~/lib/audio/session";
 import { t } from "~/lib/i18n";
-import { type PlaybackEvent, type PlaybackState, transitionPlayback } from "~/lib/playback";
+import { describeError } from "~/lib/network";
+import {
+  type PlaybackEvent,
+  type PlaybackState,
+  playbackSegment,
+  transitionPlayback,
+} from "~/lib/playback";
+import { playbackAction, playbackShortcut } from "~/lib/playback-ui";
 import type { SpeechRequest } from "~/lib/speech";
-import { requestCachedSpeech, speechCache } from "~/lib/speech-cache";
-import { openSpeechStream, PcmStreamPlayer } from "~/lib/speech-stream";
-import { type Segment, speechText } from "~/lib/state";
-import { reportError, type StatusMessage, type StatusReporter } from "~/lib/status";
-import { keepAwake, playbackRate, playbackSettings } from "~/lib/store/preferences";
+import type { Segment } from "~/lib/state";
+import { speechText } from "~/lib/state";
+import type { StatusMessage } from "~/lib/status";
+import { availableVoices, keepAwake, playbackRate, voice } from "~/lib/store/preferences";
 import { workspace } from "~/lib/store/workspace";
+import { voiceLabel } from "~/lib/voices";
 import { ScreenWakeLock } from "~/lib/wake-lock";
-import { pcmDurationMs, pcmToWav } from "~/lib/wav";
 import Button from "./ui/Button";
 import InlineStatus from "./ui/InlineStatus";
 
@@ -32,519 +39,447 @@ type PlaybackProps = {
   voice?: string;
   onBack: () => void;
   onSettings: () => void;
+  onFinished: () => void;
 };
 
 export default function Playback(props: PlaybackProps) {
-  // Resume on the segment the workspace remembers, so leaving playback does not lose the place.
+  const app = useApp();
+  const identities = () =>
+    props.segments.map((segment) => playbackSegment(segment, props.genreHint));
   const [state, setState] = createSignal<PlaybackState>({
     index: untrack(workspace.currentSegment),
     phase: "idle",
+    played: untrack(workspace.played),
   });
-  createEffect(() => workspace.setCurrentSegment(state().index));
-  const [audioUrl, setAudioUrl] = createSignal<string>();
-  const [duration, setDuration] = createSignal<number>();
-  const [streaming, setStreaming] = createSignal(false);
-  const wakeLock = new ScreenWakeLock();
-  // Progress and errors stay next to the controls; nothing here goes to the app-wide toast.
-  const [status, setStatus] = createSignal<StatusMessage>();
-  const report: StatusReporter = (message, tone = "info", details) =>
-    setStatus({ message, tone, details });
-  let claim: AudioClaim | undefined;
+  const [notice, setNotice] = createSignal<StatusMessage>();
   const [prefetch, setPrefetch] = createSignal<{
-    index: number;
-    phase: "loading" | "ready";
+    key: string;
+    settings: string;
+    abort: AbortController;
   }>();
-  let audio!: HTMLAudioElement;
-  let heading!: HTMLHeadingElement;
-  let request: AbortController | undefined;
-  let prefetchRequest: AbortController | undefined;
-  let streamPlayer: PcmStreamPlayer | undefined;
-  let streamContext: AudioContext | undefined;
+  const wakeLock = new ScreenWakeLock();
   let disposed = false;
-
+  let heading!: HTMLHeadingElement;
+  let lastPhase = "";
+  const session = createAudioSession("main", reflect);
+  const snapshot = session.snapshot;
+  const phase = createMemo(() => state().phase);
+  const error = createMemo(() => snapshot().error);
   const segment = () => props.segments[state().index];
-
-  function speechInput(index: number): SpeechRequest | undefined {
-    const target = props.segments[index];
-    if (!target) return undefined;
+  const nextSegment = () => props.segments[state().index + 1];
+  const key = (index: number) => JSON.stringify(identities()[index]);
+  const input = (index: number): SpeechRequest => {
+    const entry = props.segments[index];
     return {
-      text: speechText(target),
+      text: entry ? speechText(entry) : "",
       voice: props.voice,
-      toneHint: target.suggestedToneHint || undefined,
+      toneHint: entry?.suggestedToneHint || undefined,
       genreHint: props.genreHint,
     };
-  }
-
+  };
   function dispatch(event: PlaybackEvent) {
-    setState((current) => transitionPlayback(current, event, props.segments.length));
+    setState((current) => transitionPlayback(current, event, props.segments.length, identities()));
   }
-
-  function captionsUrl() {
-    const current = segment();
-    const transcript = (current ? speechText(current) : "").replaceAll("-->", "→") ?? "";
-    return `data:text/vtt;charset=utf-8,${encodeURIComponent(`WEBVTT\n\n00:00.000 --> 01:00.000\n${transcript}`)}`;
+  function reflect(value: AudioSnapshot) {
+    const signature = `${value.generation}:${value.phase}:${value.segmentKey}`;
+    if (signature === lastPhase) return;
+    lastPhase = signature;
+    if (value.owner !== "main") {
+      if (untrack(phase) !== "idle") dispatch({ type: "stop" });
+      return;
+    }
+    if (value.segmentKey !== key(untrack(() => state().index))) return;
+    if (value.phase === "ended") {
+      // A retained PCM tail can already be at EOF when resume confirms completion.
+      dispatch({ type: "play" });
+      dispatch({ type: "ended" });
+      const identity = untrack(() => state().activeSegment);
+      if (
+        identity &&
+        untrack(() => state().played)?.some(
+          (entry) => entry.id === identity.id && entry.version === identity.version,
+        )
+      )
+        workspace.recordPlayback(identity, (value.duration ?? value.bufferedDuration) / value.rate);
+    } else {
+      const nextPhase = value.phase;
+      setState((current) => ({ ...current, phase: nextPhase, reason: value.reason }));
+    }
   }
+  createEffect(() => workspace.setCurrentSegment(state().index));
+  const settingsChanged = () =>
+    !!snapshot().input &&
+    (snapshot().input?.voice !== voice() || snapshot().rate !== playbackRate());
+  const status = createMemo<StatusMessage | undefined>(() => {
+    if (phase() === "error")
+      return { ...describeError(error(), t("playback.failed")), tone: "error" };
+    if (phase() === "blocked") return { message: t("playback.blocked"), tone: "error" };
+    if (phase() === "interrupted")
+      return {
+        message: t(
+          snapshot().reason === "visibility"
+            ? "playback.visibilityInterrupted"
+            : "playback.interrupted",
+        ),
+        tone: "error",
+      };
+    if (phase() === "loading") return { message: t("playback.preparing"), tone: "info" };
+    if (phase() === "complete")
+      return {
+        message:
+          workspace.played().length === props.segments.length
+            ? t("playback.allDone")
+            : t("playback.reachedEnd", { n: props.segments.length - workspace.played().length }),
+        tone: "success",
+      };
+    return notice();
+  });
+  const played = (index: number) =>
+    workspace
+      .played()
+      .some(
+        (entry) =>
+          entry.id === identities()[index]?.id && entry.version === identities()[index]?.version,
+      );
+  const prepared = (index: number) => {
+    snapshot();
+    voice();
+    playbackRate();
+    return (
+      typeof window !== "undefined" &&
+      session.controller().isPrepared({ segmentKey: key(index), input: input(index) })
+    );
+  };
+  const preparing = (index: number) =>
+    (state().index === index && phase() === "loading") || prefetch()?.key === key(index);
+  const badge = (index: number) =>
+    t(
+      played(index)
+        ? "playback.played"
+        : preparing(index)
+          ? "playback.preparingBadge"
+          : prepared(index)
+            ? "playback.prepared"
+            : "playback.unprepared",
+    );
 
-  function clearAudio() {
-    audio?.pause();
-    streamPlayer?.stop();
-    streamPlayer = undefined;
-    if (streamContext) void streamContext.close();
-    streamContext = undefined;
-    setStreaming(false);
-    const url = untrack(audioUrl);
-    if (url) URL.revokeObjectURL(url);
-    setAudioUrl(undefined);
-    setDuration(undefined);
+  function cancelPreload() {
+    prefetch()?.abort.abort();
+    setPrefetch(undefined);
   }
-
+  function navigate(index: number) {
+    if (index < 0 || index >= props.segments.length) return;
+    session.controller().stop("main");
+    cancelPreload();
+    setNotice(undefined);
+    dispatch({ type: "navigate", index });
+  }
+  function start(index = state().index) {
+    session.controller().stop("main");
+    setNotice(undefined);
+    dispatch({ type: "navigate", index });
+    dispatch({ type: "start" });
+    // Direct gesture call: never await synthesis before asking the controller to play.
+    void session
+      .controller()
+      .play({
+        owner: "main",
+        segmentKey: key(index),
+        input: input(index),
+        captionsLabel: t("audio.captions"),
+      })
+      .catch((failure) => {
+        if (disposed) return;
+        setNotice({ ...describeError(failure, t("playback.failed")), tone: "error" });
+        dispatch({ type: "fail", message: t("playback.failed") });
+      });
+    // play() subscribes to an in-flight WAV synchronously, before this preload releases its
+    // subscription. Cancelling it earlier would abort the shared request and synthesize twice.
+    cancelPreload();
+  }
+  function primary() {
+    switch (phase()) {
+      case "loading":
+        return;
+      case "playing":
+        session.controller().pause("main");
+        return;
+      case "paused":
+      case "blocked":
+      case "interrupted":
+        void session.controller().resume("main");
+        return;
+      case "waiting":
+        start(state().index + 1);
+        return;
+      case "complete":
+        props.onFinished();
+        return;
+      default:
+        start();
+    }
+  }
+  function cancel() {
+    session.controller().stop("main");
+    cancelPreload();
+    setNotice(undefined);
+    dispatch({ type: "stop" });
+  }
   createEffect(
     on(
       () => props.requestRevision,
       () => {
-        request?.abort();
-        prefetchRequest?.abort();
-        clearAudio();
-        setPrefetch(undefined);
-        setState({ index: state().index, phase: "idle" });
+        cancel();
+        session.controller().invalidatePreloads();
       },
       { defer: true },
     ),
   );
-
-  function completePcm(chunks: Uint8Array[], byteLength: number): Uint8Array<ArrayBuffer> {
-    const pcm = new Uint8Array(new ArrayBuffer(byteLength));
-    let offset = 0;
-    for (const chunk of chunks) {
-      pcm.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
-    return pcm;
-  }
-
-  async function prepare(event: "start" | "next" | "retry") {
-    dispatch({ type: event });
-    const nextState = state();
-    if (nextState.phase !== "loading") return;
-
-    request?.abort();
-    request = new AbortController();
-    const controller = request;
-    clearAudio();
-    report(t("playback.preparingNumber", { n: nextState.index + 1 }));
-    try {
-      const input = speechInput(nextState.index);
-      if (!input) throw new Error(t("playback.missingSegment"));
-      const result = await requestCachedSpeech(input, request.signal, fetch, "playback");
-      controller.signal.throwIfAborted();
-      setAudioUrl(URL.createObjectURL(result.blob));
-      setDuration(result.durationMs);
-      dispatch({ type: "audio-ready" });
-      report(t("playback.readyNumber", { n: nextState.index + 1 }), "success");
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
-      if (controller.signal.aborted) return;
-      const message = reportError(report, error, t("playback.failed"));
-      dispatch({ type: "fail", message });
-    }
-  }
-
-  async function prefetchNext() {
-    const index = state().index + 1;
-    const input = speechInput(index);
-    if (!input) return;
-    if (prefetch()?.index === index) return;
-    if (speechCache.get(input)) {
-      setPrefetch({ index, phase: "ready" });
-      return;
-    }
-
-    prefetchRequest?.abort();
-    const controller = new AbortController();
-    prefetchRequest = controller;
-    setPrefetch({ index, phase: "loading" });
-    try {
-      await requestCachedSpeech(input, controller.signal, fetch, "prefetch");
-      if (prefetchRequest === controller && !controller.signal.aborted)
-        setPrefetch({ index, phase: "ready" });
-    } catch (error) {
-      if (prefetchRequest !== controller || controller.signal.aborted) return;
-      if (!(error instanceof DOMException && error.name === "AbortError")) setPrefetch(undefined);
-    }
-  }
-
-  async function streamAndPlay(event: "start" | "retry") {
-    dispatch({ type: event });
-    const nextState = state();
-    if (nextState.phase !== "loading") return;
-    const input = speechInput(nextState.index);
-    if (!input) return;
-
-    const cached = speechCache.get(input);
-    if (cached) {
-      console.info(
-        JSON.stringify({ event: "bragi.audio-cache", result: "hit", purpose: "playback" }),
-      );
-      clearAudio();
-      setAudioUrl(URL.createObjectURL(cached.blob));
-      setDuration(cached.durationMs);
-      dispatch({ type: "audio-ready" });
-      report(t("playback.readyNumber", { n: nextState.index + 1 }), "success");
-      return;
-    }
-    // Web Audio sources cannot keep their pitch when sped up, so other speeds use complete WAV
-    // audio with the browser's native pitch preservation instead of progressive streaming.
-    if (typeof AudioContext === "undefined" || playbackSettings().rate !== 1) {
-      await prepare(event);
-      return;
-    }
-
-    request?.abort();
-    const controller = new AbortController();
-    request = controller;
-    clearAudio();
-    const context = new AudioContext({ sampleRate: 24_000 });
-    context.addEventListener("statechange", () => handleInterruption(context));
-    const player = new PcmStreamPlayer(context, 24_000);
-    streamContext = context;
-    streamPlayer = player;
-    setStreaming(true);
-    report(t("playback.streamingNumber", { n: nextState.index + 1 }));
-
-    try {
-      await player.resume();
-      controller.signal.throwIfAborted();
-      const stream = await openSpeechStream(input, controller.signal);
-      const chunks: Uint8Array[] = [];
-      let byteLength = 0;
-      let started = false;
-      while (true) {
-        const result = await stream.reader.read();
-        controller.signal.throwIfAborted();
-        if (result.done) break;
-        const chunk = result.value.slice();
-        chunks.push(chunk);
-        byteLength += chunk.byteLength;
-        player.append(chunk);
-        if (!started) {
-          started = true;
-          dispatch({ type: "audio-ready" });
-          dispatch({ type: "play" });
-          report(t("playback.playingNumber", { n: nextState.index + 1 }));
-          void prefetchNext();
-        }
-      }
-
-      const pcm = completePcm(chunks, byteLength);
-      controller.signal.throwIfAborted();
-      const wav = pcmToWav(pcm);
-      const audio = {
-        blob: new Blob([wav], { type: "audio/wav" }),
-        durationMs: pcmDurationMs(pcm.byteLength),
-      };
-      speechCache.set(input, audio);
-      await player.finish();
-      if (request !== controller || controller.signal.aborted) return;
-
-      streamPlayer = undefined;
-      streamContext = undefined;
-      setStreaming(false);
-      await context.close();
-      if (request !== controller || controller.signal.aborted) return;
-      setAudioUrl(URL.createObjectURL(audio.blob));
-      setDuration(audio.durationMs);
-      dispatch({ type: "ended" });
-      report(
-        t(state().phase === "complete" ? "playback.complete" : "playback.segmentDone"),
-        "success",
-      );
-    } catch (error) {
-      player.stop();
-      await context.close().catch(() => undefined);
-      if (request !== controller || controller.signal.aborted) return;
-      streamPlayer = undefined;
-      streamContext = undefined;
-      setStreaming(false);
-      const message = reportError(report, error, t("playback.streamFailed"));
-      dispatch({ type: "fail", message });
-    }
-  }
-
-  async function play() {
-    const currentRequest = request;
-    if (streaming()) {
-      try {
-        await streamPlayer?.resume();
-        if (disposed || request !== currentRequest || currentRequest?.signal.aborted) return;
-        dispatch({ type: "play" });
-        report(t("playback.playingNumber", { n: state().index + 1 }));
-      } catch {
-        if (disposed || request !== currentRequest || currentRequest?.signal.aborted) return;
-        report(t("playback.blocked"), "error");
-      }
-      return;
-    }
-    if (!audioUrl()) return;
-    try {
-      audio.playbackRate = playbackSettings().rate;
-      audio.preservesPitch = true;
-      await audio.play();
-    } catch {
-      if (disposed || request !== currentRequest || currentRequest?.signal.aborted) return;
-      report(t("playback.blocked"), "error");
-    }
-  }
-
-  /** Phones suspend or interrupt Web Audio for calls, lock screens and other apps. */
-  function handleInterruption(context: AudioContext) {
-    if (context !== streamContext || context.state === "running" || context.state === "closed")
-      return;
-    if (state().phase !== "playing") return;
-    dispatch({ type: "pause" });
-    report(t("playback.interrupted"), "error");
-  }
-
-  async function pause() {
-    // Update state first so the resulting suspension is not reported as an interruption.
-    dispatch({ type: "pause" });
-    if (streaming()) await streamPlayer?.pause();
-    else audio.pause();
-  }
-
-  function leavePlayback() {
-    request?.abort();
-    prefetchRequest?.abort();
-    clearAudio();
-    props.onBack();
-  }
-
-  function navigate(index: number) {
-    request?.abort();
-    prefetchRequest?.abort();
-    clearAudio();
-    setPrefetch(undefined);
-    setState({ index, phase: "idle" });
-  }
-
-  onCleanup(() => {
-    disposed = true;
-    request?.abort();
-    prefetchRequest?.abort();
-    clearAudio();
-    claim?.release();
-  });
-
-  // Only one source sounds at a time: starting narration pauses a voice sample, and a sample
-  // (or anything else that claims audio) pauses narration.
   createEffect(
     on(
-      () => state().phase === "playing",
-      (playing) => {
-        claim?.release();
-        claim = playing ? claimAudio(() => void pause()) : undefined;
+      () => [state().index, phase(), voice(), playbackRate()],
+      () => {
+        if (!["playing", "waiting", "complete"].includes(phase()) || !nextSegment()) return;
+        const index = state().index + 1;
+        const settings = JSON.stringify([voice(), playbackRate()]);
+        const existing = untrack(prefetch);
+        if (
+          existing?.key === key(index) &&
+          existing.settings === settings &&
+          !existing.abort.signal.aborted
+        )
+          return;
+        cancelPreload();
+        if (prepared(index)) return;
+        const pending = { key: key(index), settings, abort: new AbortController() };
+        setPrefetch(pending);
+        void session
+          .controller()
+          .preload({ segmentKey: pending.key, input: input(index), signal: pending.abort.signal })
+          .catch(() => undefined)
+          .finally(() => {
+            if (!disposed && untrack(prefetch) === pending) setPrefetch(undefined);
+          });
       },
     ),
   );
-
-  // The preference can change from settings on any screen; only this screen holds the lock.
   createEffect(
     on(keepAwake, (enabled) => {
       if (!wakeLock.supported) return;
-      const change = enabled ? wakeLock.enable() : wakeLock.disable();
-      change.catch(() => {
-        if (!disposed && enabled) report(t("playback.keepAwakeFailed"), "error");
+      void (enabled ? wakeLock.enable() : wakeLock.disable()).catch(() => {
+        if (!disposed && enabled)
+          setNotice({ message: t("playback.keepAwakeFailed"), tone: "error" });
       });
     }),
   );
-
   onMount(() => {
     heading.focus();
-    const visibilityChanged = () => {
-      if (document.visibilityState !== "visible") return;
-      if (streamContext) handleInterruption(streamContext);
-      wakeLock.reacquire().catch(() => undefined);
+    const keyboard = (event: KeyboardEvent) => {
+      const action = playbackShortcut(
+        event,
+        app.settingsOpen() || !!app.pendingLoss() || !!document.querySelector("dialog[open]"),
+      );
+      if (!action) return;
+      event.preventDefault();
+      if (action === "toggle") primary();
+      else navigate(state().index + (action === "previous" ? -1 : 1));
     };
-    document.addEventListener("visibilitychange", visibilityChanged);
+    const visibility = () => {
+      if (document.visibilityState === "visible") void wakeLock.reacquire().catch(() => undefined);
+    };
+    document.addEventListener("keydown", keyboard);
+    document.addEventListener("visibilitychange", visibility);
     onCleanup(() => {
-      document.removeEventListener("visibilitychange", visibilityChanged);
-      void wakeLock.disable().catch(() => undefined);
+      document.removeEventListener("keydown", keyboard);
+      document.removeEventListener("visibilitychange", visibility);
     });
   });
-
+  onCleanup(() => {
+    disposed = true;
+    cancelPreload();
+    void wakeLock.disable().catch(() => undefined);
+  });
   return (
-    <section class="card playback" aria-labelledby="playback-heading">
-      <div class="playback-heading">
-        <div>
-          <p class="eyebrow">{t("playback.eyebrow")}</p>
-          <h1 ref={heading} id="playback-heading" tabindex="-1">
-            {t("playback.heading", { n: state().index + 1, total: props.segments.length })}
-          </h1>
-        </div>
-        <Button variant="secondary" size="compact" onClick={leavePlayback}>
-          {t("playback.back")}
-        </Button>
-      </div>
-
+    <section class="playback" aria-label={t("playback.eyebrow")} data-phase={phase()}>
       <div class="playback-layout">
-        <article class="playback-script" aria-live="polite">
-          <p>{segment()?.text}</p>
-          <Show when={segment()?.spokenText}>
-            {(spoken) => <p class="spoken-text">{t("playback.spokenText", { text: spoken() })}</p>}
-          </Show>
+        <article class="playback-script" aria-label={t("playback.transcript")}>
           <Show when={segment()?.suggestedToneHint}>
-            <span>{t("playback.tone", { tone: segment()?.suggestedToneHint ?? "" })}</span>
+            <span class="playback-tone">
+              {t("playback.tone", { tone: segment()?.suggestedToneHint ?? "" })}
+            </span>
+          </Show>
+          <p class="reading-text">{segment()?.text}</p>
+          <Show when={segment()?.spokenText} keyed>
+            {(text) => (
+              <details class="playback-correction">
+                <summary>{t("playback.correction")}</summary>
+                <p>{t("playback.spokenText", { text })}</p>
+              </details>
+            )}
+          </Show>
+          <Show when={nextSegment()}>
+            <p class="playback-next-preview">
+              {t("playback.nextPreview", { text: nextSegment()?.text.slice(0, 70) ?? "" })}
+            </p>
           </Show>
         </article>
         <aside class="playback-controls">
-          <ol class="playback-segments" aria-label={t("playback.segments")}>
-            <For each={props.segments}>
-              {(entry, index) => (
-                <li>
-                  <Button
-                    variant="ghost"
-                    wide
-                    aria-current={state().index === index() ? "true" : undefined}
-                    class="playback-segment-button"
-                    aria-label={t("playback.selectSegment", { n: index() + 1 })}
-                    onClick={() => navigate(index())}
-                  >
-                    <span>{index() + 1}</span>
-                    <span class="segment-excerpt">{entry.text}</span>
-                  </Button>
-                </li>
-              )}
-            </For>
-          </ol>
-          <div class="playback-rate">
-            <p>{t("playback.rateCurrent", { n: playbackRate() })}</p>
-            <Button variant="ghost" size="compact" onClick={props.onSettings}>
-              {t("playback.rateChange")}
-            </Button>
-          </div>
-          <nav class="playback-nav" aria-label={t("playback.segmentNav")}>
-            <Button
-              variant="secondary"
-              disabled={state().index === 0}
-              onClick={() => navigate(state().index - 1)}
-            >
-              {t("playback.previous")}
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={state().index >= props.segments.length - 1}
-              onClick={() => navigate(state().index + 1)}
-            >
-              {t("playback.next")}
-            </Button>
+          <nav class="playback-selector" aria-label={t("playback.segmentNav")}>
+            <h1 ref={heading} id="playback-heading" tabindex="-1" class="playback-position">
+              {t("playback.heading", { n: state().index + 1, total: props.segments.length })}
+            </h1>
+            <ul class="playback-legend">
+              <li data-state="played">{t("playback.played")}</li>
+              <li data-state="prepared">{t("playback.prepared")}</li>
+              <li data-state="preparing">{t("playback.preparingBadge")}</li>
+            </ul>
+            <ol class="playback-segments" aria-label={t("playback.segments")}>
+              <For each={props.segments}>
+                {(entry, index) => (
+                  <li>
+                    <Button
+                      variant="ghost"
+                      size="compact"
+                      aria-current={state().index === index() ? "true" : undefined}
+                      class="playback-segment-button"
+                      aria-label={`${t("playback.selectSegment", { n: index() + 1 })} · ${badge(index())}`}
+                      onClick={() => navigate(index())}
+                    >
+                      <span>{index() + 1}</span>
+                      <span class="segment-excerpt">{entry.text}</span>
+                      <span
+                        class="segment-dot"
+                        data-state={
+                          played(index())
+                            ? "played"
+                            : preparing(index())
+                              ? "preparing"
+                              : prepared(index())
+                                ? "prepared"
+                                : "unprepared"
+                        }
+                        aria-hidden="true"
+                      />
+                    </Button>
+                  </li>
+                )}
+              </For>
+            </ol>
           </nav>
-          <progress
-            aria-label={t("playback.progress")}
-            max={props.segments.length}
-            value={state().phase === "complete" ? props.segments.length : state().index}
-          />
-
-          <Show when={audioUrl()}>
-            {(url) => (
-              <div class="playback-audio">
-                <audio
-                  ref={audio}
-                  controls
-                  preload="metadata"
-                  src={url()}
-                  aria-label={t("playback.audio", { n: state().index + 1 })}
-                  onPlay={() => {
-                    audio.playbackRate = playbackSettings().rate;
-                    audio.preservesPitch = true;
-                    dispatch({ type: "play" });
-                    void prefetchNext();
-                  }}
-                  onPause={() => {
-                    if (!audio.ended) dispatch({ type: "pause" });
-                  }}
-                  onEnded={() => {
-                    dispatch({ type: "ended" });
-                    report(
-                      t(
-                        state().phase === "complete" ? "playback.complete" : "playback.segmentDone",
-                      ),
-                      "success",
-                    );
-                  }}
-                >
-                  <track kind="captions" src={captionsUrl()} label={t("audio.captions")} default />
-                </audio>
-                <Show when={duration()}>
-                  {(durationMs) => (
-                    <span>{t("common.seconds", { s: (durationMs() / 1000).toFixed(1) })}</span>
-                  )}
-                </Show>
-              </div>
-            )}
-          </Show>
-
-          <InlineStatus status={status()} class="playback-status" />
-          <div class="playback-actions">
-            <Switch>
-              <Match when={state().phase === "idle"}>
-                <Button onClick={() => streamAndPlay("start")}>
-                  {t(
-                    state().index > 0
-                      ? "playback.playThis"
-                      : playbackRate() === 1
-                        ? "playback.streamFirst"
-                        : "playback.playFirst",
-                  )}
-                </Button>
-              </Match>
-              <Match when={state().phase === "loading"}>
-                <Button disabled>{t("playback.generating")}</Button>
-              </Match>
-              <Match when={state().phase === "ready"}>
-                <Button onClick={play}>
-                  {streaming()
-                    ? t("playback.resume")
-                    : t("playback.playNumber", { n: state().index + 1 })}
-                </Button>
-              </Match>
-              <Match when={state().phase === "playing"}>
-                <Button onClick={pause}>{t("playback.pause")}</Button>
-              </Match>
-              <Match when={state().phase === "waiting"}>
-                <Show when={prefetch()?.index === state().index + 1}>
-                  <p class="prefetch-status">
-                    {t(
-                      prefetch()?.phase === "ready"
-                        ? "playback.nextReady"
-                        : "playback.nextPreparing",
-                    )}
-                  </p>
-                </Show>
-                <Button variant="secondary" onClick={play}>
-                  {t("playback.replay")}
-                </Button>
-                <Button onClick={() => prepare("next")}>
-                  {t(
-                    prefetch()?.phase === "ready"
-                      ? "playback.continueNext"
-                      : "playback.prepareNext",
-                  )}
-                </Button>
-              </Match>
-              <Match when={state().phase === "error"}>
-                <Button onClick={() => streamAndPlay("retry")}>{t("playback.retry")}</Button>
-              </Match>
-              <Match when={state().phase === "complete"}>
-                <p>{t("playback.allDone")}</p>
+          <div class="playback-transport">
+            <div class="playback-status-slot">
+              <Show
+                when={status()}
+                fallback={
+                  <div class="playback-meter">
+                    <Show when={snapshot().duration}>
+                      <progress
+                        value={snapshot().position}
+                        max={snapshot().duration}
+                        aria-label={t("playback.progress")}
+                      />
+                    </Show>
+                    <span class="playback-clock">
+                      {audioTime(snapshot().position)}
+                      <Show
+                        when={snapshot().duration}
+                      >{` / ${audioTime(snapshot().duration ?? 0)}`}</Show>
+                    </span>
+                  </div>
+                }
+              >
+                <InlineStatus status={status()} />
+              </Show>
+            </div>
+            <input
+              class="playback-seek"
+              type="range"
+              aria-label={t("playback.seek")}
+              min="0"
+              max={snapshot().duration ?? 0}
+              step="0.1"
+              value={snapshot().position}
+              disabled={!snapshot().seekable}
+              aria-valuetext={audioTime(snapshot().position)}
+              onInput={(event) =>
+                void session.controller().seek("main", Number(event.currentTarget.value))
+              }
+            />
+            <Button
+              class="playback-primary"
+              wide
+              disabled={phase() === "loading"}
+              onClick={primary}
+            >
+              {t(playbackAction(phase()))}
+            </Button>
+            <div class="playback-secondary">
+              <Button
+                variant="ghost"
+                class="playback-secondary-button"
+                size="compact"
+                disabled={state().index === 0}
+                onClick={() => navigate(state().index - 1)}
+              >
+                {t("playback.previous")}
+              </Button>
+              <Button
+                variant="ghost"
+                class="playback-secondary-button"
+                size="compact"
+                disabled={phase() === "idle"}
+                onClick={() => (phase() === "loading" ? cancel() : start())}
+              >
+                {t(phase() === "loading" ? "playback.cancel" : "playback.replay")}
+              </Button>
+              <Button
+                variant="ghost"
+                class="playback-secondary-button"
+                size="compact"
+                disabled={state().index >= props.segments.length - 1}
+                onClick={() => navigate(state().index + 1)}
+              >
+                {t("playback.next")}
+              </Button>
+            </div>
+            <div class="playback-settings-summary">
+              <div class="playback-footer-actions">
                 <Button
-                  onClick={() => {
-                    dispatch({ type: "reset" });
-                    void streamAndPlay("start");
-                  }}
+                  variant="ghost"
+                  class="playback-settings-button"
+                  size="compact"
+                  onClick={props.onSettings}
                 >
-                  {t("playback.restart")}
+                  {t("playback.voiceRate", {
+                    voice: voiceLabel(
+                      snapshot().input
+                        ? (snapshot().input?.voice ?? availableVoices()[0] ?? "")
+                        : (voice() ?? availableVoices()[0] ?? ""),
+                    ),
+                    rate: snapshot().input ? snapshot().rate : playbackRate(),
+                  })}
                 </Button>
-              </Match>
-            </Switch>
+                <Button
+                  variant="ghost"
+                  class="playback-back-button"
+                  size="compact"
+                  onClick={props.onBack}
+                >
+                  {t("playback.back")}
+                </Button>
+              </div>
+              <Show when={settingsChanged()}>
+                <p class="playback-settings-note">
+                  {t("playback.nextSettings", {
+                    voice: voiceLabel(voice() ?? availableVoices()[0] ?? ""),
+                    rate: playbackRate(),
+                  })}
+                </p>
+              </Show>
+              <Show when={playbackRate() !== 1}>
+                <p class="playback-settings-note">{t("playback.rateNote")}</p>
+              </Show>
+            </div>
           </div>
         </aside>
       </div>

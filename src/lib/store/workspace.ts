@@ -3,6 +3,7 @@ import { createStore, reconcile } from "solid-js/store";
 import { serializeDraft } from "../draft";
 import { History, textBudget } from "../editing";
 import type { PreparedImage } from "../image";
+import { type PlaybackSegment, playbackSegment } from "../playback";
 import { type Segment, speechText } from "../state";
 
 /** The text content a draft carries; the image never leaves the device's memory. */
@@ -49,6 +50,16 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
   const [savedSnapshot, setSavedSnapshot] = createSignal(EMPTY);
   const [historyRevision, setHistoryRevision] = createSignal(0);
   const [currentSegment, setCurrentSegmentSignal] = createSignal(0);
+  const [playbackRecords, setPlaybackRecords] = createSignal<
+    (PlaybackSegment & { seconds: number })[]
+  >([]);
+  const played = () =>
+    playbackRecords().filter((entry) =>
+      segments.some((segment) => {
+        const identity = playbackSegment(segment, genreHint().trim() || undefined);
+        return identity.id === entry.id && identity.version === entry.version;
+      }),
+    );
 
   const content = (): WorkspaceContent => ({
     detectedLanguage: detectedLanguage(),
@@ -66,6 +77,17 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
     detectedLanguage,
     genreHint,
     currentSegment,
+    played,
+    recordPlayback(identity: PlaybackSegment, seconds: number) {
+      setPlaybackRecords((entries) => [
+        ...entries.filter((entry) => entry.id !== identity.id),
+        { ...identity, seconds: Number.isFinite(seconds) ? Math.max(0, seconds) : 0 },
+      ]);
+    },
+    resetPlayback() {
+      setPlaybackRecords([]);
+      setCurrentSegmentSignal(0);
+    },
     historyRevision,
     content,
     /** True once there is recognised or imported text to review. */
@@ -97,6 +119,7 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
         setHistory(new History<Segment[]>(next.segments));
         setHistoryRevision((value) => value + 1);
         setCurrentSegmentSignal(0);
+        setPlaybackRecords([]);
         setSavedSnapshot(saved ? snapshot(next) : EMPTY);
       });
     },
@@ -109,6 +132,7 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
         setHistory(new History<Segment[]>([]));
         setHistoryRevision((value) => value + 1);
         setCurrentSegmentSignal(0);
+        setPlaybackRecords([]);
         setSavedSnapshot(snapshot({ genreHint: genreHint(), segments: [] }));
       });
     },
@@ -123,6 +147,7 @@ export function createWorkspace(validate: WorkspaceValidator = () => {}) {
         setHistory(new History<Segment[]>([]));
         setHistoryRevision((value) => value + 1);
         setCurrentSegmentSignal(0);
+        setPlaybackRecords([]);
         setSavedSnapshot(EMPTY);
       });
     },

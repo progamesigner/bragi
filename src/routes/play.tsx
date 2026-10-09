@@ -23,6 +23,7 @@ export default function PlayScreen() {
             voice={voice()}
             onBack={() => app.goTo("/review")}
             onSettings={app.openSettings}
+            onFinished={() => app.goTo("/finished")}
           />
         </Show>
       </Show>

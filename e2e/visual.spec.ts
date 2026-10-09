@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
+import { mockAudio } from "./audio-fixture";
 import {
   draftFile,
   goToStep,
@@ -12,6 +13,9 @@ import {
 // Baselines for the routed screens and shared settings. Animations are off, fonts are the
 // system Noto CJK faces and every API response is mocked, so only real visual changes show up.
 async function settle(page: Page) {
+  // A hidden toast still occupies its original screenshot slot. Hold its dismissal timer
+  // so a second export-confirmation picture cannot change height midway through capture.
+  await page.locator(".toast").dispatchEvent("pointerenter");
   await page.evaluate(() => document.fonts.ready);
   // Keep the caret and focus rings out of the pictures.
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
@@ -213,6 +217,108 @@ for (const colorScheme of ["light", "dark"] as const) {
         await sheet.getByRole("button", { name: "先匯出，再繼續" }).click();
         await download;
         await snap(page, `loss-${action}-exported-${colorScheme}`);
+      });
+    }
+  });
+}
+
+for (const colorScheme of ["light", "dark"] as const) {
+  test.describe(`${colorScheme} narration states`, () => {
+    test.use({ colorScheme });
+    for (const target of [
+      "loading",
+      "playing",
+      "paused",
+      "interrupted",
+      "blocked",
+      "error",
+      "waiting",
+      "complete",
+    ] as const) {
+      test(`reading ${target}`, async ({ page }) => {
+        await mockSignedInApi(page);
+        await mockAudio(page);
+        await page.addInitScript(() => localStorage.setItem("bragi-playback-rate", "1.5"));
+        let release!: () => void;
+        if (target === "loading") {
+          const held = new Promise<void>((resolve) => {
+            release = resolve;
+          });
+          await page.route("**/api/tts", async (route) => {
+            await held;
+            await route.fallback();
+          });
+        }
+        if (target === "error")
+          await page.route("**/api/tts", (route) =>
+            route.fulfill({ status: 503, json: { error: "語音服務暫時無法使用，請重試。" } }),
+          );
+        await page.goto("/");
+        await recognize(page);
+        await page.getByRole("button", { name: /^進入朗讀/ }).click();
+        await page.evaluate(() => {
+          window.audioTest.freezePosition = true;
+        });
+        if (target === "blocked")
+          await page.evaluate(() => {
+            window.audioTest.rejectNext = true;
+          });
+        if (target === "complete")
+          await page.getByRole("button", { name: "下一段", exact: true }).click();
+        await page.locator(".playback-primary").click();
+        if (!["loading", "error", "blocked"].includes(target)) {
+          await expect(page.locator(".playback")).toHaveAttribute("data-phase", "playing");
+          if (target === "paused") await page.locator(".playback-primary").click();
+          if (target === "waiting" || target === "complete")
+            await page.evaluate(() => window.audioTest.finish());
+          if (target === "interrupted")
+            await page.evaluate(() => {
+              Object.defineProperty(document, "visibilityState", {
+                configurable: true,
+                value: "hidden",
+              });
+              document.dispatchEvent(new Event("visibilitychange"));
+            });
+        }
+        await expect(page.locator(".playback")).toHaveAttribute("data-phase", target);
+        await page.locator(".toast").evaluate((element) => {
+          element.style.visibility = "hidden";
+        });
+        await snap(page, `reading-${target}-${colorScheme}`);
+        if (target === "loading") release();
+      });
+    }
+    for (const variant of ["unexported", "exported", "partial"] as const) {
+      test(`finished ${variant}`, async ({ page }) => {
+        await mockSignedInApi(page);
+        await mockAudio(page);
+        await page.addInitScript(() => localStorage.setItem("bragi-playback-rate", "1.5"));
+        await page.goto("/");
+        await recognize(page);
+        await page.getByRole("button", { name: /^進入朗讀/ }).click();
+        if (variant === "partial")
+          await page.getByRole("button", { name: "下一段", exact: true }).click();
+        await page.locator(".playback-primary").click();
+        await expect(page.locator(".playback")).toHaveAttribute("data-phase", "playing");
+        await page.evaluate(() => window.audioTest.finish());
+        if (variant !== "partial") {
+          await expect(page.locator(".playback")).toHaveAttribute("data-phase", "waiting");
+          await page.locator(".playback-primary").click();
+          await expect(page.locator(".playback")).toHaveAttribute("data-phase", "playing");
+          await page.evaluate(() => window.audioTest.finish());
+        }
+        await expect(page.locator(".playback")).toHaveAttribute("data-phase", "complete");
+        await page.locator(".playback-primary").click();
+        await expect(page).toHaveURL(/\/finished$/);
+        if (variant === "exported") {
+          const download = page.waitForEvent("download");
+          await page.getByRole("button", { name: "匯出草稿" }).click();
+          await download;
+        }
+        await page.locator(".toast").evaluate((element) => {
+          element.style.visibility = "hidden";
+        });
+        await snap(page, `finished-${variant}-${colorScheme}`);
       });
     }
   });

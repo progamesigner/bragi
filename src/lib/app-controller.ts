@@ -44,15 +44,16 @@ export type ToastAction = { label: string; run: () => void; valid?: () => boolea
 export type ToastMessage = { id: number; message: string; action?: ToastAction };
 
 /** Actions that drop the workspace and so may need the "export first" confirmation. */
-export type LossAction = "clear" | "signOut" | "update" | "import" | "replace";
+export type LossAction = "clear" | "signOut" | "update" | "import" | "replace" | "nextStory";
 
-export type AppPath = "/" | "/review" | "/play";
+export type AppPath = "/" | "/review" | "/play" | "/finished";
 
 /** Each step's "previous page" in the top bar. */
 export const PARENT_PATH: Record<AppPath, AppPath | undefined> = {
   "/": undefined,
   "/review": "/",
   "/play": "/review",
+  "/finished": "/play",
 };
 
 type NavigationState = { from?: string } | null | undefined;
@@ -336,7 +337,7 @@ export function createAppController(navigate: Navigator, location: Location) {
       return;
     }
     cancelLoss();
-    if (action === "clear") {
+    if (action === "clear" || action === "nextStory") {
       setSettingsOpen(false);
       clearWorkspace();
       // Replace, so Back cannot return to a screen whose draft is gone.
@@ -352,7 +353,7 @@ export function createAppController(navigate: Navigator, location: Location) {
   }
 
   /** Runs the action now, or first asks (offering an export) when content would be lost. */
-  function requestLoss(action: "clear" | "signOut" | "update") {
+  function requestLoss(action: "clear" | "signOut" | "update" | "nextStory") {
     cancelLoss();
     if (contentAtRisk()) setPendingLoss(action);
     else perform(action);
