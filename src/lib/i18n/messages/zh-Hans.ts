@@ -243,12 +243,12 @@ const messages = {
   "playback.preparingBadge": "准备中",
   "playback.unprepared": "尚未准备",
   "playback.transcript": "逐字稿",
-  "playback.correction": "此段使用了发音修正",
+  "playback.correction": "这段使用了发音修正",
   "playback.nextPreview": "下一段　{text}",
   "playback.seek": "段内播放位置",
   "playback.voiceRate": "{voice} · 语速 {rate} 倍",
   "playback.nextSettings": "下次播放应用：{voice} · {rate} 倍；继续播放保留原设置。",
-  "playback.visibilityInterrupted": "切换 App 或锁屏使播放中断，请按「继续播放」从原位置恢复。",
+  "playback.visibilityInterrupted": "切换 App 或锁屏导致播放中断，请按“继续播放”从原位置恢复。",
   "playback.reachedEnd": "已到最后一段，还有 {n} 段未播放。",
   "finished.heading": "故事读完了",
   "finished.all": "{n} 段全部播放完毕",
@@ -259,7 +259,7 @@ const messages = {
   "finished.again": "从头再读一遍",
   "loss.nextStoryTitle": "准备下一段故事？",
   "loss.nextStoryBody":
-    "开始新故事会清除当前的图片、草稿、编辑记录和本机暂存。导出只保存文字；取消会保留当前内容。",
+    "开始新故事会清除当前的图片、草稿、编辑记录和本地暂存。导出只保存文字；取消会保留当前内容。",
   "loss.nextStoryProceed": "不导出，开始新故事",
   "loss.nextStoryContinue": "开始新故事",
 

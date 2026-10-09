@@ -31,6 +31,9 @@ never translated.
 | Sign in / sign out | 登入／登出 | 登录／退出登录 | ログイン／ログアウト | 로그인／로그아웃 | Sign in / Sign out | Anmelden / Abmelden | Iniciar / Cerrar sesión |
 | Clear current content | 清除目前內容 | 清除当前内容 | 現在の内容を消去 | 현재 내용 지우기 | Clear current content | Aktuellen Inhalt löschen | Borrar el contenido actual |
 | Offline | 離線 | 离线 | オフライン | 오프라인 | offline | offline | sin conexión |
+| Transcript (playback script) | 逐字稿 | 逐字稿 | 書き起こし | 대본 | Transcript | Transkript | Transcripción |
+| Next story (finish page) | 下一段故事 | 下一段故事 | 次の物語 | 다음 이야기 | next story | nächste Geschichte | siguiente historia |
+| Ready / preparing / not prepared | 已備妥／準備中／尚未準備 | 已就绪／准备中／尚未准备 | 準備済み／準備中／未準備 | 준비 완료／준비 중／준비 전 | Ready / Preparing / Not prepared | Bereit / In Vorbereitung / Nicht vorbereitet | Lista / Preparando / Sin preparar |
 
 ## Reasons for the choices
 
@@ -57,6 +60,10 @@ never translated.
   sesión" were long and stiff. After exporting, the second button is now "Jetzt löschen",
   "Cerrar sesión ahora" and so on (English: "Clear now"). This keeps 44 px buttons on one line at
   320 px.
+- **Playback and finish page (batch D).** The new strings first used "segment", "párrafo",
+  "Absatz" and 문단; they now follow the part / parte / Abschnitt / 단락 rule, Korean 해요체, and
+  name the real Resume button. The full-width space in "下一段　{text}" stays in Chinese and
+  Japanese; Latin-script languages and Korean use "Next: {text}".
 - **Font size.** English, German and Spanish used "L" for the middle size; it is now
   Large / Groß / Grande, consistent with the other two sizes.
 - **Informal address.** German uses du, Spanish uses tú, Korean uses 해요체, Japanese uses です／ます.
