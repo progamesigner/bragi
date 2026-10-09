@@ -13,7 +13,7 @@ jobs:
       - run: npm run check
       - run: npm run typecheck
       - run: npm test
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium webkit
       # Screenshot baselines are rendered with the system Noto CJK faces.
       - run: sudo apt-get install -y fonts-noto-cjk
       - run: npm run test:e2e

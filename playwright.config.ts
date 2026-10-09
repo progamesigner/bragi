@@ -23,8 +23,22 @@ export default defineConfig({
   },
   projects: [
     {
+      name: "iphone-webkit",
+      testMatch: "mobile-layout.spec.ts",
+      use: {
+        ...devices["iPhone 13"],
+        viewport: { width: 390, height: 844 },
+        reducedMotion: "reduce",
+      },
+    },
+    {
       name: "mobile-chromium",
-      testIgnore: ["pwa.spec.ts", "visual.spec.ts", "voice-picker.visual.spec.ts"],
+      testIgnore: [
+        "pwa.spec.ts",
+        "visual.spec.ts",
+        "voice-picker.visual.spec.ts",
+        "mobile-layout.spec.ts",
+      ],
       use: { ...devices["Pixel 7"] },
     },
     {
