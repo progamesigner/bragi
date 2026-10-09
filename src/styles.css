@@ -7,12 +7,12 @@
   --bg-deep: #12100e;
   --bg-glow: #4a2d22;
   --surface: #221e1a;
-  --surface-2: var(--surface-2);
+  --surface-2: #1d1a17;
   --line: #2e2822;
-  --line-2: var(--line-2);
-  --line-strong: var(--line-strong);
-  --text: var(--text);
-  --text-2: var(--text-2);
+  --line-2: #3a322a;
+  --line-strong: #4c4136;
+  --text: #f3ead8;
+  --text-2: #c8bbaa;
   --text-3: #a89a87;
   --text-faint: #8a7c69;
   --reading: #f7efe1;
@@ -21,14 +21,14 @@
   --accent-text: #e7a85c;
   --accent-soft: #2a2219;
   --accent-soft-text: #efbd76;
-  --danger: var(--danger);
-  --danger-line: var(--danger-line);
+  --danger: #ef9a91;
+  --danger-line: #d86f64;
   --danger-soft: #3a1f1b;
-  --ok: var(--ok);
+  --ok: #9fc29b;
   --muted-btn: #2e2822;
   --disabled: #5e5246;
   --scrim: rgb(8 6 5 / 0.72);
-  --toast-bg: var(--text);
+  --toast-bg: #f3ead8;
   --toast-text: #22170d;
   --toast-action: #7a4a12;
   --shadow: rgb(0 0 0 / 0.4);
@@ -145,6 +145,13 @@ main {
 }
 header {
   margin-bottom: 40px;
+}
+.app-notices {
+  width: min(100% - 32px, 680px);
+  margin: 0 auto;
+}
+.app-notices:empty {
+  display: none;
 }
 .app-bar {
   display: flex;
@@ -832,4 +839,7 @@ main[data-font-size="largest"] .review-segment textarea {
 }
 .toast:has(.toast-details) {
   border-radius: 16px;
+}
+.session-state .button {
+  flex: none;
 }

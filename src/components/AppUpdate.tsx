@@ -50,7 +50,7 @@ export default function AppUpdate() {
   });
   const [activate, setActivate] = createSignal<() => void>(() => {});
   return (
-    <>
+    <div class="app-notices">
       <Show when={otherTabs()}>
         <Banner role="status" tone="warning">
           <p>{t("update.closeOtherTabs")}</p>
@@ -69,6 +69,6 @@ export default function AppUpdate() {
           <p>{t("update.offlineUnavailable")}</p>
         </Banner>
       </Show>
-    </>
+    </div>
   );
 }

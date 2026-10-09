@@ -54,6 +54,10 @@ test("theme follows the system until a choice is saved", async ({ page }) => {
   const background = () =>
     page.evaluate(() => getComputedStyle(document.body).getPropertyValue("--bg").trim());
   expect(await background()).toBe("#171512");
+  // Text must resolve to the dark theme's light ink, not fall back to black.
+  expect(await page.evaluate(() => getComputedStyle(document.body).color)).toBe(
+    "rgb(243, 234, 216)",
+  );
 
   await page.reload();
   await expect(html).toHaveAttribute("data-theme", "dark");
