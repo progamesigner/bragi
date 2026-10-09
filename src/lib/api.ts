@@ -84,8 +84,12 @@ export function parseRetryAfter(value: string | null, now = Date.now()): number 
   return Math.max(0, Math.ceil((date - now) / 1000));
 }
 
-/** Reads the API's `{ error: { code, message, requestId, retryable } }` body without trusting it. */
-export async function readApiError(response: Response, fallback: string): Promise<ApiError> {
+/** Reads the error body. Cancelled operations must not expire a newer session or request. */
+export async function readApiError(
+  response: Response,
+  fallback: string,
+  isCurrent: () => boolean = () => true,
+): Promise<ApiError> {
   let body: ApiErrorBody["error"];
   try {
     body = ((await response.json()) as ApiErrorBody).error;
@@ -103,7 +107,7 @@ export async function readApiError(response: Response, fallback: string): Promis
         : response.status === 429 || response.status >= 500,
     retryAfter,
   };
-  if (needsSignIn(details)) unauthorized?.();
+  if (isCurrent() && needsSignIn(details)) unauthorized?.();
   const known = code ? CODE_MESSAGES[code] : undefined;
   let message = known
     ? t(known)

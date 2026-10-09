@@ -1338,3 +1338,154 @@ input.invalid {
     transition: none;
   }
 }
+
+/* Capture concentrates the three entry points before optional settings and explanations. */
+.capture-screen {
+  padding: 8px 0 24px;
+}
+.capture-screen h1 {
+  font-family: var(--font-serif);
+  font-size: 1.75rem;
+  margin: 0;
+}
+.capture-intro {
+  color: var(--text-2);
+  margin: 8px 0 24px;
+}
+.capture-layout {
+  display: grid;
+  gap: 20px;
+}
+.capture-layout .capture {
+  display: contents;
+}
+.capture-layout .capture-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.capture-layout .capture-camera {
+  grid-column: 1 / -1;
+  min-height: 112px;
+  font-size: 1.125rem;
+}
+.has-candidate .capture-camera {
+  min-height: 48px;
+}
+.capture-layout .file-button {
+  white-space: normal;
+  text-align: center;
+  padding-inline: 12px;
+}
+.candidate-panel:empty {
+  display: none;
+}
+.capture-preview-details {
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 0 16px 16px;
+}
+.capture-preview-details summary {
+  cursor: pointer;
+  min-height: 48px;
+  padding-block: 12px;
+}
+.capture-preview-details .capture-preview {
+  margin: 0;
+}
+.capture-preview-details img {
+  max-height: 180px;
+  object-fit: contain;
+}
+.capture-genre label {
+  color: var(--text-2);
+  font-size: 0.875rem;
+}
+.capture-privacy {
+  color: var(--text-3);
+}
+.privacy-summary {
+  font-size: 0.875rem;
+  margin: 0 0 8px;
+}
+.capture-privacy .privacy-note {
+  margin: 0;
+}
+.privacy-note summary {
+  cursor: pointer;
+  min-height: 44px;
+}
+.capture-privacy .settings-note {
+  margin-top: 12px;
+}
+.current-draft {
+  padding: 16px;
+  margin-bottom: 20px;
+  border: 1px solid var(--line-2);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.current-draft p {
+  margin: 0 0 8px;
+  color: var(--text-2);
+}
+.recognition-stages {
+  display: flex;
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+  font-size: 0.875rem;
+  color: var(--text-3);
+}
+.recognition-stages li {
+  flex: 1;
+  border-top: 3px solid var(--line-2);
+  padding-top: 8px;
+}
+.recognition-stages [aria-current] {
+  color: var(--accent-text);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+.recognition-stages .done {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+.recognition-controls .recognize {
+  margin-top: 16px;
+}
+@media (min-width: 900px) {
+  .app #main {
+    max-width: 1160px;
+    width: calc(100% - 48px);
+  }
+  .capture-screen {
+    padding-top: 20px;
+  }
+  .has-candidate .capture-layout {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-areas: "preview choose" "preview genre" "preview recognition" "privacy privacy";
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    align-items: start;
+  }
+  .has-candidate .candidate-panel {
+    grid-area: preview;
+  }
+  .has-candidate .capture-actions {
+    grid-area: choose;
+  }
+  .has-candidate .capture-genre {
+    grid-area: genre;
+  }
+  .has-candidate .recognition-controls {
+    grid-area: recognition;
+  }
+  .has-candidate .capture-privacy {
+    grid-area: privacy;
+  }
+  .capture-preview-details img {
+    max-height: 380px;
+  }
+}

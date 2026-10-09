@@ -22,12 +22,14 @@ export default function TopNav(props: { onSettings: () => void }) {
   const app = useApp();
   const location = useLocation();
   const current = () => location.pathname as AppPath;
-  const parent = () => PARENT_PATH[current()];
+  const parent = () => (current() === "/" && app.recognitionBusy() ? "/" : PARENT_PATH[current()]);
 
   /** Why a step cannot be opened yet, or nothing when it can. */
   function unavailable(path: AppPath): MessageKey | undefined {
-    if (path === "/review" && !workspace.hasDraft()) return "nav.reviewUnavailable";
-    if (path === "/play" && !workspace.hasDraft()) return "nav.playNeedsDraft";
+    if (path === "/review" && (!workspace.hasDraft() || workspace.segments.length === 0))
+      return "nav.reviewUnavailable";
+    if (path === "/play" && (!workspace.hasDraft() || workspace.segments.length === 0))
+      return "nav.playNeedsDraft";
     if (path === "/play" && !workspace.playable()) return "nav.playNeedsFixes";
     return undefined;
   }
@@ -36,7 +38,8 @@ export default function TopNav(props: { onSettings: () => void }) {
     if (event.defaultPrevented || event.button !== 0) return;
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    app.goTo(path);
+    if (path === "/" && current() === "/" && app.recognitionBusy()) app.cancelRecognition();
+    else app.goTo(path);
   }
 
   return (

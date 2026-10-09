@@ -79,6 +79,10 @@ export function createAppController(navigate: Navigator, location: Location) {
   const [candidateActive, setCandidateActive] = createSignal(false);
   const [candidateGenre, setCandidateGenre] = createSignal("");
   const [recognitionBusy, setRecognitionBusy] = createSignal(false);
+  const [preparing, setPreparing] = createSignal(false);
+  const [recognitionStage, setRecognitionStage] = createSignal<
+    "prepare" | "upload" | "recognize"
+  >();
   const [savedDraft, setSavedDraft] = createSignal<Draft>();
   const [autosaveReady, setAutosaveReady] = createSignal(false);
   const [pendingLoss, setPendingLoss] = createSignal<LossAction>();
@@ -159,6 +163,8 @@ export function createAppController(navigate: Navigator, location: Location) {
   function cancelOperation() {
     operations.invalidate();
     setRecognitionBusy(false);
+    setPreparing(false);
+    setRecognitionStage(undefined);
   }
 
   function clearWorkspace() {
@@ -352,6 +358,7 @@ export function createAppController(navigate: Navigator, location: Location) {
     const genre = candidateGenre();
     const operation = operations.begin();
     setRecognitionBusy(true);
+    setRecognitionStage("prepare");
     reportCapture(t("recognize.creatingSession"));
     try {
       requireOnline();
@@ -361,10 +368,12 @@ export function createAppController(navigate: Navigator, location: Location) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ mimeType: selected.type, sizeBytes: selected.size }),
       });
+      if (!operation.current()) return;
       if (!sessionResponse.ok)
-        throw await readApiError(sessionResponse, t("recognize.sessionFailed"));
+        throw await readApiError(sessionResponse, t("recognize.sessionFailed"), operation.current);
       const upload = (await sessionResponse.json()) as UploadTarget;
       if (!operation.current()) return;
+      setRecognitionStage("upload");
       reportCapture(t("recognize.uploading"));
       const response = await fetch(upload.target.url, {
         signal: operation.signal,
@@ -372,9 +381,12 @@ export function createAppController(navigate: Navigator, location: Location) {
         headers: upload.target.headers,
         body: selected,
       });
-      if (!response.ok) throw await readApiError(response, t("recognize.uploadFailed"));
+      if (!operation.current()) return;
+      if (!response.ok)
+        throw await readApiError(response, t("recognize.uploadFailed"), operation.current);
       const receipt = await response.json();
       if (!operation.current()) return;
+      setRecognitionStage("recognize");
       reportCapture(t("recognize.analyzing"));
       const ocrResponse = await fetch("/api/ocr", {
         signal: operation.signal,
@@ -386,7 +398,9 @@ export function createAppController(navigate: Navigator, location: Location) {
           genreHint: genre.trim() || undefined,
         }),
       });
-      if (!ocrResponse.ok) throw await readApiError(ocrResponse, t("recognize.ocrFailed"));
+      if (!operation.current()) return;
+      if (!ocrResponse.ok)
+        throw await readApiError(ocrResponse, t("recognize.ocrFailed"), operation.current);
       const value: unknown = await ocrResponse.json();
       if (!operation.current()) return;
       const parsed = ocrResponseSchema.safeParse(value);
@@ -408,7 +422,10 @@ export function createAppController(navigate: Navigator, location: Location) {
     } catch (failure) {
       if (operation.current()) reportError(reportCapture, failure, t("recognize.failed"));
     } finally {
-      if (operation.current()) setRecognitionBusy(false);
+      if (operation.current()) {
+        setRecognitionBusy(false);
+        setRecognitionStage(undefined);
+      }
     }
   }
 
@@ -432,6 +449,9 @@ export function createAppController(navigate: Navigator, location: Location) {
     candidateActive,
     candidateGenre,
     recognitionBusy,
+    recognitionStage,
+    preparing,
+    setPreparing,
     savedDraft,
     pendingLoss,
     settingsOpen,
@@ -452,6 +472,10 @@ export function createAppController(navigate: Navigator, location: Location) {
     canExport: workspace.hasDraft,
     requestLoss,
     perform,
+    cancelRecognition() {
+      cancelOperation();
+      reportCapture(t("recognize.cancelled"));
+    },
     cancelLoss: () => setPendingLoss(undefined),
     /** Best effort: a blocked download still counts as tried, so the person decides what is next. */
     exportForLoss(): boolean {

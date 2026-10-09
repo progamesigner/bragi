@@ -1,4 +1,4 @@
-import { createSignal, onCleanup, Show } from "solid-js";
+import { createSignal, type JSX, onCleanup, Show } from "solid-js";
 import { t } from "~/lib/i18n";
 import { type PreparedImage, prepareImage } from "~/lib/image";
 import type { StatusReporter } from "~/lib/status";
@@ -13,6 +13,8 @@ type CaptureProps = {
   onSelect: () => Operation;
   onCancel: () => void;
   onStatus: StatusReporter;
+  onPreparing: (busy: boolean) => void;
+  children?: JSX.Element;
 };
 
 export default function Capture(props: CaptureProps) {
@@ -40,6 +42,7 @@ export default function Capture(props: CaptureProps) {
 
   onCleanup(() => {
     operations.invalidate();
+    props.onPreparing(false);
     const url = previewUrl();
     if (url) URL.revokeObjectURL(url);
   });
@@ -50,6 +53,7 @@ export default function Capture(props: CaptureProps) {
     const workspaceOperation = props.onSelect();
     const current = () => operation.current() && workspaceOperation.current();
     setPreparing(true);
+    props.onPreparing(true);
     setSourceFile(file);
     setPreparationFailed(false);
     setImage(undefined);
@@ -67,7 +71,10 @@ export default function Capture(props: CaptureProps) {
       setPreparationFailed(true);
       props.onStatus(error instanceof Error ? error.message : t("capture.failed"), "error");
     } finally {
-      if (operation.current()) setPreparing(false);
+      if (operation.current()) {
+        setPreparing(false);
+        props.onPreparing(false);
+      }
     }
   }
 
@@ -81,11 +88,11 @@ export default function Capture(props: CaptureProps) {
     <div class="capture">
       <div class="capture-actions">
         <label
-          class={`${buttonClass("primary")} file-button`}
+          class={`${buttonClass(sourceFile() ? "secondary" : "primary")} file-button capture-camera`}
           for="camera-input"
           aria-disabled={props.disabled || preparing()}
         >
-          {t("capture.camera")}
+          {t(sourceFile() ? "capture.retake" : "capture.camera")}
         </label>
         <input
           id="camera-input"
@@ -113,66 +120,73 @@ export default function Capture(props: CaptureProps) {
           disabled={props.disabled || preparing()}
           onChange={inputChanged}
         />
+        {props.children}
       </div>
 
-      <Show when={sourceFile()}>
-        <Button
-          variant="secondary"
-          size="compact"
-          class="capture-secondary"
-          onClick={() => {
-            operations.invalidate();
-            setPreparing(false);
-            setSourceFile(undefined);
-            setPreparationFailed(false);
-            setImage(undefined);
-            replacePreview();
-            props.onCancel();
-          }}
-        >
-          {t("capture.cancelCandidate")}
-        </Button>
-      </Show>
+      <div class="candidate-panel">
+        <Show when={sourceFile()}>
+          <Button
+            variant="secondary"
+            size="compact"
+            class="capture-secondary"
+            onClick={() => {
+              operations.invalidate();
+              setPreparing(false);
+              props.onPreparing(false);
+              setSourceFile(undefined);
+              setPreparationFailed(false);
+              setImage(undefined);
+              replacePreview();
+              props.onCancel();
+            }}
+          >
+            {t("capture.cancelCandidate")}
+          </Button>
+        </Show>
 
-      <Show when={preparationFailed()}>
-        <Button
-          variant="secondary"
-          size="compact"
-          class="capture-secondary"
-          onClick={() => void selectFile(sourceFile())}
-        >
-          {t("capture.retryPrepare")}
-        </Button>
-      </Show>
+        <Show when={preparationFailed()}>
+          <Button
+            variant="secondary"
+            size="compact"
+            class="capture-secondary"
+            onClick={() => void selectFile(sourceFile())}
+          >
+            {t("capture.retryPrepare")}
+          </Button>
+        </Show>
 
-      <Show when={selectedImage()}>
-        {(selected) => (
-          <div class="capture-preview">
-            <Show when={previewUrl() && !previewFailed()}>
-              <img
-                src={previewUrl()}
-                alt={t("capture.previewAlt")}
-                onError={() => setPreviewFailed(true)}
-              />
-            </Show>
-            <Show when={previewFailed()}>
-              <div class="preview-placeholder">{t("capture.previewUnavailable")}</div>
-            </Show>
-            <p class="file">
-              {selected().file.name} · {(selected().file.size / 1_000_000).toFixed(2)} MB
-              <Show when={selected().width && selected().height}>
-                {` · ${selected().width} × ${selected().height}`}
-              </Show>
-            </p>
-            <Show when={selected().transformed}>
-              <p class="image-note">{t("capture.transformed")}</p>
-            </Show>
-            <Show when={selected().warning}>
-              {(warning) => <p class="image-warning">{warning()}</p>}
-            </Show>
-          </div>
-        )}
-      </Show>
+        <Show when={selectedImage()}>
+          {(selected) => (
+            <details class="capture-preview-details" open>
+              <summary>{t("capture.selected")}</summary>
+              <div class="capture-preview">
+                <Show when={previewUrl() && !previewFailed()}>
+                  <img
+                    src={previewUrl()}
+                    alt={t("capture.previewAlt")}
+                    onError={() => setPreviewFailed(true)}
+                  />
+                </Show>
+                <Show when={previewFailed()}>
+                  <div class="preview-placeholder">{t("capture.previewUnavailable")}</div>
+                </Show>
+                <p class="file">
+                  {selected().file.name} · {(selected().file.size / 1_000_000).toFixed(2)} MB
+                  <Show when={selected().width && selected().height}>
+                    {` · ${selected().width} × ${selected().height}`}
+                  </Show>
+                </p>
+                <Show when={selected().transformed}>
+                  <p class="image-note">{t("capture.transformed")}</p>
+                </Show>
+                <Show when={selected().warning}>
+                  {(warning) => <p class="image-warning">{warning()}</p>}
+                </Show>
+              </div>
+            </details>
+          )}
+        </Show>
+      </div>
     </div>
   );
 }

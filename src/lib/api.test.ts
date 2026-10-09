@@ -84,4 +84,27 @@ describe("API errors", () => {
     expect(calls).toBe(1);
     onUnauthorized(undefined);
   });
+
+  it("ignores a 401 when cancellation happens while its body is still being read", async () => {
+    let current = true;
+    let calls = 0;
+    let finish!: (body: unknown) => void;
+    const response = new Response(null, { status: 401 });
+    response.json = () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      });
+    onUnauthorized(() => {
+      calls += 1;
+    });
+    try {
+      const pending = readApiError(response, "無法辨識", () => current);
+      current = false;
+      finish({ error: { code: "UNAUTHORIZED", requestId: "late-401" } });
+      expect((await pending).details.requestId).toBe("late-401");
+      expect(calls).toBe(0);
+    } finally {
+      onUnauthorized(undefined);
+    }
+  });
 });
