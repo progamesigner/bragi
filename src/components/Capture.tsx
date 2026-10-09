@@ -13,10 +13,17 @@ type CaptureProps = {
 
 export default function Capture(props: CaptureProps) {
   const [image, setImage] = createSignal<PreparedImage>();
+  const [sourceFile, setSourceFile] = createSignal<File>();
+  const [preparationFailed, setPreparationFailed] = createSignal(false);
   const [previewUrl, setPreviewUrl] = createSignal<string>();
   const [previewFailed, setPreviewFailed] = createSignal(false);
   const [preparing, setPreparing] = createSignal(false);
   const operations = new WorkspaceRevision();
+
+  const selectedImage = (): PreparedImage | undefined => {
+    const file = sourceFile();
+    return image() ?? (file ? { file, transformed: false } : undefined);
+  };
 
   function replacePreview(url?: string) {
     const previous = previewUrl();
@@ -37,8 +44,10 @@ export default function Capture(props: CaptureProps) {
     const workspaceOperation = props.onSelect();
     const current = () => operation.current() && workspaceOperation.current();
     setPreparing(true);
+    setSourceFile(file);
+    setPreparationFailed(false);
     setImage(undefined);
-    replacePreview();
+    replacePreview(URL.createObjectURL(file));
     props.onStatus("正在調整方向與圖片大小…");
     try {
       const prepared = await prepareImage(file);
@@ -52,6 +61,7 @@ export default function Capture(props: CaptureProps) {
       );
     } catch (error) {
       if (!current()) return;
+      setPreparationFailed(true);
       props.onStatus(error instanceof Error ? error.message : "無法處理圖片", "error");
     } finally {
       if (operation.current()) setPreparing(false);
@@ -98,13 +108,15 @@ export default function Capture(props: CaptureProps) {
         />
       </div>
 
-      <Show when={preparing() || image()}>
+      <Show when={sourceFile()}>
         <button
           type="button"
           class="small secondary"
           onClick={() => {
             operations.invalidate();
             setPreparing(false);
+            setSourceFile(undefined);
+            setPreparationFailed(false);
             setImage(undefined);
             replacePreview();
             props.onCancel();
@@ -114,7 +126,13 @@ export default function Capture(props: CaptureProps) {
         </button>
       </Show>
 
-      <Show when={image()}>
+      <Show when={preparationFailed()}>
+        <button type="button" class="small secondary" onClick={() => void selectFile(sourceFile())}>
+          重試圖片處理
+        </button>
+      </Show>
+
+      <Show when={selectedImage()}>
         {(selected) => (
           <div class="capture-preview">
             <Show when={previewUrl() && !previewFailed()}>
@@ -125,7 +143,7 @@ export default function Capture(props: CaptureProps) {
               />
             </Show>
             <Show when={previewFailed()}>
-              <div class="preview-placeholder">此瀏覽器無法顯示 HEIC 預覽</div>
+              <div class="preview-placeholder">此瀏覽器無法顯示圖片預覽</div>
             </Show>
             <p class="file">
               {selected().file.name} · {(selected().file.size / 1_000_000).toFixed(2)} MB

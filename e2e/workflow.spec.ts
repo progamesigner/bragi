@@ -628,6 +628,12 @@ test("new photos preserve the draft, language, genre, comparison and undo until 
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(2);
   await expect(page.getByRole("button", { name: "復原", exact: true })).toBeEnabled();
 
+  await expect(page.getByRole("button", { name: "重試圖片處理" })).toBeVisible();
+  await expect(page.locator(".capture-preview .file")).toContainText("broken.png");
+  await page.getByRole("button", { name: "重試圖片處理" }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue("保留這段修改。");
+
   await page
     .getByLabel("從相簿選擇")
     .setInputFiles({ name: "candidate.png", mimeType: "image/png", buffer: image });
