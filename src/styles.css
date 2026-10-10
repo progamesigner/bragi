@@ -1981,12 +1981,11 @@ input.invalid {
   color: var(--text-2);
   font-size: 0.8rem;
 }
-.preview-seek-label {
-  display: block;
-  min-width: 0;
-}
+.preview-seek-label,
 .preview-seek {
   display: block;
+  width: 100%;
+  min-width: 0;
 }
 .preview-transcript {
   overflow-wrap: anywhere;
