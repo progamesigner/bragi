@@ -39,8 +39,8 @@ async function place(page: Page) {
 }
 
 /**
- * Plays through every reading message (shared toast, preparing, error, settings note, blocked,
- * interrupted, completion) and checks that each floats in the same place above the clock row,
+ * Plays through every reading message (shared toast, speed note, preparing, error, blocked,
+ * interrupted, settings note, completion) and checks that each floats in the same place above the clock row,
  * over nothing but the script or segment list, without moving a control. Starts on an idle
  * `/play` at 1×, right after recognition, with the shared "recognition done" toast showing.
  */
@@ -63,11 +63,17 @@ export async function expectOneMessagePlace(page: Page) {
   }
 
   await record("shared toast", "辨識完成");
+  // At 1.5x every take is a full WAV through the media element, so the fixture can also refuse it.
+  // (Retrying after a failed PCM stream can hang Linux WebKit; that happens before this change too.)
+  const sheet = await openSettings(page);
+  await sheet.getByRole("radio", { name: "1.5 倍" }).check();
+  await closeSettings(page);
+  await record("rate note", "非 1 倍速會先產生整段音訊再播放");
   let release!: () => void;
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
-  await page.route("**/api/tts-stream", async (route) => {
+  await page.route("**/api/tts", async (route) => {
     await held;
     await route.fulfill({
       status: 503,
@@ -82,19 +88,18 @@ export async function expectOneMessagePlace(page: Page) {
   await record("error", "語音服務暫時無法使用");
   await expect(page.getByRole("alert")).toHaveCount(1);
   await expect(toast.getByRole("alert")).toContainText("技術詳情");
-  await page.unroute("**/api/tts-stream");
+  await page.unroute("**/api/tts");
   await primary.click();
   await phase("playing");
   // The state it described is over.
   await expect(toast).toHaveClass(/toast-empty/);
   expect(await controls(page)).toEqual(initial);
-  await page.evaluate(() => window.audioTest.finish());
-  await phase("waiting");
-  // Replaying the cached WAV goes through the media element, which the fixture can refuse.
+  await primary.click();
+  await phase("paused");
   await page.evaluate(() => {
     window.audioTest.rejectNext = true;
   });
-  await page.getByRole("button", { name: "重播本段", exact: true }).click();
+  await primary.click();
   await phase("blocked");
   await record("blocked", "瀏覽器阻止播放");
   await primary.click();
