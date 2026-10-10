@@ -359,6 +359,28 @@ for (const colorScheme of ["dark", "light"] as const) {
       expect(await nativeControls(page)).toEqual([]);
       expect(await bluePixels(page.locator(".playback-transport"))).toBe(0);
     });
+    test("privacy warning reads as a list item", async ({ page }) => {
+      await start(page);
+      const note = page.locator(".privacy-note");
+      if (!(await note.evaluate((element) => (element as HTMLDetailsElement).open)))
+        await note.locator("summary").click();
+      const items = await note.locator("li").evaluateAll((list) =>
+        list.map((item) => ({
+          text: item.textContent ?? "",
+          x: item.getBoundingClientRect().x,
+          size: getComputedStyle(item).fontSize,
+          color: getComputedStyle(item).color,
+        })),
+      );
+      expect(items).toHaveLength(3);
+      expect(items[2]?.text).toBe("請避免拍入無關的人臉、聯絡資訊或其他敏感資料。");
+      for (const item of items.slice(1)) {
+        expect(item.x).toBeCloseTo(items[0]?.x ?? 0, 0);
+        expect(item.size).toBe(items[0]?.size);
+        expect(item.color).toBe(items[0]?.color);
+      }
+      await expect(note.locator(":scope > p")).toHaveCount(0);
+    });
     test("review language, compact dirty hint and actual footer reservation", async ({ page }) => {
       await start(page);
       await page.locator("#draft-import").setInputFiles({

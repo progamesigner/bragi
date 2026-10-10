@@ -177,8 +177,8 @@ function CaptureContent() {
               <ul>
                 <li>{t("privacy.local")}</li>
                 <li>{t("privacy.noHistory")}</li>
+                <li>{t("privacy.avoid")}</li>
               </ul>
-              <p>{t("privacy.avoid")}</p>
             </details>
             <p id="draft-import-note" class="settings-note">
               {t("draft.importNote")}

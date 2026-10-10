@@ -506,15 +506,11 @@ label.file-button:has(+ input:focus-visible) {
   font-size: 0.9rem;
 }
 .privacy-note ul {
-  margin: 0;
+  margin: 0 0 12px;
   padding-left: 20px;
   color: var(--text-2);
   font-size: 0.84rem;
   line-height: 1.6;
-}
-.privacy-note p {
-  margin: 8px 0 0;
-  color: var(--accent-soft-text);
 }
 .capture-secondary {
   margin-top: var(--space-1);
