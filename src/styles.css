@@ -1860,6 +1860,7 @@ input.invalid {
 }
 .playback-transport {
   grid-row: 3;
+  position: relative;
   min-width: 0;
   display: grid;
   gap: 8px;
@@ -1913,23 +1914,6 @@ input.invalid {
 }
 .playback-settings-button .icon {
   flex: none;
-}
-/* Fixed height after the controls, so a message never moves a button. */
-.playback-status-slot {
-  height: 64px;
-  overflow: auto;
-  color: var(--text-2);
-  font-size: 0.8rem;
-  line-height: 1.4;
-  scrollbar-width: thin;
-}
-.playback-status-slot .inline-status [role="status"]:not(:empty),
-.playback-status-slot .inline-status-error {
-  margin: 0;
-  font-size: 0.8rem;
-}
-.playback-status-slot .inline-status-error {
-  padding: 6px 10px;
 }
 /* Every seek slider: a token-coloured track filled to --position, never the native control. */
 .seek {
@@ -2001,8 +1985,54 @@ input.invalid {
   height: 48px;
   font-size: 0.875rem;
 }
-.playback-settings-note {
+/* Every reading message floats in one place: across the column, just above the clock row, over
+   the end of the script (on wide screens, the segment list). It never takes room from the layout. */
+.toast.playback-toast {
+  position: absolute;
+  z-index: 5;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  width: auto;
+  max-width: none;
+  max-height: min(40dvh, 240px);
+  overflow: auto;
   margin: 0;
+  padding: 10px 14px;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.playback-toast .toast-status {
+  flex: 1 1 0;
+  justify-content: space-between;
+}
+.playback-toast .toast-status p {
+  flex: 1 1 12em;
+  min-width: 0;
+}
+.toast.playback-toast.toast-empty {
+  padding: 0;
+  overflow: visible;
+}
+.toast.playback-toast.toast-error {
+  border-color: var(--danger-line);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .toast.playback-toast:not(.toast-empty) {
+    animation: toast-in 160ms ease-out;
+  }
 }
 .preview-transport {
   border: 0;
@@ -2149,7 +2179,7 @@ input.invalid {
   }
 }
 
-.app:has(.playback, .review) .toast {
+.app:has(.review) .toast {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);

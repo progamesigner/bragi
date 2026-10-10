@@ -9,6 +9,7 @@ import {
   Show,
   untrack,
 } from "solid-js";
+import { needsSignIn } from "~/lib/api";
 import { useApp } from "~/lib/app-controller";
 import type { AudioSnapshot } from "~/lib/audio/controller";
 import { audioTime, createAudioSession, seekPosition } from "~/lib/audio/session";
@@ -30,8 +31,11 @@ import { workspace } from "~/lib/store/workspace";
 import { voiceLabel } from "~/lib/voices";
 import { ScreenWakeLock } from "~/lib/wake-lock";
 import Button from "./ui/Button";
-import InlineStatus from "./ui/InlineStatus";
 import { StepArrowIcon } from "./ui/icons";
+import Toast, { type ToastContent } from "./ui/Toast";
+
+/** Where a toast came from: the shell's toasts, the playback state, or a note about settings. */
+type PlaybackToast = ToastContent & { origin: "app" | "status" | "note" };
 
 type PlaybackProps = {
   requestRevision?: object;
@@ -60,6 +64,7 @@ export default function Playback(props: PlaybackProps) {
   const wakeLock = new ScreenWakeLock();
   let disposed = false;
   let heading!: HTMLHeadingElement;
+  let primaryButton: HTMLButtonElement | undefined;
   let lastPhase = "";
   const session = createAudioSession("main", reflect);
   const snapshot = session.snapshot;
@@ -144,6 +149,72 @@ export default function Playback(props: PlaybackProps) {
       };
     return notice();
   });
+  // One toast at a time floats between the script and the controls, so no message moves a button.
+  // A newer message replaces the one on screen; the shell's toasts show here while reading.
+  app.hostToasts();
+  const [toast, setToast] = createSignal<PlaybackToast>();
+  let toastId = 0;
+  /** The last note shown, so a note appears when it changes rather than on every update. */
+  let shownNote = "";
+  function showToast(content: Omit<PlaybackToast, "id">) {
+    toastId += 1;
+    // A note cut short by a playback state comes back once that state's toast is gone.
+    if (content.origin === "status" && untrack(toast)?.origin === "note") shownNote = "";
+    setToast({ ...content, id: toastId });
+    if (content.origin !== "app" && untrack(app.toast)) app.dismissToast();
+  }
+  function dismissToast() {
+    if (untrack(toast)?.origin === "app") app.dismissToast();
+    setToast(undefined);
+  }
+  createEffect(
+    on(app.toast, (shared) => {
+      if (shared) showToast({ message: shared.message, action: shared.action, origin: "app" });
+    }),
+  );
+  // Expired sessions have one shared banner, regardless of which request failed.
+  const shownStatus = () => {
+    const current = status();
+    return current && !needsSignIn(current.details) ? current : undefined;
+  };
+  // A state is shown when it starts, not again on every update while it lasts.
+  const statusKey = createMemo(() => {
+    const current = shownStatus();
+    return current
+      ? [current.tone, current.message, current.details?.requestId ?? ""].join("\n")
+      : "";
+  });
+  createEffect(
+    on(statusKey, () => {
+      const current = untrack(shownStatus);
+      if (current) showToast({ ...current, origin: "status" });
+      // The state it described is over, e.g. preparing once the audio plays.
+      else if (untrack(toast)?.origin === "status") setToast(undefined);
+    }),
+  );
+  /** How the next playback differs from what is loaded, or what a non-1x speed does. */
+  const note = createMemo(() => {
+    if (settingsChanged())
+      return t("playback.nextSettings", {
+        voice: voiceLabel(voice() ?? availableVoices()[0] ?? ""),
+        rate: playbackRate(),
+      });
+    return playbackRate() !== 1 ? t("playback.rateNote") : "";
+  });
+  createEffect(() => {
+    const text = note();
+    // A note waits for the settings sheet to close and for a playback state's toast to go.
+    const waiting = app.settingsOpen() || toast()?.origin === "status";
+    if (!text) shownNote = "";
+    if (!text || text === shownNote || waiting) return;
+    shownNote = text;
+    untrack(() => showToast({ message: text, tone: "info", origin: "note" }));
+  });
+  const toastDuration = () => {
+    const current = toast();
+    return current?.tone === "error" ? 8000 : current?.action ? 6000 : 4000;
+  };
+
   const played = (index: number) =>
     workspace
       .played()
@@ -382,6 +453,13 @@ export default function Playback(props: PlaybackProps) {
             </ol>
           </nav>
           <div class="playback-transport">
+            <Toast
+              class="playback-toast"
+              toast={toast()}
+              duration={toastDuration()}
+              onDismiss={dismissToast}
+              returnFocus={() => primaryButton}
+            />
             <div class="playback-meter">
               <span class="playback-clock">
                 {audioTime(snapshot().position)}
@@ -417,6 +495,7 @@ export default function Playback(props: PlaybackProps) {
               }
             />
             <Button
+              ref={primaryButton}
               class="playback-primary"
               wide
               disabled={phase() === "loading"}
@@ -452,21 +531,6 @@ export default function Playback(props: PlaybackProps) {
               >
                 {t("playback.next")}
               </Button>
-            </div>
-            {/* A fixed-height slot after the controls: messages never move the buttons above. */}
-            <div class="playback-status-slot">
-              <InlineStatus status={status()} />
-              <Show when={!status() && settingsChanged()}>
-                <p class="playback-settings-note">
-                  {t("playback.nextSettings", {
-                    voice: voiceLabel(voice() ?? availableVoices()[0] ?? ""),
-                    rate: playbackRate(),
-                  })}
-                </p>
-              </Show>
-              <Show when={!status() && !settingsChanged() && playbackRate() !== 1}>
-                <p class="playback-settings-note">{t("playback.rateNote")}</p>
-              </Show>
             </div>
           </div>
         </aside>

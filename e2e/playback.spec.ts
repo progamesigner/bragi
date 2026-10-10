@@ -10,6 +10,7 @@ import {
   recognize,
   segments,
 } from "./fixtures";
+import { controls, expectOneMessagePlace } from "./playback-toast";
 
 async function enter(page: Page, rate = 1) {
   await mockSignedInApi(page);
@@ -48,16 +49,12 @@ async function calls(page: Page) {
 }
 async function bounds(page: Page) {
   return page.evaluate(() =>
-    [
-      ".playback-transport",
-      ".playback-status-slot",
-      ".playback-seek",
-      ".playback-primary",
-      ".playback-secondary",
-    ].map((selector) => {
-      const rect = document.querySelector(selector)?.getBoundingClientRect();
-      return { height: rect?.height, top: rect ? rect.top + window.scrollY : undefined };
-    }),
+    [".playback-transport", ".playback-seek", ".playback-primary", ".playback-secondary"].map(
+      (selector) => {
+        const rect = document.querySelector(selector)?.getBoundingClientRect();
+        return { height: rect?.height, top: rect ? rect.top + window.scrollY : undefined };
+      },
+    ),
   );
 }
 
@@ -262,9 +259,9 @@ test("settings changes explain next playback and preserve the current voice, rat
   await sheet.getByRole("radio", { name: "0.75 倍" }).check();
   await closeSettings(page);
   await expect(page.getByText(/下一次播放套用：.*Puck.*0.75/)).toBeVisible();
-  // The slot below the controls shows one note at a time; the pending change comes first.
+  // One toast at a time; the pending change replaces the speed note.
   const rateNote = page
-    .locator(".playback-status-slot")
+    .locator(".playback-toast")
     .getByText("非 1 倍速會先產生整段音訊再播放，並保留原本的音高。", { exact: true });
   await expect(rateNote).toHaveCount(0);
   const count = requests.filter((entry) => entry.body.text === segments[0]?.text).length;
@@ -591,4 +588,112 @@ test("dismissing a toast does not move narration controls", async ({ page }) => 
   await page.locator(".toast").dispatchEvent("pointerleave");
   await expect(page.locator(".toast")).toHaveClass(/toast-empty/, { timeout: 8000 });
   expect(await bounds(page)).toEqual(before);
+});
+
+for (const [width, height] of [
+  [390, 844],
+  [320, 640],
+  [1180, 820],
+] as const)
+  test(`every reading message floats in one place above the controls at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height });
+    await mockSignedInApi(page);
+    await mockAudio(page);
+    await page.goto("/");
+    await recognize(page);
+    await page.getByRole("button", { name: /^進入朗讀/ }).click();
+    await phase(page, "idle");
+    // Nothing is reserved for messages: the secondary row ends the transport.
+    const [transport, , , , secondary] = await controls(page);
+    expect(
+      (transport?.y ?? 0) +
+        (transport?.height ?? 0) -
+        (secondary?.y ?? 0) -
+        (secondary?.height ?? 0),
+    ).toBeLessThanOrEqual(1);
+    await expectOneMessagePlace(page);
+  });
+
+test("info toasts leave after about four seconds; errors stay longer, close, and wait for focus", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await enter(page);
+  const toast = page.locator(".playback-toast");
+  const pause = async () => page.clock.pauseAt((await page.evaluate(() => Date.now())) + 10);
+  await expect(toast).toContainText("辨識完成");
+  await pause();
+  await page.clock.runFor(3000);
+  await expect(toast).toContainText("辨識完成");
+  await page.clock.runFor(1500);
+  await expect(toast).toHaveClass(/toast-empty/);
+  // The shell's toast went with it, so another page does not show it again.
+  await goToStep(page, "校對");
+  await expect(page.locator(".toast")).toHaveClass(/toast-empty/);
+  await goToStep(page, "朗讀");
+  await page.route("**/api/tts-stream", (route) =>
+    route.fulfill({ status: 503, json: { error: { code: "TTS_UNAVAILABLE", message: "x" } } }),
+  );
+  await primary(page).click();
+  await phase(page, "error");
+  const close = toast.getByRole("button", { name: "關閉訊息" });
+  await expect(close).toBeVisible();
+  await page.clock.runFor(6000);
+  await expect(toast.getByRole("alert")).toBeVisible();
+  await page.clock.runFor(2500);
+  await expect(toast).toHaveClass(/toast-empty/);
+  // The primary button still offers the way forward.
+  await expect(primary(page)).toHaveText("重試本段");
+  await primary(page).click();
+  await phase(page, "error");
+  await close.focus();
+  await page.clock.runFor(20_000);
+  await expect(toast.getByRole("alert")).toBeVisible();
+  await close.press("Enter");
+  await expect(toast).toHaveClass(/toast-empty/);
+  // Focus goes to the control that offers the next step instead of falling to the page.
+  await expect(primary(page)).toBeFocused();
+});
+
+test("a reading message is announced once while its state lasts, and never takes focus", async ({
+  page,
+}) => {
+  await enter(page);
+  await page.evaluate(() => {
+    const toast = document.querySelector(".playback-toast") as HTMLElement;
+    const log: string[] = [];
+    let alerts = 0;
+    Object.assign(window, { toastLog: log, toastAlerts: () => alerts });
+    new MutationObserver((records) => {
+      for (const record of records)
+        for (const node of record.addedNodes)
+          if (node instanceof HTMLElement && node.matches("[role=alert]")) alerts += 1;
+      const text =
+        toast.querySelector("[role=alert] p")?.textContent ||
+        toast.querySelector("[role=status]")?.textContent ||
+        "";
+      if (text && log.at(-1) !== text) log.push(text);
+    }).observe(toast, { childList: true, subtree: true, characterData: true });
+  });
+  await page.route("**/api/tts-stream", (route) =>
+    route.fulfill({ status: 503, json: { error: { code: "TTS_UNAVAILABLE", message: "x" } } }),
+  );
+  await primary(page).click();
+  await phase(page, "error");
+  expect(await page.evaluate(() => !!document.activeElement?.closest(".playback-toast"))).toBe(
+    false,
+  );
+  // Settings change what the page shows around the error, not the error itself.
+  await openSettings(page);
+  await chooseVoice(page, "Puck");
+  await closeSettings(page);
+  await expect(page.locator(".playback-toast [role=alert]")).toBeVisible();
+  const log = await page.evaluate(() => (window as unknown as { toastLog: string[] }).toastLog);
+  expect(log.filter((text) => text.includes("語音服務暫時無法使用"))).toHaveLength(1);
+  expect(
+    await page.evaluate(() => (window as unknown as { toastAlerts: () => number }).toastAlerts()),
+  ).toBe(1);
+  await expect(page.getByRole("alert")).toHaveCount(1);
 });

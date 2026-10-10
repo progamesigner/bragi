@@ -10,6 +10,7 @@ import {
   recognize,
   selectImage,
 } from "./fixtures";
+import { controls, expectOneMessagePlace } from "./playback-toast";
 import { pageStyle, settle } from "./visual-capture";
 
 async function box(locator: Locator) {
@@ -191,7 +192,7 @@ for (const colorScheme of ["dark", "light"] as const) {
           [
             element,
             ...element.querySelectorAll(
-              ".playback-meter, .playback-primary, .playback-secondary, .playback-seek, .playback-status-slot",
+              ".playback-meter, .playback-primary, .playback-secondary, .playback-seek",
             ),
           ].map((item) => {
             const rect = item.getBoundingClientRect();
@@ -238,10 +239,39 @@ for (const colorScheme of ["dark", "light"] as const) {
       for (const height of [664, 844]) {
         await page.setViewportSize({ width: 390, height });
         await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-        const slot = await box(page.locator(".playback-status-slot"));
-        expect(height - slot.y - slot.height).toBeLessThanOrEqual(28);
+        // No room is kept for messages: the secondary buttons end the page.
+        const secondary = await box(page.locator(".playback-secondary"));
+        expect(height - secondary.y - secondary.height).toBeLessThanOrEqual(28);
       }
     });
+    for (const [width, height] of [
+      [390, 844],
+      [320, 640],
+    ] as const)
+      test(`reading messages float in one place over the script at ${width}px`, async ({
+        page,
+      }) => {
+        await page.setViewportSize({ width, height });
+        await start(page);
+        await recognize(page);
+        await page.getByRole("button", { name: /^進入朗讀/ }).click();
+        await expect(page.locator(".playback")).toHaveAttribute("data-phase", "idle");
+        await page.evaluate(() => document.fonts.ready);
+        const [transport, , , , secondary] = await controls(page);
+        expect(
+          (transport?.y ?? 0) +
+            (transport?.height ?? 0) -
+            (secondary?.y ?? 0) -
+            (secondary?.height ?? 0),
+        ).toBeLessThanOrEqual(1);
+        const places = await expectOneMessagePlace(page);
+        // Over the end of the script, never above where it starts.
+        const script = await box(page.locator(".playback-script"));
+        for (const { label, rect } of places) {
+          expect(rect.y + rect.height, label).toBeGreaterThan(script.y);
+          expect(rect.y, label).toBeGreaterThanOrEqual(script.y - 1);
+        }
+      });
     for (const locale of ["zh-Hant", "zh-Hans", "ja", "ko", "en", "de", "es"]) {
       test(`reading ${locale}: voice summary shares the clock row right under the script`, async ({
         page,
