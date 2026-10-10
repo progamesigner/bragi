@@ -936,7 +936,10 @@ label.file-button:has(+ input:focus-visible) {
   min-height: 48px;
   margin-top: var(--space-1);
 }
-.voice-picker-sample span {
+.voice-picker-sample .settings-note {
+  margin-top: var(--space-2);
+}
+.voice-picker-sample-text {
   color: var(--text-2);
 }
 .voice-picker-count {

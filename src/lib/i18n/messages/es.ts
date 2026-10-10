@@ -126,6 +126,7 @@ const messages = {
   "voicePicker.trait": "Filtrar por rasgo",
   "voicePicker.allTraits": "Todos los rasgos ({n})",
   "voicePicker.traitOption": "{trait} ({n})",
+  "voicePicker.sampleLanguage": "Idioma de la muestra",
   "voicePicker.sampleText": "Frase de muestra: ",
   "voicePicker.count": "{n} de {total} voces",
   "voicePicker.none": "Ninguna voz coincide",

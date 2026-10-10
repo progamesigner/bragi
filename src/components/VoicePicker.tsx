@@ -1,13 +1,8 @@
 import { createMemo, createSignal, createUniqueId, For, Show } from "solid-js";
-import { t } from "~/lib/i18n";
-import {
-  filterVoices,
-  VOICE_SAMPLE_TEXT,
-  type VoiceTrait,
-  voiceLabel,
-  voiceTrait,
-  voiceTraits,
-} from "~/lib/voices";
+import { LOCALE_NAMES, LOCALES, type Locale, t } from "~/lib/i18n";
+import { locale } from "~/lib/store/preferences";
+import { VOICE_SAMPLE_TEXTS } from "~/lib/voice-samples";
+import { filterVoices, type VoiceTrait, voiceLabel, voiceTrait, voiceTraits } from "~/lib/voices";
 import AudioPreview from "./AudioPreview";
 import Button from "./ui/Button";
 import Select from "./ui/Select";
@@ -68,6 +63,9 @@ function VoicePickerBody(
   const id = createUniqueId();
   const [query, setQuery] = createSignal("");
   const [trait, setTrait] = createSignal<VoiceTrait | undefined>();
+  // Scripts are often in another language than the interface, so the sample can be switched here.
+  const [sampleLocale, setSampleLocale] = createSignal<Locale>(locale());
+  const sampleText = () => VOICE_SAMPLE_TEXTS[sampleLocale()];
   const traitLabel = (value: VoiceTrait) => t(`voiceTrait.${value}`);
   const shown = createMemo(() =>
     filterVoices(props.voices, { query: query(), trait: trait() }, traitLabel),
@@ -116,10 +114,29 @@ function VoicePickerBody(
           </Select>
         </div>
       </div>
-      <p id={`${id}-sample`} class="settings-note voice-picker-sample">
-        {t("voicePicker.sampleText")}
-        <span lang="zh-Hant">{VOICE_SAMPLE_TEXT}</span>
-      </p>
+      <div class="settings-field voice-picker-sample">
+        <label for={`${id}-sample-locale`}>{t("voicePicker.sampleLanguage")}</label>
+        <Select
+          id={`${id}-sample-locale`}
+          value={sampleLocale()}
+          aria-describedby={`${id}-sample`}
+          onChange={(event) => setSampleLocale(event.currentTarget.value as Locale)}
+        >
+          <For each={LOCALES}>
+            {(value) => (
+              <option value={value} lang={value}>
+                {LOCALE_NAMES[value]}
+              </option>
+            )}
+          </For>
+        </Select>
+        <p id={`${id}-sample`} class="settings-note">
+          {t("voicePicker.sampleText")}
+          <span class="voice-picker-sample-text" lang={sampleLocale()}>
+            {sampleText()}
+          </span>
+        </p>
+      </div>
       <p class="voice-picker-count" role="status">
         {shown().length
           ? t("voicePicker.count", { n: shown().length, total: props.voices.length })
@@ -183,7 +200,8 @@ function VoicePickerBody(
                 </label>
                 <AudioPreview
                   owner="sample"
-                  input={{ text: VOICE_SAMPLE_TEXT, voice: name }}
+                  input={{ text: sampleText(), voice: name }}
+                  lang={sampleLocale()}
                   requestRevision={props.requestRevision}
                   active={props.open}
                   valid

@@ -126,6 +126,7 @@ const messages = {
   "voicePicker.trait": "特徴で絞り込む",
   "voicePicker.allTraits": "すべての特徴（{n}）",
   "voicePicker.traitOption": "{trait}（{n}）",
+  "voicePicker.sampleLanguage": "試聴の言語",
   "voicePicker.sampleText": "サンプル文：",
   "voicePicker.count": "{total} 件中 {n} 件の声",
   "voicePicker.none": "一致する声がありません",

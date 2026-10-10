@@ -27,6 +27,8 @@ test -s .vercel/output/static/sw.js
 
 `assets/icon/icon.svg` 與 `icon-maskable.svg` 是圖示來源。maskable 圖案保留在中央 80% 圓內；執行 `node scripts/build-icons.mjs`，以已安裝的 Playwright Chromium 產生 `public/` 的 PNG、Apple touch icon 與 favicon。`scripts/pwa-assets.mjs` 列出 precache 公開檔案。
 
+`public/voice-samples/` 是 7 種語言 × 30 種聲音的預產試聽檔（AAC、48 kbps mono），由 `scripts/build-voice-samples.mjs` 呼叫 Gemini 產生後提交。它們不進 precache，也不需要登入；缺檔時前端退回 `/api/tts`。
+
 `build-worker.mjs` 依公開資產及 client JS／CSS 的內容 hash 產生版本化 `bragi-shell-*` 快取。安裝取公開資產時不帶憑證；啟用後刪除舊 shell cache。
 
 service worker 不攔截 API、跨來源、非 GET 或有 query 的請求。公開 precache 資產由 cache 提供；只有 `/` 的離線導覽會落到 `/offline.html`。它不提供離線辨識或新音訊生成，也不把圖片、草稿或音訊存入 Cache Storage；文字草稿另由 localStorage 暫存。

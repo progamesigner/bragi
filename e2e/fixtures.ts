@@ -29,9 +29,18 @@ export function expectTouchSize(size: number, minimum: number, label?: string) {
   expect(size, label).toBeGreaterThanOrEqual(minimum - 0.01);
 }
 
+/**
+ * Hides the pre-generated voice samples, so previews go through the live speech fallback that
+ * tests mock and count. Tests of the files themselves route them after this.
+ */
+export async function withoutVoiceSampleFiles(page: Page) {
+  await page.route("**/voice-samples/**", (route) => route.fulfill({ status: 404 }));
+}
+
 /** A deterministic API, signed in unless asked otherwise; nothing reaches a real provider. */
 export async function mockSignedInApi(page: Page, { authenticated = true } = {}) {
   await observeAudio(page);
+  await withoutVoiceSampleFiles(page);
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;

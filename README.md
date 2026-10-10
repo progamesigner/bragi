@@ -10,7 +10,7 @@ Bragi 是手機優先的桌遊口白助手。拍下劇本或卡牌，交給 Gemi
 
 - 拍照或選擇圖片，也可以匯入先前匯出的 JSON 草稿。
 - 校對卡預設只顯示口白，可以直接修改。展開後能改語氣與發音修正，也能拆分、合併、新增或刪除段落。段落列表可快速跳到要改的位置，編輯可以復原與重做。
-- 設定面板可調字級、外觀（深色、淺色或跟隨系統）、介面語言、聲音、語速與朗讀時螢幕常亮。聲音選擇器列出 30 種聲音並可試聽，預設是 Kore。
+- 設定面板可調字級、外觀（深色、淺色或跟隨系統）、介面語言、聲音、語速與朗讀時螢幕常亮。聲音選擇器列出 30 種聲音並可試聽，預設是 Kore。試聽句子跟著介面語言，也可以在選擇器裡切換成其他語言；試聽音檔已預先產生，按下就播，不會呼叫 Gemini。
 - 介面有繁體中文、簡體中文、日文、韓文、英文、德文與西班牙文。切換介面語言不會翻譯稿件。繁中以外的譯文還沒經母語者校對，用語見 [用語表](docs/i18n-glossary.md)。
 
 ## 使用流程
@@ -91,7 +91,11 @@ BRAGI_SMOKE_URL=https://bragi.0x148.com npm run test:smoke
 
 可以用瀏覽器的安裝功能把 Bragi 加到主畫面。PWA 只快取公開的靜態檔案，離線時顯示說明頁；辨識與生成新語音仍然需要網路。有新版本時要先確認才會重新載入，套用前請關閉其他 Bragi 分頁。
 
-圖示來源是 `assets/icon/icon.svg` 與 `assets/icon/icon-maskable.svg`。換圖後執行 `node scripts/build-icons.mjs`，它會用 Playwright 安裝的 Chromium 在 `public/` 產生 PNG、Apple touch icon 與 favicon。maskable 版的圖案要放在中央 80% 的圓內。部署檢查、快取與日誌的細節見 [維運文件](docs/operations.md)。
+圖示來源是 `assets/icon/icon.svg` 與 `assets/icon/icon-maskable.svg`。換圖後執行 `node scripts/build-icons.mjs`，它會用 Playwright 安裝的 Chromium 在 `public/` 產生 PNG、Apple touch icon 與 favicon。maskable 版的圖案要放在中央 80% 的圓內。
+
+聲音試聽音檔放在 `public/voice-samples/<語言>/<聲音>.m4a`，句子定義在 `src/lib/voice-samples.ts`。改了句子或聲音清單後，執行 `node --env-file=.env scripts/build-voice-samples.mjs --force <語言或聲音>` 重新產生，需要 `GEMINI_API_KEY` 與 ffmpeg。沒有 `--force` 時只補缺少的檔案。Gemini 每次念得不太一樣，產生後要聽過一遍，念錯的再單獨重產。缺檔時試聽會退回即時產生。腳本把請求控制在每分鐘 8 次；Tier 1 的 TTS 每天只有 100 次，而且和正式站共用，全部 210 個要分兩天以上產生，額度用完時腳本會停下，隔天再跑一次即可補齊。
+
+部署檢查、快取與日誌的細節見 [維運文件](docs/operations.md)。
 
 ## 資料與隱私
 

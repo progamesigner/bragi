@@ -1,6 +1,7 @@
 import { readApiError } from "./api";
 import { t } from "./i18n";
 import { requireOnline } from "./network";
+import { voiceSampleAsset } from "./voice-samples";
 
 export type SpeechRequest = {
   voice?: string;
@@ -39,4 +40,23 @@ export async function requestSpeech(
     blob,
     durationMs: Number.isFinite(durationMs) ? durationMs : undefined,
   };
+}
+
+/**
+ * Voice previews of a sample line come from the pre-generated file; anything else, or a voice
+ * without one yet, is synthesized live.
+ */
+export async function requestVoiceSample(
+  input: SpeechRequest,
+  signal?: AbortSignal,
+  fetcher: typeof fetch = fetch,
+): Promise<SpeechAudio> {
+  const asset = voiceSampleAsset(input);
+  if (asset) {
+    requireOnline();
+    const response = await fetcher(asset, { signal });
+    if (response.ok && response.headers.get("content-type")?.startsWith("audio/"))
+      return { blob: await response.blob() };
+  }
+  return requestSpeech(input, signal, fetcher);
 }

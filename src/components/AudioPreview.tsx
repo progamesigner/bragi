@@ -18,6 +18,8 @@ export default function AudioPreview(props: {
   valid: boolean;
   requestRevision?: object;
   describedBy?: string;
+  /** The language of `input.text` when it may differ from the interface. */
+  lang?: string;
   /**
    * A one-button preview for lists: play, cancel while preparing, stop while playing. The visible
    * text stays short and the accessible name adds `subject`.
@@ -165,7 +167,9 @@ export default function AudioPreview(props: {
           </Button>
           <details open={props.owner === "sample"}>
             <summary>{t("playback.transcript")}</summary>
-            <p class="preview-transcript">{props.input.text}</p>
+            <p class="preview-transcript" lang={props.lang}>
+              {props.input.text}
+            </p>
           </details>
         </fieldset>
       </Show>

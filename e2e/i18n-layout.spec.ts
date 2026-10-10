@@ -150,7 +150,7 @@ for (const [locale, dictionary] of Object.entries({
       await expect(picker).toBeVisible();
       await expect(picker.getByRole("radio")).toHaveCount(VOICE_CATALOG.length);
       expect(await layoutProblems(page, ".voice-picker-sheet"), "voice picker").toEqual([]);
-      await picker.locator("select").selectOption("firm");
+      await picker.getByLabel(dictionary["voicePicker.trait"]).selectOption("firm");
       await picker
         .getByRole("button", {
           name: format(dictionary["voicePicker.action"], {

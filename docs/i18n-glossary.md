@@ -5,8 +5,9 @@
 > check, and update both this file and `src/lib/i18n/messages/*.ts` together.
 
 Traditional Chinese (`zh-Hant.ts`) is the source dictionary; every other language falls back to it
-key by key. OCR text, tone hints, the voice sample sentence and draft data are content and are
-never translated.
+key by key. OCR text, tone hints and draft data are content and are never translated. The voice sample
+sentences are spoken content too: each language has its own line in `src/lib/voice-samples.ts`,
+pre-generated as audio, so changing one means regenerating its files.
 
 ## Core terms
 

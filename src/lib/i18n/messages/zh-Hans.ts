@@ -120,6 +120,7 @@ const messages = {
   "voicePicker.trait": "按特质筛选",
   "voicePicker.allTraits": "全部特质（{n}）",
   "voicePicker.traitOption": "{trait}（{n}）",
+  "voicePicker.sampleLanguage": "试听语言",
   "voicePicker.sampleText": "试听句子：",
   "voicePicker.count": "显示 {n} 个声音，共 {total} 个",
   "voicePicker.none": "没有符合的声音",

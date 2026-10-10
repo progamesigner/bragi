@@ -126,6 +126,7 @@ const messages = {
   "voicePicker.trait": "특징으로 거르기",
   "voicePicker.allTraits": "모든 특징({n})",
   "voicePicker.traitOption": "{trait}({n})",
+  "voicePicker.sampleLanguage": "미리 듣기 언어",
   "voicePicker.sampleText": "샘플 문장: ",
   "voicePicker.count": "{total}개 중 {n}개 음성",
   "voicePicker.none": "맞는 음성이 없어요",

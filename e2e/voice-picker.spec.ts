@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { VOICE_SAMPLE_TEXTS } from "../src/lib/voice-samples";
 import { VOICE_CATALOG } from "../src/lib/voices";
 import { mockAudio } from "./audio-fixture";
 import {
@@ -10,6 +11,7 @@ import {
   segments,
   settingsSheet,
   voicePicker,
+  wav,
 } from "./fixtures";
 
 const ALL = ["Kore", ...VOICE_CATALOG.map(([name]) => name).filter((name) => name !== "Kore")];
@@ -34,9 +36,11 @@ async function enter(page: Page, { holdSamples = false } = {}) {
     const aborted: string[] = [];
     const fetcher = window.fetch.bind(window);
     window.fetch = (input, init) => {
-      init?.signal?.addEventListener("abort", () => {
-        aborted.push(JSON.parse(String(init.body ?? "{}")).voice ?? "");
-      });
+      // Speech requests only: a sample file lookup shares the signal but has no body.
+      if (init?.body)
+        init.signal?.addEventListener("abort", () => {
+          aborted.push(JSON.parse(String(init.body)).voice ?? "");
+        });
       return fetcher(input, init);
     };
     Object.assign(window, { abortedSpeech: aborted });
@@ -158,6 +162,37 @@ test("previews only on request, one voice at a time, and reuse the bounded sampl
   await expect(preview(page, "停止", "Puck")).toBeVisible();
   expect(samples(calls).map((call) => call.voice)).toEqual(["Puck", "Zephyr"]);
   expect(calls.every((call) => call.path === "/api/tts")).toBe(true);
+});
+
+test("samples in the interface language from the pre-generated files, switchable in the picker", async ({
+  page,
+}) => {
+  const calls = await enter(page);
+  const files: string[] = [];
+  await page.route("**/voice-samples/**", (route) => {
+    files.push(new URL(route.request().url()).pathname);
+    return route.fulfill({ contentType: "audio/mp4", body: wav });
+  });
+  const picker = await openVoicePicker(page);
+  const language = picker.getByLabel("試聽語言");
+  await expect(language).toHaveValue("zh-Hant");
+  await expect(picker.locator(".voice-picker-sample-text")).toHaveText(
+    VOICE_SAMPLE_TEXTS["zh-Hant"],
+  );
+
+  await preview(page, "試聽", "Puck").click();
+  await expect(preview(page, "停止", "Puck")).toBeVisible();
+  await preview(page, "停止", "Puck").click();
+
+  await language.selectOption("ja");
+  const sample = picker.locator(".voice-picker-sample-text");
+  await expect(sample).toHaveText(VOICE_SAMPLE_TEXTS.ja);
+  await expect(sample).toHaveAttribute("lang", "ja");
+  await preview(page, "試聽", "Puck").click();
+  await expect(preview(page, "停止", "Puck")).toBeVisible();
+
+  expect(files).toEqual(["/voice-samples/zh-Hant/Puck.m4a", "/voice-samples/ja/Puck.m4a"]);
+  expect(samples(calls)).toEqual([]);
 });
 
 test("closing the picker or settings stops the preview and cancels its request", async ({

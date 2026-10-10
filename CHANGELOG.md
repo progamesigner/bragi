@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+- Voice previews play pre-generated audio instead of waiting for Gemini, with a narration line written for each interface language. The sample follows the interface language and can be switched in the voice picker.
+
 ## 1.1.0 — 2026-10-10
 
 Interface rebuild, local drafts and a new reading flow. Verified on real iOS Safari and Android Chrome devices with the reading device checklist.

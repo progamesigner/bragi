@@ -126,6 +126,7 @@ const messages = {
   "voicePicker.trait": "Filter by trait",
   "voicePicker.allTraits": "All traits ({n})",
   "voicePicker.traitOption": "{trait} ({n})",
+  "voicePicker.sampleLanguage": "Preview language",
   "voicePicker.sampleText": "Sample sentence: ",
   "voicePicker.count": "Showing {n} of {total} voices",
   "voicePicker.none": "No voices match",

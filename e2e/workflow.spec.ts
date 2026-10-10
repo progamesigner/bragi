@@ -15,6 +15,7 @@ import {
   signIn,
   signOut,
   toast,
+  withoutVoiceSampleFiles,
 } from "./fixtures";
 
 const pcm = Buffer.alloc(12_000);
@@ -26,6 +27,7 @@ const image = Buffer.from(
 
 async function mockApi(page: Page, authenticated = false) {
   await observeAudio(page);
+  await withoutVoiceSampleFiles(page);
   const calls: { path: string; body: unknown }[] = [];
   await page.route("**/api/**", async (route) => {
     const request = route.request();

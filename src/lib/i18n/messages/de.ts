@@ -126,6 +126,7 @@ const messages = {
   "voicePicker.trait": "Nach Merkmal filtern",
   "voicePicker.allTraits": "Alle Merkmale ({n})",
   "voicePicker.traitOption": "{trait} ({n})",
+  "voicePicker.sampleLanguage": "Sprache der Hörprobe",
   "voicePicker.sampleText": "Beispielsatz: ",
   "voicePicker.count": "{n} von {total} Stimmen",
   "voicePicker.none": "Keine passende Stimme",

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { requestSpeech } from "./speech";
+import { requestSpeech, requestVoiceSample } from "./speech";
+import { VOICE_SAMPLE_TEXTS } from "./voice-samples";
 
 describe("speech client", () => {
   it("returns validated WAV audio metadata", async () => {
@@ -48,5 +49,67 @@ describe("speech client", () => {
     await expect(requestSpeech({ text: "第一段" }, undefined, fetcher)).rejects.toThrow(
       "音訊格式不正確",
     );
+  });
+});
+
+describe("voice samples", () => {
+  const wav = () =>
+    new Response(new Blob(["audio"], { type: "audio/wav" }), {
+      headers: { "x-audio-duration-ms": "900" },
+    });
+
+  it("plays the pre-generated file for a sample line without calling Gemini", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        new Response(new Blob(["m4a"]), { headers: { "content-type": "audio/mp4" } }),
+      );
+
+    const result = await requestVoiceSample(
+      { text: VOICE_SAMPLE_TEXTS.ja, voice: "Puck" },
+      undefined,
+      fetcher,
+    );
+
+    expect(await result.blob.text()).toBe("m4a");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith("/voice-samples/ja/Puck.m4a", expect.anything());
+  });
+
+  it("falls back to live speech when the file is missing or is the app shell", async () => {
+    for (const missing of [
+      new Response("not found", { status: 404 }),
+      new Response("<!doctype html>", { headers: { "content-type": "text/html" } }),
+    ]) {
+      const fetcher = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(missing)
+        .mockResolvedValueOnce(wav());
+
+      const result = await requestVoiceSample(
+        { text: VOICE_SAMPLE_TEXTS.de, voice: "Kore" },
+        undefined,
+        fetcher,
+      );
+
+      expect(result.durationMs).toBe(900);
+      expect(fetcher).toHaveBeenLastCalledWith(
+        "/api/tts",
+        expect.objectContaining({ method: "POST" }),
+      );
+    }
+  });
+
+  it("synthesizes any other text live", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => wav());
+
+    await requestVoiceSample({ text: "第一段", voice: "Kore" }, undefined, fetcher);
+    await requestVoiceSample(
+      { text: VOICE_SAMPLE_TEXTS.en, voice: "Kore", toneHint: "calm" },
+      undefined,
+      fetcher,
+    );
+
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual(["/api/tts", "/api/tts"]);
   });
 });

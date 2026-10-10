@@ -1,4 +1,9 @@
-import { requestSpeech, type SpeechAudio, type SpeechPurpose, type SpeechRequest } from "../speech";
+import {
+  requestVoiceSample,
+  type SpeechAudio,
+  type SpeechPurpose,
+  type SpeechRequest,
+} from "../speech";
 import { requestCachedSpeech, SpeechCache, speechCache, speechCacheKey } from "../speech-cache";
 import { openSpeechStream, PcmStreamPlayer, type SpeechPcmStream } from "../speech-stream";
 import { playbackSettings, subscribePlaybackSettings } from "../store/preferences";
@@ -154,7 +159,7 @@ export class AudioController {
         get: (input) => samples.get(input),
         set: (input, audio) => samples.set(input, audio),
         request: async (input, signal) => {
-          const audio = await requestSpeech(input, signal);
+          const audio = await requestVoiceSample(input, signal);
           signal.throwIfAborted();
           samples.set(input, audio);
           return audio;

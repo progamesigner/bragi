@@ -130,6 +130,7 @@ const zhHant = {
   "voicePicker.trait": "依特質篩選",
   "voicePicker.allTraits": "全部特質（{n}）",
   "voicePicker.traitOption": "{trait}（{n}）",
+  "voicePicker.sampleLanguage": "試聽語言",
   "voicePicker.sampleText": "試聽句子：",
   "voicePicker.count": "顯示 {n} 個聲音，共 {total} 個",
   "voicePicker.none": "沒有符合的聲音",
