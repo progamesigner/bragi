@@ -2,6 +2,7 @@ import { createSignal, For, onMount, Show } from "solid-js";
 import Capture from "~/components/Capture";
 import Button, { buttonClass } from "~/components/ui/Button";
 import InlineStatus from "~/components/ui/InlineStatus";
+import { CheckIcon } from "~/components/ui/icons";
 import { useApp } from "~/lib/app-controller";
 import { t } from "~/lib/i18n";
 import { insertAfter } from "~/lib/state";
@@ -121,16 +122,23 @@ function CaptureContent() {
             <Show when={stage()}>
               <ol class="recognition-stages" aria-label={t("recognize.stages")}>
                 <For each={stages}>
-                  {(value) => (
-                    <li
-                      aria-current={stage() === value ? "step" : undefined}
-                      classList={{
-                        done: stages.indexOf(value) < stages.indexOf(stage() ?? "prepare"),
-                      }}
-                    >
-                      {t(`recognize.${value}Stage`)}
-                    </li>
-                  )}
+                  {(value) => {
+                    const done = () => stages.indexOf(value) < stages.indexOf(stage() ?? "prepare");
+                    return (
+                      <li
+                        aria-current={stage() === value ? "step" : undefined}
+                        classList={{ done: done() }}
+                      >
+                        <Show when={done()}>
+                          <CheckIcon />
+                        </Show>
+                        {t(`recognize.${value}Stage`)}
+                        <Show when={done()}>
+                          <span class="visually-hidden">{` (${t("recognize.stageDone")})`}</span>
+                        </Show>
+                      </li>
+                    );
+                  }}
                 </For>
               </ol>
             </Show>

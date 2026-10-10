@@ -415,6 +415,7 @@ const messages = {
   "capture.addText": "Add text part",
   "privacy.summary": "Photos are sent to Google Gemini and kept for up to 48 hours",
   "recognize.stages": "Recognition progress",
+  "recognize.stageDone": "done",
   "recognize.prepareStage": "Preparing image",
   "recognize.uploadStage": "Uploading image",
   "recognize.recognizeStage": "Reading and splitting text",

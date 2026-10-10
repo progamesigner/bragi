@@ -423,6 +423,7 @@ const messages = {
   "capture.addText": "Añadir parte de texto",
   "privacy.summary": "Las fotos se envían a Google Gemini y se conservan hasta 48 horas",
   "recognize.stages": "Progreso del reconocimiento",
+  "recognize.stageDone": "completado",
   "recognize.prepareStage": "Preparar imagen",
   "recognize.uploadStage": "Subir imagen",
   "recognize.recognizeStage": "Reconocer y dividir el texto",

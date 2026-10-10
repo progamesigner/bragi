@@ -36,6 +36,53 @@ async function snap(locator: Locator, name: string) {
     scale: "css",
   });
 }
+/** Pixels in a screenshot that read as blue; the warm palettes never draw any. */
+async function bluePixels(locator: Locator) {
+  const png = await locator.screenshot({ animations: "disabled" });
+  return locator.page().evaluate(async (data) => {
+    const picture = new Image();
+    picture.src = `data:image/png;base64,${data}`;
+    await picture.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = picture.width;
+    canvas.height = picture.height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("No canvas");
+    context.drawImage(picture, 0, 0);
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let count = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      const [red = 0, green = 0, blue = 0] = pixels.subarray(index, index + 3);
+      if (blue > red + 40 && blue > green + 20) count++;
+    }
+    return count;
+  }, png.toString("base64"));
+}
+/** Native controls on the page that would draw in the platform's colours instead of the theme's. */
+function nativeControls(page: Page) {
+  return page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--accent)";
+    document.body.append(probe);
+    const accent = getComputedStyle(probe).color;
+    probe.remove();
+    const problems: string[] = [];
+    if (document.querySelector("progress, meter")) problems.push("native progress or meter");
+    for (const input of document.querySelectorAll<HTMLInputElement>(
+      "input[type=range], input[type=radio], input[type=checkbox]",
+    )) {
+      const style = getComputedStyle(input);
+      const hidden = style.opacity === "0";
+      const drawn = style.getPropertyValue("-webkit-appearance") === "none";
+      if (input.type === "range" && !drawn) problems.push(`native range ${input.className}`);
+      if (input.type === "range" && !input.classList.contains("seek"))
+        problems.push(`range without the shared seek style ${input.className}`);
+      if (!hidden && !drawn && style.accentColor !== accent)
+        problems.push(`${input.type} accent ${style.accentColor}`);
+    }
+    return problems;
+  });
+}
 async function start(page: Page) {
   await mockSignedInApi(page);
   await mockAudio(page);
@@ -254,6 +301,64 @@ for (const colorScheme of ["dark", "light"] as const) {
         await expect(page.locator("dialog[open] .voice-current")).toBeFocused();
       });
     }
+    test("sliders, stage bars and native choices use theme tokens", async ({ page }) => {
+      await start(page);
+      await page.route("**/api/ocr", () => undefined);
+      await selectImage(page);
+      await page.getByRole("button", { name: "辨識文字", exact: true }).click();
+      const stages = page.locator(".recognition-stages");
+      await expect(stages.locator("[aria-current=step]")).toHaveText("辨識與分段");
+      const tracks = await stages.locator("li").evaluateAll((items) =>
+        items.map((item) => ({
+          border: getComputedStyle(item).borderTopColor,
+          weight: getComputedStyle(item).fontWeight,
+          check: !!item.querySelector("svg"),
+        })),
+      );
+      const ok = await page.evaluate(() => {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--ok)";
+        document.body.append(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color;
+      });
+      // Done, done, current: done stages carry a check and a lighter track than the current one.
+      expect(tracks.map((track) => track.check)).toEqual([true, true, false]);
+      expect(tracks[0]?.border).toBe(tracks[1]?.border);
+      expect(tracks[0]?.border).not.toBe(tracks[2]?.border);
+      expect(tracks[0]?.border).not.toBe(ok);
+      expect(Number(tracks[2]?.weight)).toBeGreaterThan(Number(tracks[0]?.weight));
+      expect(await bluePixels(stages)).toBe(0);
+      expect(await nativeControls(page)).toEqual([]);
+      await page.getByRole("button", { name: "取消辨識", exact: true }).click();
+      await page.unroute("**/api/ocr");
+      await mockSignedInApi(page);
+      await recognize(page);
+
+      const preview = page.locator(".speech-preview").first();
+      await preview.getByRole("button", { name: "產生試聽" }).click();
+      await expect(preview.locator("input[type=range]")).toBeEnabled();
+      expect(await nativeControls(page)).toEqual([]);
+      expect(await bluePixels(preview.locator(".preview-transport"))).toBe(0);
+      await preview.getByRole("button", { name: "停止", exact: true }).click();
+
+      const sheet = await openSettings(page);
+      await sheet.getByRole("button", { name: "試聽這個聲音" }).click();
+      await expect(sheet.locator(".voice-sample input[type=range]")).toBeEnabled();
+      expect(await nativeControls(page)).toEqual([]);
+      expect(await bluePixels(sheet.locator(".voice-sample .preview-transport"))).toBe(0);
+      await openVoicePicker(page);
+      expect(await nativeControls(page)).toEqual([]);
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Escape");
+      await expect(page.locator("dialog[open]")).toHaveCount(0);
+
+      await page.getByRole("button", { name: /^進入朗讀/ }).click();
+      await expect(page.locator(".playback-seek")).toBeVisible();
+      expect(await nativeControls(page)).toEqual([]);
+      expect(await bluePixels(page.locator(".playback-transport"))).toBe(0);
+    });
     test("review language, compact dirty hint and actual footer reservation", async ({ page }) => {
       await start(page);
       await page.locator("#draft-import").setInputFiles({

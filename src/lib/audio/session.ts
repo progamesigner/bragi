@@ -52,3 +52,9 @@ export function audioTime(seconds: number): string {
     .toString()
     .padStart(2, "0")}:${(value % 60).toString().padStart(2, "0")}`;
 }
+
+/** How far a seek slider's track is filled, as the `--position` its styles read. */
+export function seekPosition(snapshot: Pick<AudioSnapshot, "position" | "duration">): string {
+  const { position, duration } = snapshot;
+  return `${duration ? Math.min(100, (position / duration) * 100) : 0}%`;
+}

@@ -103,6 +103,10 @@
   --focus: #8a4f0e;
 }
 :root {
+  /* Any native control that still draws its own accent (and the text caret) uses the theme, not
+     the platform blue. */
+  accent-color: var(--accent);
+  caret-color: var(--accent-text);
   --space-1: 8px;
   --space-2: 16px;
   --space-3: 24px;
@@ -1589,17 +1593,26 @@ input.invalid {
 }
 .recognition-stages li {
   flex: 1;
+  min-width: 0;
   border-top: 3px solid var(--line-2);
   padding-top: 8px;
 }
+/* Done, current and waiting differ in track tone, text weight and the done check, not hue alone. */
 .recognition-stages [aria-current] {
   color: var(--accent-text);
   border-color: var(--accent);
   font-weight: 700;
 }
 .recognition-stages .done {
-  color: var(--ok);
-  border-color: var(--ok);
+  color: var(--text-2);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line-2));
+}
+.recognition-stages .icon {
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+  vertical-align: -2px;
+  color: var(--accent-text);
 }
 .recognition-controls .recognize {
   margin-top: 16px;
@@ -1879,7 +1892,8 @@ input.invalid {
   margin: 0;
   font-size: 0.8rem;
 }
-.playback-seek {
+/* Every seek slider: a token-coloured track filled to --position, never the native control. */
+.seek {
   width: 100%;
   min-width: 0;
   height: 44px;
@@ -1890,7 +1904,7 @@ input.invalid {
   background: transparent;
   border: 0;
 }
-.playback-seek::-webkit-slider-runnable-track {
+.seek::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 4px;
   background: linear-gradient(
@@ -1899,7 +1913,7 @@ input.invalid {
     var(--line-strong) var(--position)
   );
 }
-.playback-seek::-moz-range-track {
+.seek::-moz-range-track {
   height: 4px;
   border-radius: 4px;
   background: linear-gradient(
@@ -1908,7 +1922,7 @@ input.invalid {
     var(--line-strong) var(--position)
   );
 }
-.playback-seek::-webkit-slider-thumb {
+.seek::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;
   width: 20px;
@@ -1918,17 +1932,17 @@ input.invalid {
   border-radius: 50%;
   background: var(--accent);
 }
-.playback-seek::-moz-range-thumb {
+.seek::-moz-range-thumb {
   width: 16px;
   height: 16px;
   border: 2px solid var(--bg);
   border-radius: 50%;
   background: var(--accent);
 }
-.playback-seek:disabled::-webkit-slider-thumb {
+.seek:disabled::-webkit-slider-thumb {
   visibility: hidden;
 }
-.playback-seek:disabled::-moz-range-thumb {
+.seek:disabled::-moz-range-thumb {
   visibility: hidden;
 }
 .playback-primary {
@@ -1959,11 +1973,12 @@ input.invalid {
   color: var(--text-2);
   font-size: 0.8rem;
 }
-.preview-seek-label,
+.preview-seek-label {
+  display: block;
+  min-width: 0;
+}
 .preview-seek {
   display: block;
-  width: 100%;
-  min-width: 0;
 }
 .preview-transcript {
   overflow-wrap: anywhere;

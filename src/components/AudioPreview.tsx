@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createUniqueId, on, Show } from "solid-js";
 import type { AudioOwner } from "~/lib/audio/controller";
-import { audioTime, createAudioSession } from "~/lib/audio/session";
+import { audioTime, createAudioSession, seekPosition } from "~/lib/audio/session";
 import { t } from "~/lib/i18n";
 import { describeError } from "~/lib/network";
 import type { SpeechRequest } from "~/lib/speech";
@@ -136,8 +136,9 @@ export default function AudioPreview(props: {
           <label class="preview-seek-label">
             {t("playback.seek")}
             <input
-              class="preview-seek"
+              class="seek preview-seek"
               type="range"
+              style={{ "--position": seekPosition(session.snapshot()) }}
               min="0"
               step="0.1"
               max={session.snapshot().duration ?? 0}

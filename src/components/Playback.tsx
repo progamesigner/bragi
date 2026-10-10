@@ -11,7 +11,7 @@ import {
 } from "solid-js";
 import { useApp } from "~/lib/app-controller";
 import type { AudioSnapshot } from "~/lib/audio/controller";
-import { audioTime, createAudioSession } from "~/lib/audio/session";
+import { audioTime, createAudioSession, seekPosition } from "~/lib/audio/session";
 import { t } from "~/lib/i18n";
 import { describeError } from "~/lib/network";
 import {
@@ -402,11 +402,9 @@ export default function Playback(props: PlaybackProps) {
               </Button>
             </div>
             <input
-              class="playback-seek"
+              class="seek playback-seek"
               type="range"
-              style={{
-                "--position": `${snapshot().duration ? Math.min(100, (snapshot().position / (snapshot().duration ?? 1)) * 100) : 0}%`,
-              }}
+              style={{ "--position": seekPosition(snapshot()) }}
               aria-label={t("playback.seek")}
               min="0"
               max={snapshot().duration ?? 0}

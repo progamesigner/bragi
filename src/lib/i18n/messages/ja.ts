@@ -412,6 +412,7 @@ const messages = {
   "capture.addText": "文字の段落を追加",
   "privacy.summary": "写真はGoogle Geminiに送信され、最長48時間保存されます",
   "recognize.stages": "認識の進捗",
+  "recognize.stageDone": "完了",
   "recognize.prepareStage": "画像を準備",
   "recognize.uploadStage": "画像をアップロード",
   "recognize.recognizeStage": "読み取りと段落分け",

@@ -40,3 +40,11 @@ export function GlobeIcon() {
     </svg>
   );
 }
+
+export function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" class="icon">
+      <path d="m5 12.5 4.5 4.5L19 7.5" />
+    </svg>
+  );
+}
