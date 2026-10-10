@@ -298,7 +298,7 @@ test("choosing a voice while reading leaves the current audio untouched until th
   ).not.toContain("Puck");
   await expect(page.locator(".playback-segment-button").nth(1)).toHaveAccessibleName(/已備妥$/);
   await expect(page.getByText(/下一次播放套用：.*Puck/)).toBeVisible();
-  await expect(page.locator(".playback-settings-summary")).toContainText("Kore");
+  await expect(page.locator(".playback-settings-button")).toContainText("Kore");
 
   await page.getByRole("button", { name: "重播本段", exact: true }).click();
   await expect(reading).toHaveAttribute("data-phase", "playing");

@@ -298,6 +298,7 @@ const messages = {
   "playback.nextPreview": "다음 단락: {text}",
   "playback.seek": "단락 내 재생 위치",
   "playback.voiceRate": "{voice} · 속도 {rate}배",
+  "playback.voiceSettings": "{summary}, 음성과 속도 변경",
   "playback.nextSettings":
     "다음 재생에 적용: {voice} · {rate}배. 이어서 재생할 때는 기존 설정을 유지해요.",
   "playback.visibilityInterrupted":

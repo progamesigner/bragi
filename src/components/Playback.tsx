@@ -31,6 +31,7 @@ import { voiceLabel } from "~/lib/voices";
 import { ScreenWakeLock } from "~/lib/wake-lock";
 import Button from "./ui/Button";
 import InlineStatus from "./ui/InlineStatus";
+import { StepArrowIcon } from "./ui/icons";
 
 type PlaybackProps = {
   requestRevision?: object;
@@ -109,6 +110,16 @@ export default function Playback(props: PlaybackProps) {
   const settingsChanged = () =>
     !!snapshot().input &&
     (snapshot().input?.voice !== voice() || snapshot().rate !== playbackRate());
+  /** The voice and speed of what is loaded, or of the next playback when nothing is. */
+  const settingsSummary = () =>
+    t("playback.voiceRate", {
+      voice: voiceLabel(
+        snapshot().input
+          ? (snapshot().input?.voice ?? availableVoices()[0] ?? "")
+          : (voice() ?? availableVoices()[0] ?? ""),
+      ),
+      rate: snapshot().input ? snapshot().rate : playbackRate(),
+    });
   const status = createMemo<StatusMessage | undefined>(() => {
     if (phase() === "error")
       return { ...describeError(error(), t("playback.failed")), tone: "error" };
@@ -371,22 +382,24 @@ export default function Playback(props: PlaybackProps) {
             </ol>
           </nav>
           <div class="playback-transport">
-            <div class="playback-status-slot">
-              <Show
-                when={status()}
-                fallback={
-                  <div class="playback-meter">
-                    <span class="playback-clock">
-                      {audioTime(snapshot().position)}
-                      <Show
-                        when={snapshot().duration}
-                      >{` / ${audioTime(snapshot().duration ?? 0)}`}</Show>
-                    </span>
-                  </div>
-                }
+            <div class="playback-meter">
+              <span class="playback-clock">
+                {audioTime(snapshot().position)}
+                <Show
+                  when={snapshot().duration}
+                >{` / ${audioTime(snapshot().duration ?? 0)}`}</Show>
+              </span>
+              <Button
+                variant="ghost"
+                class="playback-settings-button"
+                size="compact"
+                title={settingsSummary()}
+                aria-label={t("playback.voiceSettings", { summary: settingsSummary() })}
+                onClick={props.onSettings}
               >
-                <InlineStatus status={status()} />
-              </Show>
+                <span class="playback-settings-text">{settingsSummary()}</span>
+                <StepArrowIcon />
+              </Button>
             </div>
             <input
               class="playback-seek"
@@ -442,23 +455,10 @@ export default function Playback(props: PlaybackProps) {
                 {t("playback.next")}
               </Button>
             </div>
-            <div class="playback-settings-summary">
-              <Button
-                variant="ghost"
-                class="playback-settings-button"
-                size="compact"
-                onClick={props.onSettings}
-              >
-                {t("playback.voiceRate", {
-                  voice: voiceLabel(
-                    snapshot().input
-                      ? (snapshot().input?.voice ?? availableVoices()[0] ?? "")
-                      : (voice() ?? availableVoices()[0] ?? ""),
-                  ),
-                  rate: snapshot().input ? snapshot().rate : playbackRate(),
-                })}
-              </Button>
-              <Show when={settingsChanged()}>
+            {/* A fixed-height slot after the controls: messages never move the buttons above. */}
+            <div class="playback-status-slot">
+              <InlineStatus status={status()} />
+              <Show when={!status() && settingsChanged()}>
                 <p class="playback-settings-note">
                   {t("playback.nextSettings", {
                     voice: voiceLabel(voice() ?? availableVoices()[0] ?? ""),
@@ -466,7 +466,7 @@ export default function Playback(props: PlaybackProps) {
                   })}
                 </p>
               </Show>
-              <Show when={playbackRate() !== 1}>
+              <Show when={!status() && !settingsChanged() && playbackRate() !== 1}>
                 <p class="playback-settings-note">{t("playback.rateNote")}</p>
               </Show>
             </div>

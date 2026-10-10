@@ -143,7 +143,9 @@ for (const colorScheme of ["dark", "light"] as const) {
         page.locator(".playback-transport").evaluate((element) =>
           [
             element,
-            ...element.querySelectorAll(".playback-primary, .playback-secondary, .playback-seek"),
+            ...element.querySelectorAll(
+              ".playback-meter, .playback-primary, .playback-secondary, .playback-seek, .playback-status-slot",
+            ),
           ].map((item) => {
             const rect = item.getBoundingClientRect();
             return { y: rect.y, height: rect.height };
@@ -189,10 +191,69 @@ for (const colorScheme of ["dark", "light"] as const) {
       for (const height of [664, 844]) {
         await page.setViewportSize({ width: 390, height });
         await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-        const summary = await box(page.locator(".playback-settings-summary"));
-        expect(height - summary.y - summary.height).toBeLessThanOrEqual(28);
+        const slot = await box(page.locator(".playback-status-slot"));
+        expect(height - slot.y - slot.height).toBeLessThanOrEqual(28);
       }
     });
+    for (const locale of ["zh-Hant", "zh-Hans", "ja", "ko", "en", "de", "es"]) {
+      test(`reading ${locale}: voice summary shares the clock row right under the script`, async ({
+        page,
+      }) => {
+        await page.addInitScript((value) => localStorage.setItem("bragi-locale", value), locale);
+        await start(page);
+        await page.locator("#draft-import").setInputFiles(draftFile("故事開始。"));
+        await page.locator(".review-primary").click();
+        await expect(page.locator(".playback")).toBeVisible();
+        await page.evaluate(() => document.fonts.ready);
+        // Paused after playing, the clock shows its widest form: position and duration.
+        await page.locator(".playback-primary").click();
+        await expect(page.locator(".playback")).toHaveAttribute("data-phase", "playing");
+        await page.evaluate(() => window.audioTest.finish());
+        await expect(page.locator(".playback-clock")).toContainText("/");
+        for (const width of [320, 390]) {
+          await page.setViewportSize({ width, height: 700 });
+          const layout = await page.locator(".playback-transport").evaluate((transport) => {
+            const rect = (selector: string) =>
+              (transport.querySelector(selector) as HTMLElement).getBoundingClientRect();
+            const text = transport.querySelector(".playback-settings-text") as HTMLElement;
+            return {
+              transport: transport.getBoundingClientRect(),
+              meter: rect(".playback-meter"),
+              clock: rect(".playback-clock"),
+              button: rect(".playback-settings-button"),
+              text: rect(".playback-settings-text"),
+              clipped: text.scrollHeight > text.clientHeight + 1,
+              lines: Math.round(
+                text.getBoundingClientRect().height /
+                  Number.parseFloat(getComputedStyle(text).lineHeight),
+              ),
+              overflow: document.documentElement.scrollWidth - window.innerWidth,
+            };
+          });
+          expect(layout.overflow).toBeLessThanOrEqual(0);
+          // Same row: vertical centres agree, the summary sits right of the clock.
+          const middle = (r: DOMRect) => r.y + r.height / 2;
+          expect(Math.abs(middle(layout.clock) - middle(layout.text))).toBeLessThan(2);
+          expect(layout.text.x).toBeGreaterThanOrEqual(layout.clock.x + layout.clock.width + 8);
+          // Right-aligned and inside the transport.
+          expect(layout.button.x + layout.button.width).toBeLessThanOrEqual(
+            layout.transport.x + layout.transport.width + 7,
+          );
+          expect(layout.transport.x + layout.transport.width - layout.text.right).toBeLessThan(24);
+          // A long summary may take a second line, never more, and never grows the row.
+          expect(layout.lines).toBeLessThanOrEqual(2);
+          expect(layout.clipped).toBe(false);
+          expect(layout.meter.height).toBeCloseTo(44, 0);
+          expect(layout.button.height).toBeGreaterThanOrEqual(44);
+          // The row starts right under the script's divider.
+          expect(layout.clock.y - layout.transport.y).toBeLessThanOrEqual(20);
+        }
+        const summary = page.locator(".playback-settings-button");
+        await expect(summary).toHaveAccessibleName(/Kore/);
+        await summary.click();
+        await expect(page.locator("dialog[open] .voice-current")).toBeFocused();
+      });
+    }
     test("review language, compact dirty hint and actual footer reservation", async ({ page }) => {
       await start(page);
       await page.locator("#draft-import").setInputFiles({

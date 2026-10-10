@@ -60,7 +60,7 @@ export default function Shell(props: RouteSectionProps) {
     <AppContext.Provider value={app}>
       <div class="app" data-font-size={fontSize()}>
         <Show when={inApp()}>
-          <TopNav onSettings={app.openSettings} />
+          <TopNav onSettings={() => app.openSettings()} />
         </Show>
         <div class="app-notices">
           <Show when={!app.online()}>

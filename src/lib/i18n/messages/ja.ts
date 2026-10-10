@@ -296,6 +296,7 @@ const messages = {
   "playback.nextPreview": "次の段落　{text}",
   "playback.seek": "段落内の再生位置",
   "playback.voiceRate": "{voice} · 速度 {rate} 倍",
+  "playback.voiceSettings": "{summary}、声と速度を変更",
   "playback.nextSettings": "次回の再生から適用：{voice} · {rate}倍。再開時は元の設定のままです。",
   "playback.visibilityInterrupted":
     "アプリの切り替えや画面ロックで再生が中断されました。「再開」を押すと元の位置から続きます。",

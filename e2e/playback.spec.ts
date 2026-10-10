@@ -262,11 +262,11 @@ test("settings changes explain next playback and preserve the current voice, rat
   await sheet.getByRole("radio", { name: "0.75 倍" }).check();
   await closeSettings(page);
   await expect(page.getByText(/下一次播放套用：.*Puck.*0.75/)).toBeVisible();
-  await expect(
-    page
-      .locator(".playback-settings-summary")
-      .getByText("非 1 倍速會先產生整段音訊再播放，並保留原本的音高。", { exact: true }),
-  ).toBeVisible();
+  // The slot below the controls shows one note at a time; the pending change comes first.
+  const rateNote = page
+    .locator(".playback-status-slot")
+    .getByText("非 1 倍速會先產生整段音訊再播放，並保留原本的音高。", { exact: true });
+  await expect(rateNote).toHaveCount(0);
   const count = requests.filter((entry) => entry.body.text === segments[0]?.text).length;
   await primary(page).click();
   await phase(page, "playing");
@@ -277,6 +277,7 @@ test("settings changes explain next playback and preserve the current voice, rat
   expect(requests.at(-1)?.body.voice).toBe("Puck");
   expect(await page.evaluate(() => window.audioTest.audio.playbackRate)).toBe(0.75);
   await expect(page.getByText(/下一次播放套用/)).toHaveCount(0);
+  await expect(rateNote).toBeVisible();
 });
 
 test("main, review and sample share one output; closing a preview cannot stop a different owner", async ({

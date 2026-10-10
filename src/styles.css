@@ -1815,29 +1815,69 @@ input.invalid {
   display: grid;
   gap: 8px;
   border-top: 1px solid var(--line);
-  padding-top: 12px;
+  padding-top: 2px;
 }
-.playback-status-slot {
-  height: 80px;
-  overflow: auto;
-  display: grid;
-  align-items: end;
-  scrollbar-width: thin;
-}
-.playback-status-slot .inline-status-error {
-  margin: 0;
-}
+/* The clock and the voice summary share the row right under the script. */
 .playback-meter {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
   min-width: 0;
+  min-height: 44px;
+  /* The slider's own 44px target already spaces the track below the row. */
+  margin-bottom: -8px;
 }
 .playback-clock {
+  flex: none;
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   color: var(--text-2);
+}
+.button.playback-settings-button {
+  flex: 0 1 auto;
+  justify-content: flex-end;
+  gap: 2px;
+  min-width: 0;
+  padding: 0 0 0 8px;
+  color: var(--text-2);
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.25;
+}
+.button.playback-settings-button:not(:disabled):hover {
+  background: transparent;
+  color: var(--text);
+}
+/* A long summary wraps to a second line inside the 44px row rather than moving the controls. */
+.playback-settings-text {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  line-height: 1.25;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.playback-settings-button .icon {
+  flex: none;
+}
+/* Fixed height after the controls, so a message never moves a button. */
+.playback-status-slot {
+  height: 56px;
+  overflow: auto;
+  color: var(--text-2);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  scrollbar-width: thin;
+}
+.playback-status-slot .inline-status [role="status"]:not(:empty),
+.playback-status-slot .inline-status-error {
+  margin: 0;
+  font-size: 0.8rem;
 }
 .playback-seek {
   width: 100%;
@@ -1908,19 +1948,8 @@ input.invalid {
   height: 48px;
   font-size: 0.875rem;
 }
-.playback-settings-summary {
-  height: 96px;
-  overflow: auto;
-  color: var(--text-2);
-  font-size: 0.8rem;
-}
-.playback-settings-button {
-  max-width: 100%;
-  font-size: 0.85rem;
-  overflow-wrap: anywhere;
-}
 .playback-settings-note {
-  margin: 4px 0;
+  margin: 0;
 }
 .preview-transport {
   border: 0;
@@ -2059,12 +2088,6 @@ input.invalid {
   .playback-script {
     height: auto;
     min-height: 0;
-  }
-  .playback-status-slot {
-    height: 64px;
-  }
-  .playback-settings-summary {
-    height: 64px;
   }
 }
 @media (min-width: 900px) {

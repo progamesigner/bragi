@@ -21,7 +21,7 @@ export default function PlayScreen() {
             segments={workspace.segments}
             genreHint={workspace.genreHint().trim() || undefined}
             voice={voice()}
-            onSettings={app.openSettings}
+            onSettings={() => app.openSettings("voice")}
             onFinished={() => app.goTo("/finished")}
           />
         </Show>

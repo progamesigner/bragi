@@ -55,6 +55,7 @@ export default function SettingsPanel(props: SettingsPanelProps) {
     if (!props.open) setPickerOpen(false);
   });
   const currentVoice = () => voice() ?? voices()[0] ?? "";
+  let voiceButton: HTMLButtonElement | undefined;
 
   return (
     <Sheet
@@ -62,6 +63,7 @@ export default function SettingsPanel(props: SettingsPanelProps) {
       title={t("settings.title")}
       closeLabel={t("settings.close")}
       placement="side"
+      initialFocus={() => (app.settingsFocus() === "voice" ? voiceButton : undefined)}
       onClose={props.onClose}
     >
       <section class="settings-section" aria-labelledby={`${id}-display`}>
@@ -104,6 +106,7 @@ export default function SettingsPanel(props: SettingsPanelProps) {
               </span>
               <div class="voice-row">
                 <Button
+                  ref={voiceButton}
                   variant="secondary"
                   class="voice-current"
                   aria-haspopup="dialog"

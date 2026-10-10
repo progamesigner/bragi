@@ -302,6 +302,7 @@ const messages = {
   "playback.nextPreview": "Next: {text}",
   "playback.seek": "Position within this part",
   "playback.voiceRate": "{voice} · Speed {rate}×",
+  "playback.voiceSettings": "{summary}, change voice and speed",
   "playback.nextSettings":
     "Next playback: {voice} · {rate}×. Resuming keeps the original settings.",
   "playback.visibilityInterrupted":

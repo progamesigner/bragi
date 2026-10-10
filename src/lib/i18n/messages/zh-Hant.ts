@@ -301,6 +301,7 @@ const zhHant = {
   "playback.nextPreview": "下一段　{text}",
   "playback.seek": "段內播放位置",
   "playback.voiceRate": "{voice} · 語速 {rate} 倍",
+  "playback.voiceSettings": "{summary}，調整聲音與語速",
   "playback.nextSettings": "下一次播放套用：{voice} · {rate} 倍；繼續播放保留原設定。",
   "playback.visibilityInterrupted": "切換 App 或鎖屏使播放中斷，請按「繼續播放」從原位置恢復。",
   "playback.reachedEnd": "已到最後一段，還有 {n} 段未播放。",

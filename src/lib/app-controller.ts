@@ -89,6 +89,8 @@ export function createAppController(navigate: Navigator, location: Location) {
   const [pendingLoss, setPendingLoss] = createSignal<LossAction>();
   const [updateActivator, setUpdateActivator] = createSignal<() => void>();
   const [settingsOpen, setSettingsOpen] = createSignal(false);
+  /** The settings section to focus when the panel opens; the first control otherwise. */
+  const [settingsFocus, setSettingsFocus] = createSignal<"voice">();
   // Screens move focus to their heading only after in-app navigation, not on first load.
   const [navigated, setNavigated] = createSignal(false);
   createEffect(
@@ -497,7 +499,11 @@ export function createAppController(navigate: Navigator, location: Location) {
     savedDraft,
     pendingLoss,
     settingsOpen,
-    openSettings: () => setSettingsOpen(true),
+    settingsFocus,
+    openSettings: (section?: "voice") => {
+      setSettingsFocus(section);
+      setSettingsOpen(true);
+    },
     closeSettings: () => setSettingsOpen(false),
     navigated,
     setUpdateActivator: (activate: (() => void) | undefined) => setUpdateActivator(() => activate),

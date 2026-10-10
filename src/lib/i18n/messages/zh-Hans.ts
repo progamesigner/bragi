@@ -281,6 +281,7 @@ const messages = {
   "playback.nextPreview": "下一段　{text}",
   "playback.seek": "段内播放位置",
   "playback.voiceRate": "{voice} · 语速 {rate} 倍",
+  "playback.voiceSettings": "{summary}，调整声音与语速",
   "playback.nextSettings": "下次播放应用：{voice} · {rate} 倍；继续播放保留原设置。",
   "playback.visibilityInterrupted": "切换 App 或锁屏导致播放中断，请按“继续播放”从原位置恢复。",
   "playback.reachedEnd": "已到最后一段，还有 {n} 段未播放。",

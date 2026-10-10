@@ -309,6 +309,7 @@ const messages = {
   "playback.nextPreview": "Als Nächstes: {text}",
   "playback.seek": "Position im Abschnitt",
   "playback.voiceRate": "{voice} · Tempo {rate}×",
+  "playback.voiceSettings": "{summary}, Stimme und Tempo ändern",
   "playback.nextSettings":
     "Beim nächsten Abspielen: {voice} · {rate}×. Fortsetzen behält die bisherigen Einstellungen.",
   "playback.visibilityInterrupted":
