@@ -24,7 +24,7 @@ export default defineConfig({
   projects: [
     {
       name: "iphone-webkit",
-      testMatch: "mobile-layout.spec.ts",
+      testMatch: ["mobile-layout.spec.ts", "stream-retry.spec.ts"],
       use: {
         ...devices["iPhone 13"],
         viewport: { width: 390, height: 844 },

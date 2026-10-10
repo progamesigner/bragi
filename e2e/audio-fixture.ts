@@ -88,6 +88,25 @@ export async function mockAudio(page: Page) {
         },
       },
     });
+    /**
+     * Sources stay with the fixture. A native element would still load each one, and Linux WebKit
+     * can block its main thread for good when a source it has reloaded, but never played, is
+     * replaced; real playback (audio-tests) does not get there.
+     */
+    const sources = new WeakMap<HTMLMediaElement, string>();
+    Object.defineProperty(HTMLMediaElement.prototype, "src", {
+      configurable: true,
+      get() {
+        return sources.get(this) ?? "";
+      },
+      set(url: string) {
+        sources.set(this, url);
+      },
+    });
+    HTMLMediaElement.prototype.removeAttribute = function (name: string) {
+      if (name.toLowerCase() === "src") sources.delete(this);
+      else Element.prototype.removeAttribute.call(this, name);
+    };
     HTMLMediaElement.prototype.load = function () {
       const value = state(this);
       value.offset = 0;
