@@ -1885,7 +1885,7 @@ input.invalid {
 }
 /* Fixed height after the controls, so a message never moves a button. */
 .playback-status-slot {
-  height: 56px;
+  height: 64px;
   overflow: auto;
   color: var(--text-2);
   font-size: 0.8rem;
@@ -1896,6 +1896,9 @@ input.invalid {
 .playback-status-slot .inline-status-error {
   margin: 0;
   font-size: 0.8rem;
+}
+.playback-status-slot .inline-status-error {
+  padding: 6px 10px;
 }
 /* Every seek slider: a token-coloured track filled to --position, never the native control. */
 .seek {
