@@ -19,6 +19,7 @@ const events: Record<string, unknown>[] = [];
 let calls = 0;
 let rejectContent = false;
 let holdResume = false;
+let failStream = false;
 let context: AudioContext | undefined;
 let element: HTMLAudioElement | undefined;
 let preloadReady = false;
@@ -50,6 +51,10 @@ const speech: SpeechAdapter = {
   async stream(_input, signal) {
     calls++;
     await sleep(delayMs, signal);
+    if (failStream) {
+      failStream = false;
+      throw new Error("Injected stream failure");
+    }
     events.push({ event: "synthesis-ready", active: navigator.userActivation?.isActive });
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
@@ -148,6 +153,9 @@ document
 document.querySelector("#interrupt")?.addEventListener("click", () => void context?.suspend());
 document.querySelector("#reject")?.addEventListener("click", () => {
   rejectContent = true;
+});
+document.querySelector("#fail")?.addEventListener("click", () => {
+  failStream = true;
 });
 document.querySelector("#hold")?.addEventListener("click", () => {
   holdResume = true;

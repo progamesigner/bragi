@@ -96,6 +96,17 @@ test("resume timeout and late resolution never start buffered PCM", async ({ pag
   expect((await read(page)).calls).toBe(1);
 });
 
+test("a failed stream retries into one PCM output", async ({ page }) => {
+  await page.goto("/?delay=50");
+  await page.locator("#fail").click();
+  await page.locator("#pcm").click();
+  await phase(page, "error");
+  expect(await read(page)).toMatchObject({ calls: 1, activeOutputs: 0 });
+  await page.locator("#pcm").click();
+  await phase(page, "playing");
+  expect(await read(page)).toMatchObject({ transport: "pcm", calls: 2, activeOutputs: 1 });
+});
+
 test("PCM EOF enables explicit seek, paused seek keeps silence", async ({ page }) => {
   await page.goto("/?delay=50");
   await page.locator("#pcm").click();
