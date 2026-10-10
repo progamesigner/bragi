@@ -417,7 +417,7 @@ const messages = {
   "capture.addText": "텍스트 단락 추가",
   "privacy.summary": "사진은 Google Gemini로 전송되어 최대 48시간 보관돼요",
   "recognize.stages": "인식 진행 상황",
-  "recognize.stageDone": "완료",
+  "recognize.stageDone": " (완료)",
   "recognize.prepareStage": "이미지 준비",
   "recognize.uploadStage": "이미지 업로드",
   "recognize.recognizeStage": "인식 및 단락 나누기",

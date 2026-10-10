@@ -405,7 +405,7 @@ const zhHant = {
   "capture.addText": "新增文字段落",
   "privacy.summary": "照片將傳送至 Google Gemini，最多保存 48 小時",
   "recognize.stages": "辨識進度",
-  "recognize.stageDone": "已完成",
+  "recognize.stageDone": "（已完成）",
   "recognize.prepareStage": "準備圖片",
   "recognize.uploadStage": "上傳圖片",
   "recognize.recognizeStage": "辨識與分段",

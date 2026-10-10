@@ -136,8 +136,8 @@ for (const [path, stage] of [
     await started;
     await expect(page.locator(".recognition-stages [aria-current=step]")).toHaveText(stage);
     await expect(page.locator(".recognition-stages li")).toHaveText([
-      "準備圖片",
-      "上傳圖片",
+      path === "uploads" ? "準備圖片" : "準備圖片（已完成）",
+      path === "ocr" ? "上傳圖片（已完成）" : "上傳圖片",
       "辨識與分段",
     ]);
     const aborted = page.waitForEvent("requestfailed", (r) => r.url().endsWith(`/api/${path}`));

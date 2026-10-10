@@ -134,7 +134,7 @@ function CaptureContent() {
                         </Show>
                         {t(`recognize.${value}Stage`)}
                         <Show when={done()}>
-                          <span class="visually-hidden">{` (${t("recognize.stageDone")})`}</span>
+                          <span class="visually-hidden">{t("recognize.stageDone")}</span>
                         </Show>
                       </li>
                     );

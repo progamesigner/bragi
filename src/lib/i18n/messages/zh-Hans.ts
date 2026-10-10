@@ -382,7 +382,7 @@ const messages = {
   "capture.addText": "新增文字段落",
   "privacy.summary": "照片将发送到 Google Gemini，最多保存 48 小时",
   "recognize.stages": "识别进度",
-  "recognize.stageDone": "已完成",
+  "recognize.stageDone": "（已完成）",
   "recognize.prepareStage": "准备图片",
   "recognize.uploadStage": "上传图片",
   "recognize.recognizeStage": "识别与分段",
