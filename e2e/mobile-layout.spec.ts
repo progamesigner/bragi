@@ -178,10 +178,9 @@ for (const colorScheme of ["dark", "light"] as const) {
       expect(legend.y - heading.y - heading.height).toBeGreaterThanOrEqual(11);
       expect(segments.y - legend.y - legend.height).toBeGreaterThanOrEqual(11);
       expect(tone.y - segments.y - segments.height).toBeGreaterThanOrEqual(11);
-      const settings = await box(page.locator(".playback-settings-button"));
-      const back = await box(page.locator(".playback-back-button"));
-      expect(Math.abs(settings.y + settings.height / 2 - back.y - back.height / 2)).toBeLessThan(1);
-      expect(settings.x + settings.width).toBeLessThanOrEqual(back.x);
+      await expect(page.locator(".playback").getByRole("button", { name: "返回校對" })).toHaveCount(
+        0,
+      );
       await snap(page.locator(".playback-transport"), `transport-paused-${colorScheme}`);
       await primary.click();
       await page.evaluate(() => window.audioTest.finish());

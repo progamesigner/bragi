@@ -37,7 +37,6 @@ type PlaybackProps = {
   segments: Segment[];
   genreHint?: string;
   voice?: string;
-  onBack: () => void;
   onSettings: () => void;
   onFinished: () => void;
 };
@@ -444,31 +443,21 @@ export default function Playback(props: PlaybackProps) {
               </Button>
             </div>
             <div class="playback-settings-summary">
-              <div class="playback-footer-actions">
-                <Button
-                  variant="ghost"
-                  class="playback-settings-button"
-                  size="compact"
-                  onClick={props.onSettings}
-                >
-                  {t("playback.voiceRate", {
-                    voice: voiceLabel(
-                      snapshot().input
-                        ? (snapshot().input?.voice ?? availableVoices()[0] ?? "")
-                        : (voice() ?? availableVoices()[0] ?? ""),
-                    ),
-                    rate: snapshot().input ? snapshot().rate : playbackRate(),
-                  })}
-                </Button>
-                <Button
-                  variant="ghost"
-                  class="playback-back-button"
-                  size="compact"
-                  onClick={props.onBack}
-                >
-                  {t("playback.back")}
-                </Button>
-              </div>
+              <Button
+                variant="ghost"
+                class="playback-settings-button"
+                size="compact"
+                onClick={props.onSettings}
+              >
+                {t("playback.voiceRate", {
+                  voice: voiceLabel(
+                    snapshot().input
+                      ? (snapshot().input?.voice ?? availableVoices()[0] ?? "")
+                      : (voice() ?? availableVoices()[0] ?? ""),
+                  ),
+                  rate: snapshot().input ? snapshot().rate : playbackRate(),
+                })}
+              </Button>
               <Show when={settingsChanged()}>
                 <p class="playback-settings-note">
                   {t("playback.nextSettings", {

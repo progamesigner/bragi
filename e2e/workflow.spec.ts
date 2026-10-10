@@ -232,7 +232,7 @@ test("login, upload, edit, stream, manually continue, return and sign out", asyn
     genreHint: "奇幻",
   });
   expect(calls.filter((call) => call.path === "/api/tts")).toHaveLength(1);
-  await page.getByRole("button", { name: "返回校對" }).click();
+  await page.getByRole("link", { name: "上一頁", exact: true }).click();
   await expect(page.getByLabel("口白文字", { exact: true }).first()).toHaveValue("修改後的故事。");
   await signOut(page, "proceed");
   await expect(page.getByLabel("口白文字", { exact: true })).toHaveCount(0);
@@ -349,7 +349,7 @@ test("overlong drafts split safely and editing history survives playback", async
   await expect(original).toHaveValue(long);
   await page.getByRole("button", { name: "重做", exact: true }).click();
   await page.getByRole("button", { name: /^進入朗讀/ }).click();
-  await page.getByRole("button", { name: /返回校對/ }).click();
+  await page.getByRole("link", { name: "上一頁", exact: true }).click();
   await page.locator("#main").getByRole("button", { name: "復原", exact: true }).click();
   await expect(original).toHaveValue(long);
   await page.locator("#main").getByRole("button", { name: "復原", exact: true }).click();
@@ -385,7 +385,7 @@ test("spoken corrections change synthesis without changing the transcript", asyn
   // The preview already cached the corrected audio, so playback must reuse it.
   expect(calls.filter((c) => c.path === "/api/tts-stream")).toHaveLength(0);
 
-  await page.getByRole("button", { name: /返回校對/ }).click();
+  await page.getByRole("link", { name: "上一頁", exact: true }).click();
   await moreEditing(page);
   await page.getByRole("button", { name: "改回朗讀口白文字" }).click();
   await expect(page.getByLabel("朗讀文字（只影響語音）")).toHaveCount(0);
@@ -1172,7 +1172,7 @@ for (const mode of ["playback", "stream"] as const) {
     expect(await paused()).toBe(false);
 
     failure = false;
-    await page.getByRole("button", { name: /返回校對/ }).click();
+    await page.getByRole("link", { name: "上一頁", exact: true }).click();
     await startOcrAndPlay();
     await expect.poll(paused).toBe(false);
     finishOcr();
@@ -1184,7 +1184,7 @@ for (const mode of ["playback", "stream"] as const) {
     await expect(page.getByRole("button", { name: "暫停", exact: true })).toBeVisible();
     expect(await paused()).toBe(false);
 
-    await page.getByRole("button", { name: /返回校對/ }).click();
+    await page.getByRole("link", { name: "上一頁", exact: true }).click();
     await startOcrAndPlay();
     finishOcr();
     await page

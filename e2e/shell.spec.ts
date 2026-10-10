@@ -58,6 +58,9 @@ test("route history keeps edits, reading position and the review scroll position
   await expect(page.getByLabel("朗讀語氣")).toHaveValue("新語氣");
   await page.goForward();
   await expect(page.getByRole("heading", { name: "第 2 段，共 2 段" })).toBeVisible();
+  // Reading has a single way back: the top bar's "previous page".
+  await expect(page.locator("#main").getByRole("button", { name: "返回校對" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "上一頁" })).toHaveAttribute("href", "/review");
   await page.getByRole("link", { name: "上一頁" }).click();
   await expect(page).toHaveURL(/\/review$/);
   await page.locator("#main").getByRole("button", { name: "復原", exact: true }).click();

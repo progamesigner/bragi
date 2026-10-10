@@ -2073,18 +2073,6 @@ input.invalid {
   }
 }
 
-.playback-footer-actions {
-  gap: 8px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-}
-.playback-back-button {
-  max-width: 130px;
-  padding-inline: 8px;
-  font-size: 0.8rem;
-}
-
 .app:has(.playback, .review) .toast {
   position: fixed;
   left: 50%;

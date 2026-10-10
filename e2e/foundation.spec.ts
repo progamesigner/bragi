@@ -117,7 +117,7 @@ test("controls meet touch target sizes and icon buttons have names", async ({ pa
   await page.goto("/");
   await recognize(page);
   await page.getByRole("button", { name: /^進入朗讀/ }).click();
-  await page.getByRole("button", { name: "返回校對" }).click();
+  await page.getByRole("link", { name: "上一頁", exact: true }).click();
 
   const measure = () =>
     page.evaluate(() =>
@@ -202,7 +202,7 @@ test("leaving playback keeps the draft, its history and the current segment", as
   await page.getByRole("button", { name: /^進入朗讀/ }).click();
   await page.getByRole("button", { name: "下一段", exact: true }).click();
   await expect(page.getByRole("heading", { name: "第 2 段，共 2 段" })).toBeVisible();
-  await page.getByRole("button", { name: "返回校對" }).click();
+  await page.getByRole("link", { name: "上一頁", exact: true }).click();
   await moreEditing(page);
   await expect(page.getByLabel("朗讀語氣")).toHaveValue("急促");
   await expect(page.getByRole("button", { name: "復原", exact: true })).toBeEnabled();
