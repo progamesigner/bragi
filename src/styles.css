@@ -608,9 +608,37 @@ label.file-button:has(+ input:focus-visible) {
   text-align: center;
   backdrop-filter: blur(12px);
 }
+.toast-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  min-width: 0;
+}
+/* An error is the alert next to it; the polite region stays in the page, empty and out of sight. */
+.toast-error .toast-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
 .toast-action {
   min-height: 44px;
   color: var(--accent-text);
+}
+.toast-alert {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: start;
+}
+.toast-alert > p {
+  color: var(--danger);
+}
+.button.toast-close {
+  flex: none;
+  margin: -10px -10px -10px 0;
 }
 .review-heading {
   display: flex;
@@ -702,6 +730,9 @@ label.file-button:has(+ input:focus-visible) {
   color: var(--text-2);
   font-size: 0.82rem;
   text-align: left;
+}
+.toast-alert .status-details {
+  margin-top: 0;
 }
 .status-details summary {
   min-height: 44px;

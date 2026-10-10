@@ -71,6 +71,8 @@ export function createAppController(navigate: Navigator, location: Location) {
   const [welcome, setWelcome] = createSignal(false);
   const [authBusy, setAuthBusy] = createSignal(false);
   const [toast, setToast] = createSignal<ToastMessage>();
+  /** Screens that show toasts in a place of their own; the shell's toast steps aside meanwhile. */
+  const [toastHosts, setToastHosts] = createSignal(0);
   const [error, setError] = createSignal<StatusMessage>();
   const [captureStatus, setCaptureStatus] = createSignal<StatusMessage>();
   // A fresh object remounts the screens, e.g. so a new draft never shows the old one's state.
@@ -484,6 +486,12 @@ export function createAppController(navigate: Navigator, location: Location) {
     signedIn: () => auth() === "signed-in" || auth() === "expired",
     toast,
     dismissToast: () => setToast(undefined),
+    toastsHosted: () => toastHosts() > 0,
+    /** Called while a screen sets up; it shows every toast until that screen is disposed. */
+    hostToasts() {
+      setToastHosts((count) => count + 1);
+      onCleanup(() => setToastHosts((count) => count - 1));
+    },
     error,
     dismissError: () => setError(undefined),
     captureStatus,

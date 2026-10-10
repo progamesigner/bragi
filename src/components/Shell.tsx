@@ -27,8 +27,9 @@ function fadeInScreen(main: HTMLElement | undefined) {
 }
 
 /**
- * The app layout around every route: top bar, notices, settings, confirmations and the toast.
- * Until a session exists it shows the sign-in page instead of any route.
+ * The app layout around every route: top bar, notices, settings, confirmations and the toast
+ * (unless the screen shows toasts in its own place). Until a session exists it shows the sign-in
+ * page instead of any route.
  */
 export default function Shell(props: RouteSectionProps) {
   const location = useLocation();
@@ -105,7 +106,9 @@ export default function Shell(props: RouteSectionProps) {
           </Sheet>
         </Show>
         <ConfirmLoss />
-        <Toast toast={app.toast()} onDismiss={app.dismissToast} />
+        <Show when={!app.toastsHosted()}>
+          <Toast toast={app.toast()} onDismiss={app.dismissToast} />
+        </Show>
       </div>
     </AppContext.Provider>
   );
