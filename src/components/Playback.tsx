@@ -409,6 +409,17 @@ export default function Playback(props: PlaybackProps) {
             </p>
           </Show>
         </article>
+        {/* Holds the toast's place: over the end of the script, above the controls on a phone and
+            at the foot of the script column beside them on a wide screen. */}
+        <div class="playback-toast-anchor">
+          <Toast
+            class="playback-toast"
+            toast={toast()}
+            duration={toastDuration()}
+            onDismiss={dismissToast}
+            returnFocus={() => primaryButton}
+          />
+        </div>
         <aside class="playback-controls">
           <nav class="playback-selector" aria-label={t("playback.segmentNav")}>
             <h1 ref={heading} id="playback-heading" tabindex="-1" class="playback-position">
@@ -453,13 +464,6 @@ export default function Playback(props: PlaybackProps) {
             </ol>
           </nav>
           <div class="playback-transport">
-            <Toast
-              class="playback-toast"
-              toast={toast()}
-              duration={toastDuration()}
-              onDismiss={dismissToast}
-              returnFocus={() => primaryButton}
-            />
             <div class="playback-meter">
               <span class="playback-clock">
                 {audioTime(snapshot().position)}

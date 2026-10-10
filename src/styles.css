@@ -1501,7 +1501,9 @@ input.invalid {
   .spinner {
     animation: none;
   }
-  .switch::after {
+  /* Buttons ease back from a press; without this their own transition outranks the rule above. */
+  .switch::after,
+  .button {
     transition: none;
   }
 }
@@ -1860,7 +1862,8 @@ input.invalid {
 }
 .playback-transport {
   grid-row: 3;
-  position: relative;
+  /* Shares its cell with the toast anchor rather than making a second column beside it. */
+  grid-column: 1;
   min-width: 0;
   display: grid;
   gap: 8px;
@@ -1985,12 +1988,21 @@ input.invalid {
   height: 48px;
   font-size: 0.875rem;
 }
-/* Every reading message floats in one place: across the column, just above the clock row, over
-   the end of the script (on wide screens, the segment list). It never takes room from the layout. */
+/* Every reading message floats in one place and never takes room from the layout. The anchor has
+   no height: on a phone it sits at the top of the controls, so the toast covers the end of the
+   script just above the clock row; on a wide screen it is the foot of the script column. */
+.playback-toast-anchor {
+  grid-row: 3;
+  grid-column: 1;
+  align-self: start;
+  position: relative;
+  z-index: 5;
+  height: 0;
+  min-width: 0;
+}
 .toast.playback-toast {
   position: absolute;
-  z-index: 5;
-  bottom: calc(100% + 8px);
+  bottom: 8px;
   left: 0;
   right: 0;
   width: auto;
@@ -2140,6 +2152,16 @@ input.invalid {
   }
   .playback-transport {
     grid-row: 2;
+  }
+  /* The foot of the script column, kept on screen while a long script runs past it. */
+  .playback-toast-anchor {
+    grid-row: 1;
+    align-self: end;
+    position: sticky;
+    bottom: max(16px, env(safe-area-inset-bottom));
+  }
+  .toast.playback-toast {
+    bottom: 0;
   }
 }
 

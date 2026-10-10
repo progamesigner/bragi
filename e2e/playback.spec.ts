@@ -3,6 +3,7 @@ import { mockAudio } from "./audio-fixture";
 import {
   chooseVoice,
   closeSettings,
+  draftFile,
   goToStep,
   mockSignedInApi,
   moreEditing,
@@ -10,7 +11,13 @@ import {
   recognize,
   segments,
 } from "./fixtures";
-import { controls, expectOneMessagePlace } from "./playback-toast";
+import {
+  controls,
+  expectFootOfLongScript,
+  expectOneMessagePlace,
+  holdToasts,
+  longScript,
+} from "./playback-toast";
 
 async function enter(page: Page, rate = 1) {
   await mockSignedInApi(page);
@@ -590,19 +597,22 @@ test("dismissing a toast does not move narration controls", async ({ page }) => 
   expect(await bounds(page)).toEqual(before);
 });
 
-for (const [width, height] of [
-  [390, 844],
-  [320, 640],
-  [1180, 820],
+for (const [width, height, colorScheme] of [
+  [390, 844, "light"],
+  [320, 640, "light"],
+  [1180, 820, "light"],
+  [1180, 820, "dark"],
 ] as const)
-  test(`every reading message floats in one place above the controls at ${width}px`, async ({
+  test(`every reading message floats in one place clear of the controls at ${width}px ${colorScheme}`, async ({
     page,
   }) => {
     // Walks through every playback state; WebKit under a full parallel run needs the time.
     test.slow();
+    await page.emulateMedia({ colorScheme });
     await page.setViewportSize({ width, height });
     await mockSignedInApi(page);
     await mockAudio(page);
+    await holdToasts(page);
     await page.goto("/");
     await recognize(page);
     await page.getByRole("button", { name: /^進入朗讀/ }).click();
@@ -616,6 +626,22 @@ for (const [width, height] of [
         (secondary?.height ?? 0),
     ).toBeLessThanOrEqual(1);
     await expectOneMessagePlace(page);
+  });
+
+for (const colorScheme of ["light", "dark"] as const)
+  test(`on a tablet a long script keeps messages at the foot of the visible script column ${colorScheme}`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme });
+    await page.setViewportSize({ width: 1180, height: 820 });
+    await mockSignedInApi(page);
+    await mockAudio(page);
+    await holdToasts(page);
+    await page.goto("/");
+    await page.locator("#draft-import").setInputFiles(draftFile(longScript));
+    await page.locator(".review-primary").click();
+    await phase(page, "idle");
+    await expectFootOfLongScript(page);
   });
 
 test("info toasts leave after about four seconds; errors stay longer, close, and wait for focus", async ({

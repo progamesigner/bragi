@@ -10,7 +10,13 @@ import {
   recognize,
   selectImage,
 } from "./fixtures";
-import { controls, expectOneMessagePlace } from "./playback-toast";
+import {
+  controls,
+  expectFootOfLongScript,
+  expectOneMessagePlace,
+  holdToasts,
+  longScript,
+} from "./playback-toast";
 import { pageStyle, settle } from "./visual-capture";
 
 async function box(locator: Locator) {
@@ -254,6 +260,7 @@ for (const colorScheme of ["dark", "light"] as const) {
         // Walks through every playback state; WebKit under a full parallel run needs the time.
         test.slow();
         await page.setViewportSize({ width, height });
+        await holdToasts(page);
         await start(page);
         await recognize(page);
         await page.getByRole("button", { name: /^進入朗讀/ }).click();
@@ -274,6 +281,20 @@ for (const colorScheme of ["dark", "light"] as const) {
           expect(rect.y, label).toBeGreaterThanOrEqual(script.y - 1);
         }
       });
+    test("a long script keeps reading messages at the foot of the visible column at 1180px", async ({
+      page,
+    }) => {
+      // Imports, reviews and reads like the walks above; WebKit under a full parallel run needs the time.
+      test.slow();
+      await page.setViewportSize({ width: 1180, height: 820 });
+      await holdToasts(page);
+      await start(page);
+      await page.locator("#draft-import").setInputFiles(draftFile(longScript));
+      await page.locator(".review-primary").click();
+      await expect(page.locator(".playback")).toHaveAttribute("data-phase", "idle");
+      await page.evaluate(() => document.fonts.ready);
+      await expectFootOfLongScript(page);
+    });
     for (const locale of ["zh-Hant", "zh-Hans", "ja", "ko", "en", "de", "es"]) {
       test(`reading ${locale}: voice summary shares the clock row right under the script`, async ({
         page,
