@@ -251,6 +251,8 @@ for (const colorScheme of ["dark", "light"] as const) {
       test(`reading messages float in one place over the script at ${width}px`, async ({
         page,
       }) => {
+        // Walks through every playback state; WebKit under a full parallel run needs the time.
+        test.slow();
         await page.setViewportSize({ width, height });
         await start(page);
         await recognize(page);

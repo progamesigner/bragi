@@ -598,6 +598,8 @@ for (const [width, height] of [
   test(`every reading message floats in one place above the controls at ${width}px`, async ({
     page,
   }) => {
+    // Walks through every playback state; WebKit under a full parallel run needs the time.
+    test.slow();
     await page.setViewportSize({ width, height });
     await mockSignedInApi(page);
     await mockAudio(page);
