@@ -359,7 +359,9 @@ for (const colorScheme of ["dark", "light"] as const) {
       expect(await nativeControls(page)).toEqual([]);
       expect(await bluePixels(page.locator(".playback-transport"))).toBe(0);
     });
-    test("privacy warning reads as a list item", async ({ page }) => {
+    test("privacy warning reads as a list item; recognition shows each stage once", async ({
+      page,
+    }) => {
       await start(page);
       const note = page.locator(".privacy-note");
       if (!(await note.evaluate((element) => (element as HTMLDetailsElement).open)))
@@ -380,6 +382,20 @@ for (const colorScheme of ["dark", "light"] as const) {
         expect(item.color).toBe(items[0]?.color);
       }
       await expect(note.locator(":scope > p")).toHaveCount(0);
+
+      await page.route("**/api/ocr", () => undefined);
+      await selectImage(page);
+      await page.getByRole("button", { name: "辨識文字", exact: true }).click();
+      await expect(page.locator(".recognition-stages [aria-current=step]")).toBeVisible();
+      const status = page.locator(".capture-status [role=status]");
+      await expect(status).toHaveText("辨識與分段…");
+      // The status stays in the accessibility tree but is not drawn under the stage bar.
+      expect(
+        await status.evaluate((element) => element.getBoundingClientRect().height),
+      ).toBeLessThanOrEqual(1);
+      const stages = await box(page.locator(".recognition-stages"));
+      const cancel = await box(page.getByRole("button", { name: "取消辨識", exact: true }));
+      expect(cancel.y - stages.y - stages.height).toBeGreaterThanOrEqual(12);
     });
     test("review language, compact dirty hint and actual footer reservation", async ({ page }) => {
       await start(page);

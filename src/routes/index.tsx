@@ -142,7 +142,11 @@ function CaptureContent() {
                 </For>
               </ol>
             </Show>
-            <InlineStatus status={app.captureStatus()} class="capture-status" />
+            {/* While the stages show progress, progress text is for screen readers only. */}
+            <InlineStatus
+              status={app.captureStatus()}
+              class={`capture-status${stage() && app.captureStatus()?.tone === "info" ? " capture-status-staged" : ""}`}
+            />
             <Show
               when={app.recognitionBusy()}
               fallback={

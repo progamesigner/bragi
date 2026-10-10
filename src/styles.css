@@ -1175,6 +1175,15 @@ label.file-button:has(+ input:focus-visible) {
 .capture-status {
   margin-top: var(--space-1);
 }
+.capture-status-staged [role="status"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
 
 /* Top bar: wordmark or "previous page", the three steps, settings. */
 .top-nav {
