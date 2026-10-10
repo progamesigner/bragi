@@ -30,6 +30,14 @@ async function enter(page: Page) {
   await page.route("**/api/session", (route) =>
     route.fulfill({ json: { authenticated: true, voices: ["Kore", "Puck", "Zephyr", "Charon"] } }),
   );
+  // Long enough that a slow runner pauses mid-part rather than after the audio has run out.
+  await page.route("**/api/tts-stream", (route) =>
+    route.fulfill({
+      contentType: "audio/l16",
+      headers: { "x-audio-sample-rate": "24000" },
+      body: Buffer.alloc(24_000 * 2 * 8),
+    }),
+  );
   const speech: Speech[] = [];
   const requests = new Map<object, Speech>();
   const gate = { held: false, release: () => {}, opened: Promise.resolve() };
