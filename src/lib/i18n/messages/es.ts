@@ -116,6 +116,8 @@ const messages = {
   "voiceSample.generating": "Generando una muestra de {voice}…",
   "voiceSample.ready": "La muestra está lista. Pulsa reproducir.",
   "voiceSample.failed": "No se pudo generar la muestra de voz",
+  "voiceSample.loadFailed":
+    "No se pudo cargar la muestra de voz. Revisa tu conexión y vuelve a intentarlo.",
   "voiceSample.audio": "Muestra de voz",
   "voiceSample.captions": "Frase de muestra",
   "voicePicker.open": "Cambiar",

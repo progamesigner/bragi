@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { describeError } from "./network";
 import { requestSpeech, requestVoiceSample } from "./speech";
 import { VOICE_SAMPLE_TEXTS } from "./voice-samples";
 
@@ -98,6 +99,34 @@ describe("voice samples", () => {
         expect.objectContaining({ method: "POST" }),
       );
     }
+  });
+
+  it("reports a sample file that fails to load without calling Gemini", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(new TypeError("Failed to fetch"));
+
+    const failure = await requestVoiceSample(
+      { text: VOICE_SAMPLE_TEXTS.ko, voice: "Puck" },
+      undefined,
+      fetcher,
+    ).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(Error);
+    expect(describeError(failure, "fallback").message).toBe(
+      "無法載入聲音試聽。請檢查網路連線後再試一次",
+    );
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith("/voice-samples/ko/Puck.m4a", expect.anything());
+  });
+
+  it("passes a cancelled sample file request through unchanged", async () => {
+    const abort = new AbortController();
+    abort.abort();
+    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(abort.signal.reason);
+
+    await expect(
+      requestVoiceSample({ text: VOICE_SAMPLE_TEXTS.ko, voice: "Puck" }, abort.signal, fetcher),
+    ).rejects.toBe(abort.signal.reason);
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it("synthesizes any other text live", async () => {

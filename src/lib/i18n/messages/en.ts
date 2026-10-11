@@ -116,6 +116,7 @@ const messages = {
   "voiceSample.generating": "Generating a {voice} sample…",
   "voiceSample.ready": "Voice sample is ready. Press play.",
   "voiceSample.failed": "Could not generate the voice sample",
+  "voiceSample.loadFailed": "The voice sample failed to load. Check your connection and retry.",
   "voiceSample.audio": "Voice sample",
   "voiceSample.captions": "Sample sentence",
   "voicePicker.open": "Change",

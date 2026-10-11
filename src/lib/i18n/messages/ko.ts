@@ -116,6 +116,7 @@ const messages = {
   "voiceSample.generating": "{voice} 샘플 생성 중…",
   "voiceSample.ready": "음성 샘플이 준비됐어요. 재생을 눌러 주세요",
   "voiceSample.failed": "음성 샘플을 생성할 수 없어요",
+  "voiceSample.loadFailed": "음성 샘플을 불러오지 못했어요. 연결을 확인하고 다시 시도해 주세요",
   "voiceSample.audio": "음성 샘플",
   "voiceSample.captions": "샘플 문장",
   "voicePicker.open": "변경",

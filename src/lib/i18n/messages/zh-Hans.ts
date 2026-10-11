@@ -110,6 +110,7 @@ const messages = {
   "voiceSample.generating": "正在生成 {voice} 的试听…",
   "voiceSample.ready": "声音试听已准备完成，请按播放",
   "voiceSample.failed": "无法生成声音试听",
+  "voiceSample.loadFailed": "无法加载声音试听。请检查网络连接后重试",
   "voiceSample.audio": "声音试听",
   "voiceSample.captions": "试听句子",
   "voicePicker.open": "更换",

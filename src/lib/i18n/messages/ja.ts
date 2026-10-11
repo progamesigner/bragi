@@ -116,6 +116,8 @@ const messages = {
   "voiceSample.generating": "{voice}のサンプルを生成中…",
   "voiceSample.ready": "声のサンプルができました。再生してください",
   "voiceSample.failed": "声のサンプルを生成できませんでした",
+  "voiceSample.loadFailed":
+    "声のサンプルを読み込めませんでした。接続を確認して、もう一度お試しください",
   "voiceSample.audio": "声のサンプル",
   "voiceSample.captions": "サンプル文",
   "voicePicker.open": "変更",

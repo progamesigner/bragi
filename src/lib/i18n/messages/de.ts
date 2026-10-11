@@ -116,6 +116,8 @@ const messages = {
   "voiceSample.generating": "Hörprobe für {voice} wird erstellt…",
   "voiceSample.ready": "Hörprobe bereit. Drücke auf Wiedergabe.",
   "voiceSample.failed": "Hörprobe konnte nicht erstellt werden",
+  "voiceSample.loadFailed":
+    "Die Hörprobe konnte nicht geladen werden. Prüfe deine Verbindung und versuche es erneut.",
   "voiceSample.audio": "Hörprobe",
   "voiceSample.captions": "Beispielsatz",
   "voicePicker.open": "Ändern",

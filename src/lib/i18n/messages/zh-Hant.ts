@@ -120,6 +120,7 @@ const zhHant = {
   "voiceSample.generating": "正在產生 {voice} 的試聽…",
   "voiceSample.ready": "聲音試聽已準備完成，請按播放",
   "voiceSample.failed": "無法產生聲音試聽",
+  "voiceSample.loadFailed": "無法載入聲音試聽。請檢查網路連線後再試一次",
   "voiceSample.audio": "聲音試聽",
   "voiceSample.captions": "試聽句子",
   "voicePicker.open": "更換",

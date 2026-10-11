@@ -44,7 +44,7 @@ export async function requestSpeech(
 
 /**
  * Voice previews of a sample line come from the pre-generated file; anything else, or a voice
- * without one yet, is synthesized live.
+ * without one yet, is synthesized live. A network failure loading the file is reported instead.
  */
 export async function requestVoiceSample(
   input: SpeechRequest,
@@ -54,7 +54,13 @@ export async function requestVoiceSample(
   const asset = voiceSampleAsset(input);
   if (asset) {
     requireOnline();
-    const response = await fetcher(asset, { signal });
+    let response: Response;
+    try {
+      response = await fetcher(asset, { signal });
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) throw error;
+      throw new Error(t("voiceSample.loadFailed"));
+    }
     if (response.ok && response.headers.get("content-type")?.startsWith("audio/"))
       return { blob: await response.blob() };
   }
