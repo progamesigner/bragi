@@ -2277,12 +2277,19 @@ input.invalid {
 .segment-compact-actions .speech-preview > .inline-status {
   order: 1;
   flex: 1 0 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
-/* An empty status leaves the row, so an idle card keeps its height, but stays a live region. */
+/* An empty status leaves the row, so an idle card keeps its height, but stays a live region. It is
+   clipped while out of the row, so nothing it holds can draw over the buttons beside it. */
 .segment-compact-actions
   .speech-preview
   > .inline-status:has(> [role="status"]:empty):not(:has(.inline-status-error)) {
   position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 .segment-more {
   margin-top: 12px;

@@ -504,6 +504,41 @@ for (const colorScheme of ["dark", "light"] as const) {
       await page.getByRole("button", { name: "不匯出，直接匯入" }).click();
       await expect(page.locator(".review-heading")).toContainText("x-unknown");
     });
+    test("a paragraph preview's status never draws over the compact actions", async ({ page }) => {
+      await start(page);
+      await recognize(page);
+      const row = page.locator(".segment-compact-actions").first();
+      const status = row.locator(".inline-status");
+      const idle = await box(row);
+      // Empty, the status sits outside the row and is clipped to nothing.
+      const empty = await status.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return { width: rect.width, height: rect.height, clip: getComputedStyle(element).clipPath };
+      });
+      expect(empty.width).toBeLessThanOrEqual(1);
+      expect(empty.height).toBeLessThanOrEqual(1);
+      expect(empty.clip).not.toBe("none");
+
+      await status.locator("[role=status]").evaluate((element) => {
+        element.textContent = "試聽狀態".repeat(4) + "x".repeat(200);
+      });
+      const text = await box(status);
+      const buttons = await row
+        .locator(":scope button")
+        .evaluateAll((items) => items.map((item) => item.getBoundingClientRect().bottom));
+      const shown = await box(row);
+      // With text, the status takes its own line under the buttons and wraps inside the row.
+      expect(text.y).toBeGreaterThanOrEqual(Math.max(...buttons));
+      expect(text.x).toBeGreaterThanOrEqual(shown.x);
+      expect(text.x + text.width).toBeLessThanOrEqual(shown.x + shown.width + 0.5);
+      expect(shown.height).toBeGreaterThan(idle.height);
+      expect(text.y + text.height).toBeLessThanOrEqual(shown.y + shown.height + 0.5);
+
+      await status.locator("[role=status]").evaluate((element) => {
+        element.textContent = "";
+      });
+      expect((await box(row)).height).toBeCloseTo(idle.height, 0);
+    });
     test("capture candidate grouping, collapsed disclosures and bottom space", async ({ page }) => {
       await start(page);
       await selectImage(page);
