@@ -50,3 +50,38 @@ describe("theme tokens", () => {
     });
   });
 });
+
+function declarations(selector: string): Record<string, string> {
+  const start = css.indexOf(`\n${selector} {`);
+  expect(start, selector).toBeGreaterThanOrEqual(0);
+  const body = css
+    .slice(css.indexOf("{", start) + 1, css.indexOf("}", start))
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+  return Object.fromEntries(
+    [...body.matchAll(/([\w-]+):\s*([^;]+);/g)].map(([, name, value]) => [
+      name,
+      value?.replace(/\s+/g, " ").trim(),
+    ]),
+  ) as Record<string, string>;
+}
+
+describe("phone playback toast", () => {
+  it("takes the clock row's place from the row's own sizes, not a copied offset", () => {
+    const layout = declarations(".playback-layout");
+    const transport = declarations(".playback-transport");
+    const meter = declarations(".playback-meter");
+    const toast = declarations(".toast.playback-toast");
+    expect(layout).toMatchObject({
+      "--playback-transport-border": "1px",
+      "--playback-transport-padding": "2px",
+      "--playback-meter-height": "44px",
+    });
+    expect(transport["border-top"]).toBe("var(--playback-transport-border) solid var(--line)");
+    expect(transport["padding-top"]).toBe("var(--playback-transport-padding)");
+    expect(meter["min-height"]).toBe("var(--playback-meter-height)");
+    expect(toast.bottom).toBe(
+      "calc( -1 * var(--playback-transport-border) - var(--playback-transport-padding) - var(--playback-meter-height) )",
+    );
+    expect(toast["min-height"]).toBe("var(--playback-meter-height)");
+  });
+});

@@ -281,6 +281,36 @@ for (const colorScheme of ["dark", "light"] as const) {
           expect(rect.y, label).toBeGreaterThanOrEqual(script.y - 1);
         }
       });
+    test("a reading message follows the clock row when the row changes size", async ({ page }) => {
+      await holdToasts(page);
+      await start(page);
+      await recognize(page);
+      await page.getByRole("button", { name: /^進入朗讀/ }).click();
+      await expect(page.locator(".playback-toast")).toContainText("辨識完成");
+      await page.evaluate(() => document.fonts.ready);
+      for (const [border, padding, row] of [
+        ["1px", "2px", "44px"],
+        ["3px", "6px", "60px"],
+      ] as const) {
+        const frame = await page.locator(".playback-layout").evaluate(
+          async (layout, sizes) => {
+            layout.style.setProperty("--playback-transport-border", sizes[0]);
+            layout.style.setProperty("--playback-transport-padding", sizes[1]);
+            layout.style.setProperty("--playback-meter-height", sizes[2]);
+            const toast = layout.querySelector(".playback-toast") as HTMLElement;
+            await Promise.all(toast.getAnimations().map((animation) => animation.finished));
+            const meter = (
+              layout.querySelector(".playback-meter") as HTMLElement
+            ).getBoundingClientRect();
+            return { toast: toast.getBoundingClientRect(), meter };
+          },
+          [border, padding, row] as const,
+        );
+        expect(Math.abs(frame.toast.bottom - frame.meter.bottom), row).toBeLessThanOrEqual(1);
+        expect(frame.meter.height, row).toBeCloseTo(Number.parseFloat(row), 0);
+        expect(frame.toast.height, row).toBeGreaterThanOrEqual(frame.meter.height - 1);
+      }
+    });
     test("a long script keeps reading messages at the foot of the visible column at 1180px", async ({
       page,
     }) => {

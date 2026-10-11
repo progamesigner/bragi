@@ -1744,6 +1744,10 @@ input.invalid {
 .playback-layout {
   display: grid;
   gap: 20px;
+  /* The clock row's edges, shared with the phone toast that takes its place. */
+  --playback-transport-border: 1px;
+  --playback-transport-padding: 2px;
+  --playback-meter-height: 44px;
 }
 .playback-controls {
   min-width: 0;
@@ -1870,8 +1874,8 @@ input.invalid {
   min-width: 0;
   display: grid;
   gap: 8px;
-  border-top: 1px solid var(--line);
-  padding-top: 2px;
+  border-top: var(--playback-transport-border) solid var(--line);
+  padding-top: var(--playback-transport-padding);
 }
 /* The clock and the voice summary share the row right under the script. */
 .playback-meter {
@@ -1880,7 +1884,7 @@ input.invalid {
   justify-content: space-between;
   gap: 12px;
   min-width: 0;
-  min-height: 44px;
+  min-height: var(--playback-meter-height);
   /* The slider's own 44px target already spaces the track below the row. */
   margin-bottom: -8px;
 }
@@ -2005,10 +2009,15 @@ input.invalid {
 }
 .toast.playback-toast {
   position: absolute;
-  /* On a phone the message takes the clock row's place: its bottom meets the row's (1px border,
-     2px padding and the 44px row below the anchor), and a longer one grows up over the script. */
-  bottom: -47px;
-  min-height: 44px;
+  /* On a phone the message takes the clock row's place: its bottom meets the row's (the border,
+     padding and row below the anchor), and a longer one grows up over the script. */
+  bottom: calc(
+    -1 *
+    var(--playback-transport-border) -
+    var(--playback-transport-padding) -
+    var(--playback-meter-height)
+  );
+  min-height: var(--playback-meter-height);
   left: 0;
   right: 0;
   width: auto;
