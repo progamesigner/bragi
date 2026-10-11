@@ -394,7 +394,7 @@ for (const colorScheme of ["dark", "light"] as const) {
       await expect(preview.locator("input[type=range]")).toBeEnabled();
       expect(await nativeControls(page)).toEqual([]);
       expect(await bluePixels(preview.locator(".preview-transport"))).toBe(0);
-      await preview.getByRole("button", { name: "停止", exact: true }).click();
+      await preview.getByRole("button", { name: "暫停", exact: true }).click();
 
       const sheet = await openSettings(page);
       await sheet.getByRole("button", { name: "試聽這個聲音" }).click();

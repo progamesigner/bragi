@@ -6,6 +6,12 @@
 
 - Voice previews play pre-generated audio instead of waiting for Gemini, with a narration line written for each interface language. The sample follows the interface language and can be switched in the voice picker.
 
+### Fixes
+
+- The image comparison button on the review screen has the same outline as the buttons beside it.
+- Paragraph previews drop the stop button that repeated the pause button and show the elapsed time beside the slider, with a cancel button there only while the audio is being prepared. The preview button itself says the audio is being prepared instead of a separate line below.
+- On a phone, reading messages take the place of the clock row instead of floating above it.
+
 ## 1.1.0 — 2026-10-10
 
 Interface rebuild, local drafts and a new reading flow. Verified on real iOS Safari and Android Chrome devices with the reading device checklist.

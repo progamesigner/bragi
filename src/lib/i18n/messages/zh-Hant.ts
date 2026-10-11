@@ -140,7 +140,6 @@ const zhHant = {
   "voicePicker.preview": "試聽",
   "voicePicker.action": "{action} {voice}",
   "voicePicker.done": "完成",
-  "common.generating": "產生中…",
   "common.seconds": "{s} 秒",
 
   "offline.notice": "目前離線。已載入的文字與音訊仍可使用；連線恢復後請手動重試。",

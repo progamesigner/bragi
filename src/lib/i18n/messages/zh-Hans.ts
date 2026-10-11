@@ -130,7 +130,6 @@ const messages = {
   "voicePicker.preview": "试听",
   "voicePicker.action": "{action} {voice}",
   "voicePicker.done": "完成",
-  "common.generating": "生成中…",
   "common.seconds": "{s} 秒",
   "offline.notice": "当前离线。已加载的文字与音频仍可使用；连接恢复后请手动重试。",
   "workspace.clear": "清除当前内容",

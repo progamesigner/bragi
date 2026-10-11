@@ -74,7 +74,7 @@ async function place(page: Page) {
 /**
  * Plays through every reading message (shared toast, speed note, preparing, error, blocked,
  * interrupted, settings note, completion) and checks that each floats in the same place, without
- * moving a control: above the clock row on a phone, at the foot of the script column when wide.
+ * moving a control: over the clock row on a phone, at the foot of the script column when wide.
  * Starts on an idle `/play` at 1×, right after recognition, with the shared "recognition done"
  * toast showing and held by `holdToasts`.
  */
@@ -166,7 +166,7 @@ export async function expectOneMessagePlace(page: Page) {
   await phase("complete");
   await record("complete", "全部段落播放完成");
 
-  const [transport] = initial;
+  const [transport, meter] = initial;
   if (!transport) throw new Error("No transport");
   const frame = await page.evaluate(() => {
     const rect = (selector: string) => {
@@ -205,9 +205,10 @@ export async function expectOneMessagePlace(page: Page) {
       const foot = Math.min(frame.layout.y + frame.layout.height, frame.viewportBottom - 16);
       expect(Math.abs(bottom - foot), label).toBeLessThanOrEqual(2);
     } else {
-      // Just above the clock row, inside the content column, clear of the slider and buttons.
-      expect(bottom, label).toBeLessThanOrEqual(transport.y);
-      expect(transport.y - bottom, label).toBeLessThanOrEqual(12);
+      // Over the clock row, inside the content column, clear of the slider and buttons.
+      if (!meter) throw new Error("No clock row");
+      expect(Math.abs(bottom - meter.y - meter.height), label).toBeLessThanOrEqual(2);
+      expect(rect.height, label).toBeGreaterThanOrEqual(meter.height - 2);
       expect(rect.x, label).toBeGreaterThanOrEqual(transport.x - 1);
       expect(rect.x + rect.width, label).toBeLessThanOrEqual(transport.x + transport.width + 1);
     }

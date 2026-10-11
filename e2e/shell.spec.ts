@@ -265,7 +265,7 @@ test("settings trial pauses narration, stops on close and cancels a pending tria
     route.request().postDataJSON().text ? new Promise(() => {}) : route.fallback(),
   );
   await settings.getByRole("button", { name: "試聽這個聲音" }).click();
-  await expect(settings.getByRole("button", { name: "產生中…" })).toBeDisabled();
+  await expect(settings.getByRole("button", { name: "正在準備音訊" })).toBeDisabled();
   await closeSettings(page);
   await openSettings(page);
   await expect(settings.getByRole("button", { name: "試聽這個聲音" })).toBeEnabled();

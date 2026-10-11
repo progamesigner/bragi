@@ -488,7 +488,7 @@ export default function Review(props: ReviewProps) {
             </Button>
           </Show>
           <Show when={!wide() && imageUrl()}>
-            <Button variant="ghost" size="compact" onClick={() => setImageOpen(true)}>
+            <Button variant="secondary" size="compact" onClick={() => setImageOpen(true)}>
               {t("review.compare")}
             </Button>
           </Show>

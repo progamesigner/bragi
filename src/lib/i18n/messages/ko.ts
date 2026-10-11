@@ -136,7 +136,6 @@ const messages = {
   "voicePicker.preview": "미리 듣기",
   "voicePicker.action": "{action} {voice}",
   "voicePicker.done": "완료",
-  "common.generating": "생성 중…",
   "common.seconds": "{s}초",
   "offline.notice":
     "오프라인이에요. 로드된 텍스트와 오디오는 계속 사용할 수 있어요. 연결이 복구되면 직접 재시도해 주세요.",

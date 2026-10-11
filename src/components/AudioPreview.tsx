@@ -98,7 +98,7 @@ export default function AudioPreview(props: {
           : ["paused", "interrupted"].includes(phase())
             ? "playback.resume"
             : phase() === "loading"
-              ? "common.generating"
+              ? "playback.preparing"
               : phase() === "error"
                 ? "playback.retry"
                 : "preview.generate",
@@ -135,8 +135,7 @@ export default function AudioPreview(props: {
       </Button>
       <Show when={current() && phase() !== "idle"}>
         <fieldset class="preview-transport" aria-label={props.label}>
-          <label class="preview-seek-label">
-            {t("playback.seek")}
+          <div class="preview-seek-row">
             <input
               class="seek preview-seek"
               type="range"
@@ -146,25 +145,33 @@ export default function AudioPreview(props: {
               max={session.snapshot().duration ?? 0}
               value={session.snapshot().position}
               disabled={!session.snapshot().seekable}
+              aria-label={t("playback.seek")}
               aria-valuetext={audioTime(session.snapshot().position)}
               onInput={(event) =>
                 void session.controller().seek(props.owner, Number(event.currentTarget.value))
               }
             />
-          </label>
-          <span>
-            {audioTime(session.snapshot().position)}
+            {/* The button above pauses and resumes; only a pending take needs a way out here. */}
             <Show
-              when={session.snapshot().duration}
-            >{` / ${audioTime(session.snapshot().duration ?? 0)}`}</Show>
-          </span>
-          <Button
-            variant="ghost"
-            size="compact"
-            onClick={() => session.controller().stop(props.owner)}
-          >
-            {t(phase() === "loading" ? "playback.cancel" : "playback.stop")}
-          </Button>
+              when={phase() === "loading"}
+              fallback={
+                <span class="preview-clock">
+                  {audioTime(session.snapshot().position)}
+                  <Show
+                    when={session.snapshot().duration}
+                  >{` / ${audioTime(session.snapshot().duration ?? 0)}`}</Show>
+                </span>
+              }
+            >
+              <Button
+                variant="ghost"
+                size="compact"
+                onClick={() => session.controller().stop(props.owner)}
+              >
+                {t("playback.cancel")}
+              </Button>
+            </Show>
+          </div>
           <details open={props.owner === "sample"}>
             <summary>{t("playback.transcript")}</summary>
             <p class="preview-transcript" lang={props.lang}>
@@ -173,7 +180,11 @@ export default function AudioPreview(props: {
           </details>
         </fieldset>
       </Show>
-      <InlineStatus status={status()} />
+      {/* The button already says it is preparing; the status stays for screen readers only. */}
+      <InlineStatus
+        status={status()}
+        class={phase() === "loading" ? "visually-hidden" : undefined}
+      />
     </div>
   );
 }

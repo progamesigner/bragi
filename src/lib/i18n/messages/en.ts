@@ -136,7 +136,6 @@ const messages = {
   "voicePicker.preview": "Preview",
   "voicePicker.action": "{action} {voice}",
   "voicePicker.done": "Done",
-  "common.generating": "Generating…",
   "common.seconds": "{s} seconds",
   "offline.notice":
     "You are offline. Loaded text and audio remain available. Retry manually when connected.",

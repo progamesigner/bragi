@@ -1992,8 +1992,8 @@ input.invalid {
   font-size: 0.875rem;
 }
 /* Every reading message floats in one place and never takes room from the layout. The anchor has
-   no height: on a phone it sits at the top of the controls, so the toast covers the end of the
-   script just above the clock row; on a wide screen it is the foot of the script column. */
+   no height: on a phone it sits at the top of the controls, so the toast covers the clock row and
+   the end of the script above it; on a wide screen it is the foot of the script column. */
 .playback-toast-anchor {
   grid-row: 3;
   grid-column: 1;
@@ -2005,7 +2005,10 @@ input.invalid {
 }
 .toast.playback-toast {
   position: absolute;
-  bottom: 8px;
+  /* On a phone the message takes the clock row's place: its bottom meets the row's (1px border,
+     2px padding and the 44px row below the anchor), and a longer one grows up over the script. */
+  bottom: -47px;
+  min-height: 44px;
   left: 0;
   right: 0;
   width: auto;
@@ -2033,6 +2036,7 @@ input.invalid {
 }
 .toast.playback-toast.toast-empty {
   padding: 0;
+  min-height: 0;
   overflow: visible;
 }
 .toast.playback-toast.toast-error {
@@ -2057,10 +2061,21 @@ input.invalid {
   color: var(--text-2);
   font-size: 0.8rem;
 }
-.preview-seek-label,
+.preview-clock {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* The clock, or the cancel button while a take is pending, sits right of the slider. */
+.preview-seek-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
 .preview-seek {
-  display: block;
-  width: 100%;
+  flex: 1 1 auto;
+  width: auto;
   min-width: 0;
 }
 .preview-transcript {

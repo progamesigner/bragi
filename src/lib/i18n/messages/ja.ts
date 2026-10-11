@@ -136,7 +136,6 @@ const messages = {
   "voicePicker.preview": "試聴",
   "voicePicker.action": "{action} {voice}",
   "voicePicker.done": "完了",
-  "common.generating": "生成中…",
   "common.seconds": "{s}秒",
   "offline.notice":
     "オフラインです。読み込み済みの文字と音声は使用できます。接続が戻ったら手動で再試行してください。",
