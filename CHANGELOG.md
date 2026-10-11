@@ -9,7 +9,7 @@
 ### Fixes
 
 - The image comparison button on the review screen has the same outline as the buttons beside it.
-- Paragraph previews drop the stop button that repeated the pause button and show the elapsed time beside the slider, with a cancel button there only while the audio is being prepared. The preview button itself says the audio is being prepared instead of a separate line below.
+- Paragraph previews drop the stop button that repeated the pause button and the transcript that repeated the editor. The slider and elapsed time take their own row above the preview button, with a cancel button beside the slider only while the audio is being prepared, and "more editing" stays where it was. The preview button itself says the audio is being prepared instead of a separate line below.
 - On a phone, reading messages take the place of the clock row instead of floating above it.
 
 ## 1.1.0 — 2026-10-10

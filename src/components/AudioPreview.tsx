@@ -172,12 +172,15 @@ export default function AudioPreview(props: {
               </Button>
             </Show>
           </div>
-          <details open={props.owner === "sample"}>
-            <summary>{t("playback.transcript")}</summary>
-            <p class="preview-transcript" lang={props.lang}>
-              {props.input.text}
-            </p>
-          </details>
+          {/* A paragraph preview reads the text already in the editor above it. */}
+          <Show when={props.owner === "sample"}>
+            <details open>
+              <summary>{t("playback.transcript")}</summary>
+              <p class="preview-transcript" lang={props.lang}>
+                {props.input.text}
+              </p>
+            </details>
+          </Show>
         </fieldset>
       </Show>
       {/* The button already says it is preparing; the status stays for screen readers only. */}
