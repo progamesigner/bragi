@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 — 2026-10-11
+
+Pre-generated voice previews and simpler paragraph preview controls.
 
 ### Features
 
