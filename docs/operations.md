@@ -4,7 +4,7 @@
 
 ## Build 與驗收
 
-使用 Node.js 24 與 `npm ci`。CI 執行 check、typecheck、Vitest、安裝 Chromium 與 Noto CJK、Playwright E2E，再 build Vercel 產物。完整指令見 [README](../README.md#測試與驗證)。
+使用 Node.js 24 與 `npm ci`。CI 執行 check、typecheck、Vitest、安裝 Chromium 與 Noto CJK、Playwright E2E，再 build Cloudflare Workers 產物。完整指令見 [README](../README.md#測試與驗證)。
 
 - `npm run test:e2e` 使用 `playwright.config.ts`，自行 build 並執行 `.output/server/index.mjs`。預設 port 4173，可用 `BRAGI_E2E_PORT=4194` 覆寫，預設 4 workers，沒有自動 retry。
 - 手機流程、手機／平板視覺與 PWA 是不同 projects。一般測試阻擋 service worker，PWA project 允許它。測試使用合成 API 回應，不需要真實 Gemini 憑證或額度。
@@ -12,14 +12,14 @@
 - 獨立音訊測試：`npx playwright test --config playwright.audio-core.config.ts`，固定 port 4188。先以 `npx playwright install --with-deps chromium webkit` 安裝瀏覽器；涵蓋 Chromium 的 2 種手勢政策與 WebKit，輸出 `test-results/audio-core-results.json`。目前 CI 未執行這份設定。
 - iOS Safari、Android Chrome、安裝版 PWA、來電／鎖屏／切 App 與輔助工具依 [真機清單](reading-device-checklist.md) 驗收；清單是待驗步驟，不是通過紀錄。
 
-Vercel build：
+Cloudflare Workers build：
 
 ```sh
-NITRO_PRESET=vercel VERCEL=1 VERCEL_ENV=production npm run build
-test -s .vercel/output/static/sw.js
+NITRO_PRESET=cloudflare_module npm run build
+test -s .output/public/sw.js
 ```
 
-平台需配置 `.env.example` 所列伺服器變數，正式站使用 HTTPS。`BRAGI_SESSION_VERSION` 變更會使舊登入失效；登入 cookie 為 90 天有效。金鑰與 session secret 不放進 git 或公開 build 資產。
+`wrangler deploy` 會讀取 build 產生的 `.output/server/wrangler.json`。Worker 需配置 `.env.example` 所列伺服器變數，正式站使用 HTTPS。`BRAGI_SESSION_VERSION` 變更會使舊登入失效；登入 cookie 為 90 天有效。金鑰與 session secret 不放進 git 或公開 build 資產。
 
 部署後執行 `BRAGI_SMOKE_URL=https://bragi.0x148.com npm run test:smoke`。smoke 驗證健康端點與未登入的公開畫面，不生成 OCR／語音；另可在本機用 `npm run preview` 檢視 build。
 

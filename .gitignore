@@ -9,6 +9,7 @@ dist/
 coverage/
 *.log
 .DS_Store
-.vercel/
+.wrangler/
 playwright-report/
 test-results/
+.dev.vars*

@@ -57,7 +57,7 @@ npm run dev
 
 ## 測試與驗證
 
-下面的檢查和 `.github/workflows/verify.yml` 相同。在 Ubuntu 上跑視覺測試需要 Noto CJK 字型。
+下面的檢查和 `.github/workflows/deploy.yaml` 相同。在 Ubuntu 上跑視覺測試需要 Noto CJK 字型。
 
 ```sh
 npm run check
@@ -66,8 +66,8 @@ npm test
 npx playwright install --with-deps chromium
 sudo apt-get install -y fonts-noto-cjk
 BRAGI_E2E_PORT=4194 npx playwright test --workers=4
-NITRO_PRESET=vercel VERCEL=1 VERCEL_ENV=production npm run build
-test -s .vercel/output/static/sw.js
+NITRO_PRESET=cloudflare_module npm run build
+test -s .output/public/sw.js
 ```
 
 CI 用 `npm run test:e2e` 跑同一份 Playwright 設定，預設 port 是 4173；本機有 port 衝突時用 `BRAGI_E2E_PORT` 換一個。測試會自己 build 並以正式模式啟動伺服器，API 全部是模擬回應，不耗用 Gemini 額度。另外還有啟用真實 service worker 的 PWA 測試，以及手機與平板的截圖比對。
@@ -83,7 +83,9 @@ npx playwright test --config playwright.audio-core.config.ts
 
 ## 部署與 PWA
 
-部署到 Vercel 時，設定和本機相同的伺服器環境變數，並使用上面的 Vercel build。登入 cookie 有 Secure 屬性，所以正式站必須是 HTTPS。部署後可以跑一次不生成內容的 smoke test：
+正式站跑在 Cloudflare Workers。GitHub Actions 在每次 push 時跑完上面的檢查，再用 `NITRO_PRESET=cloudflare_module` build。`main` 用 `wrangler deploy` 部署到 `bragi.0x148.com`，其他 branch 用 `wrangler versions upload --preview-alias` 上傳 preview，網址是 `https://<branch>-bragi.<subdomain>.workers.dev`。設定在 `wrangler.jsonc`。
+
+GitHub repo 需要 `CLOUDFLARE_ACCOUNT_ID` 與 `CLOUDFLARE_API_TOKEN` 兩個 secrets。`.env.example` 所列的伺服器變數設在 Cloudflare Worker 的 Settings → Variables and Secrets，金鑰類設為 Secret。`wrangler.jsonc` 設了 `keep_vars: true`，部署時不會清掉這些變數。本機用 `wrangler dev` 測試時，把變數放在 `.dev.vars`。登入 cookie 有 Secure 屬性，所以正式站必須是 HTTPS。部署後可以跑一次不生成內容的 smoke test：
 
 ```sh
 BRAGI_SMOKE_URL=https://bragi.0x148.com npm run test:smoke

@@ -6,7 +6,7 @@
       "!!node_modules",
       "!!.nitro",
       "!!.output",
-      "!!.vercel",
+      "!!.wrangler",
       "!!test-results",
       "!!playwright-report"
     ]

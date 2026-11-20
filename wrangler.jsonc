@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "bragi",
+  "compatibility_date": "2026-10-16",
+  // nodejs_compat provides process.env and Buffer to the server code
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": true,
+  "routes": [{ "pattern": "bragi.0x148.com", "custom_domain": true, "previews_enabled": false }],
+  // BRAGI_* and GEMINI_* are set in the Cloudflare dashboard; keep deploys from wiping them
+  "keep_vars": true,
+  "observability": {
+    "enabled": true
+  }
+}
